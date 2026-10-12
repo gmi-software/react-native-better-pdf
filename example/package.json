@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "expo": "~57.0.26",
+    "expo": "~57.0.27",
     "expo-build-properties": "~57.0.22",
     "expo-dev-client": "~57.0.19",
     "expo-file-system": "~57.0.7",
@@ -22,7 +22,7 @@
     "react-native-blob-util": "^0.25.1",
     "react-native-nitro-modules": "0.37.1",
     "react-native-pdf": "7.0.5",
-    "react-native-safe-area-context": "~5.7.0"
+    "react-native-safe-area-context": "~5.10.1"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
