@@ -29,6 +29,6 @@
     "jpeg-js": "0.4.4",
     "prettier": "^3.8.3",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.61.1"
+    "typescript-eslint": "^8.71.1"
   }
 }
