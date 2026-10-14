@@ -19,7 +19,7 @@ appId: software.gmi.betterpdf.example
 - assertNotVisible: { id: "page-image" }
 # Android lays out unvisited pages at the first page's size and corrects
 # them as they render; on this fixture (every page a different size) the
-# first jump can stop short (README, Limitations). The second lands exactly.
+# first jump can stop short (docs/limitations.md). The second lands exactly.
 - tapOn: "Last"
 - waitForAnimationToEnd
 - tapOn: "Last"

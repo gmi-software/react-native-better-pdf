@@ -20,7 +20,7 @@ and the end-to-end flows you ran (example/e2e).
 - [ ] `bun run lint`, `bun run typecheck` and `bun run test` pass
 - [ ] New behavior is covered by a test (JS, Kotlin JVM or an end-to-end flow)
 - [ ] Nitro specs changed? `cd package && bun run specs` was re-run and `package/nitrogen/` is committed with it
-- [ ] Public API changed? `README.md`, the capability matrix and `docs/api-design.md` are updated
+- [ ] Public API changed? `docs/api.md`, the feature's guide in `docs/guides/`, the README's capability matrix and `docs/api-design.md` are updated
 - [ ] Native change? Validated on both iOS and Android
 - [ ] Performance claim? A benchmark run on a release build is attached
 - [ ] Commits follow [Conventional Commits](https://www.conventionalcommits.org/)

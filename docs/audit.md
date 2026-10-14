@@ -25,7 +25,7 @@ None open.
 | H3 | Android view painted outside its bounds (RN parents disable `clipChildren`). | Fixed (`clipRect`), found in e2e screenshots. |
 | H4 | Tiles could be placed with the wrong scale if the user zoomed while a tile was rendering. | Fixed (tile carries its own content rect and scale). |
 | H5 | **Removing any optional prop crashed the app** (both platforms): Fabric sends `null` for a removed prop and Nitro 0.37's `std::optional` converters accept only `undefined` ("Value is null, expected a String"). Same for removing an event handler. | Fixed in the `PdfView` wrapper: concrete defaults for every prop, events stay subscribed once used. Unit test + `viewer-fit-policy` e2e step. Found while cycling `fitPolicy`. |
-| H6 | **Android drew no annotations except form fields** (highlights, notes, stamps, shapes, ink), while the docs claimed they always render. | Partly fixed: `RenderParams` flags draw highlight, free text and notes from API 35 and stamps from API 37 (measured per kind, no render-time cost). Shapes, ink, underline and strike-out remain undrawable with `PdfRenderer`; documented in README and api-design "Annotations". |
+| H6 | **Android drew no annotations except form fields** (highlights, notes, stamps, shapes, ink), while the docs claimed they always render. | Partly fixed: `RenderParams` flags draw highlight, free text and notes from API 35 and stamps from API 37 (measured per kind, no render-time cost). Shapes, ink, underline and strike-out remain undrawable with `PdfRenderer`; documented in [Limitations](limitations.md) and api-design "Annotations". |
 
 ## Medium
 

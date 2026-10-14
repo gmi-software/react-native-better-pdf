@@ -6,6 +6,25 @@ This guide maps every prop, callback and method of
 workarounds for what is not supported yet. Defaults and signatures below were
 read from react-native-pdf 7.0.5's source, not from its README.
 
+## Common react-native-pdf issues
+
+How this library handles what react-native-pdf users report most:
+
+| Reported in react-native-pdf | react-native-better-pdf |
+| --- | --- |
+| Android 16 KB page size ([#960](https://github.com/wonday/react-native-pdf/issues/960) and others) | Native library 16 KB aligned |
+| New Architecture / Fabric ([#878](https://github.com/wonday/react-native-pdf/issues/878) and others) | Built for Fabric on Nitro Views |
+| `react-native-blob-util` crashes and setup ([#796](https://github.com/wonday/react-native-pdf/issues/796) and others) | Not used: downloads are native |
+| Android "Already closed" crashes ([#830](https://github.com/wonday/react-native-pdf/issues/830) and others) | Closing a document while it renders, searches or exports is handled and stress-tested |
+| Link taps on Android ([#983](https://github.com/wonday/react-native-pdf/issues/983) and others) | Every link form on every Android version |
+| Search ([#555](https://github.com/wonday/react-native-pdf/issues/555) and others) | Built in, with highlights (Android: see the [capability matrix](../README.md#capability-matrix)) |
+| Viewport events, restoring the position ([#492](https://github.com/wonday/react-native-pdf/issues/492) and others) | `onViewportChange`, `initialViewport`, `goToViewport` |
+| Filling in and saving forms ([#748](https://github.com/wonday/react-native-pdf/issues/748) and others) | Fill, read and export (Android: see the [capability matrix](../README.md#capability-matrix)) |
+| Cache control and offline reading ([#952](https://github.com/wonday/react-native-pdf/issues/952) and others) | Cache options on the source, `PdfCache` |
+
+The full list, with reaction counts, is in
+[community-requests.md](community-requests.md).
+
 ## Before you start
 
 - **New Architecture only.** `react-native-better-pdf` is a Nitro View and
@@ -93,7 +112,7 @@ users see.
 | `scrollEnabled` | `scrollEnabled` | Same name and default. Disables drag scrolling (also paging swipes); the drag goes to parent views. |
 | `enableDoubleTapZoom` | `enableDoubleTapZoom` | Same name and default. When `false`, `onPageTap` also fires without waiting for a possible second tap. |
 | `enableAntialiasing` | — | Always on. |
-| `enableAnnotationRendering` | — | Always on where the platform can: iOS draws every annotation; Android draws only some kinds (see the README's Limitations). react-native-pdf's bundled PDFium drew all kinds on Android. |
+| `enableAnnotationRendering` | — | Always on where the platform can: iOS draws every annotation; Android draws only some kinds (see [Limitations](limitations.md)). react-native-pdf's bundled PDFium drew all kinds on Android. |
 | `enableTextSelection` | `enableTextSelection` | Same name and default (`true`). `false` now turns selection off (react-native-pdf only stopped the event), and Android selects too (Android 15+). |
 | `usePDFKit` | — | iOS always uses PDFKit. |
 | `trustAllCerts` | — | Intentionally not supported. |
@@ -297,7 +316,7 @@ pdf.current?.search('invoice');
 pdf.current?.searchNext();
 ```
 
-Matches are highlighted natively; see the README's "Search" section.
+Matches are highlighted natively; see the [Search guide](guides/search.md).
 
 ### Tap to toggle toolbars
 
@@ -344,7 +363,7 @@ await PdfCache.download(source, { onProgress, signal });
 const entry = await PdfCache.getEntry(source); // undefined when not stored
 ```
 
-See the README's "Offline reading and caching" section.
+See [Offline reading and caching](guides/offline-and-caching.md).
 
 ## Base64 documents
 
@@ -375,7 +394,7 @@ Give each document its own file name: a source with the same path does not
 reload the view, even after the file is rewritten. If the base64 comes from
 your own API, returning the PDF itself and passing its URL with `headers` is
 better still: it is then downloaded natively, with progress, caching and
-offline reading. See the README's "Base64 documents" section.
+offline reading. See [Base64 documents](guides/sources-and-loading.md#base64-documents).
 
 ## Not supported yet
 
@@ -383,8 +402,8 @@ offline reading. See the README's "Base64 documents" section.
 | --- | --- |
 | Passwords on Android 7–11, and 12–14 without SDK extension 13 | Not possible with the platform renderer |
 | Windows | Not planned |
-| Links in password-protected documents on Android < 15 (except 12–14 with SDK extension 13), and their internal links other than GoTo actions with XYZ destinations | Platform limitation — see the README (links in other documents work on every version) |
-| Text selection on Android < 15 (except 12–14 with SDK extension 13); selections across pages on Android | Platform limitation below 15; cross-page selection not yet — see the README |
+| Links in password-protected documents on Android < 15 (except 12–14 with SDK extension 13), and their internal links other than GoTo actions with XYZ destinations | Platform limitation — see [Limitations](limitations.md) (links in other documents work on every version) |
+| Text selection on Android < 15 (except 12–14 with SDK extension 13); selections across pages on Android | Platform limitation below 15; cross-page selection not yet — see [Limitations](limitations.md) |
 
 If one of these blocks your migration, please open an issue describing the use
 case.

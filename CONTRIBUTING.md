@@ -6,7 +6,7 @@
 - `example/` — Expo SDK 57 development-build app: a viewer, a benchmark
   screen, and Maestro end-to-end flows (`example/e2e/`)
 - `benchmarks/` — fixture generator, fixture server, Android benchmark driver
-- `docs/` — design, research, benchmarks, audit
+- `docs/` — guides, API reference, design, research, benchmarks, audit
 
 Bun workspaces with `linker = "hoisted"` (see `bunfig.toml`): react-native-pdf,
 used as the benchmark baseline, expects a flat `node_modules`.
@@ -94,7 +94,9 @@ builds.
 - Keep the hot path native. A change that adds per-frame JS work, a new
   per-gesture event, or a React-managed page needs a design note first.
 - Anything that allocates bitmaps must say who frees them and when.
-- Update `README.md` and `docs/api-design.md` for public API changes, and the
+- For public API changes, update `docs/api.md`, the feature's guide in
+  `docs/guides/` and `docs/api-design.md`; for new features or platform
+  support, also the README's feature list and capability matrix. Update the
   [agent skill](https://github.com/gmi-software/better-skills/tree/main/skills/react-native-better-pdf)
   in gmi-software/better-skills when they are released.
 - Validate both iOS and Android for native changes.

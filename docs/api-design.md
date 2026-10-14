@@ -89,7 +89,8 @@ type PdfSource =
 - Base64 / `data:` URIs are intentionally not supported. Android's
   `PdfRenderer` reads a file descriptor, so the library would write the data
   to a file anyway and then own that file's name, reuse and cleanup; the
-  caller does it in a few lines (README "Base64 documents"). A
+  caller does it in a few lines (see
+  [Base64 documents](guides/sources-and-loading.md#base64-documents)). A
   document-sized string in `source` would also be normalized and compared on
   the JS thread on every render (the memoization above) and copied again
   into native memory. An API that returns a PDF as base64 in JSON is better
@@ -894,8 +895,9 @@ for every page: overlays, thumbnails and layouts for mixed-size documents).
   platforms, including the encrypted copy that takes Android's renderer
   path.
 - **Not used for layout yet.** Android's layout still starts from the first
-  page's size and corrects pages as they are rendered (see README,
-  Limitations); the page-tree sizes could remove that re-anchoring.
+  page's size and corrects pages as they are rendered (see
+  [Limitations](limitations.md)); the page-tree sizes could remove that
+  re-anchoring.
 
 ## Page images
 
