@@ -36,9 +36,9 @@ def getExtOrIntegerDefault(name) {
 }
 
 android {
-  namespace "com.margelo.nitro.betterpdf"
+  namespace = "com.margelo.nitro.betterpdf"
 
-  ndkVersion getExtOrDefault("ndkVersion")
+  ndkVersion = getExtOrDefault("ndkVersion")
   compileSdkVersion getExtOrIntegerDefault("compileSdkVersion")
 
   defaultConfig {
@@ -93,8 +93,8 @@ android {
   }
 
   buildFeatures {
-    buildConfig true
-    prefab true
+    buildConfig = true
+    prefab = true
   }
 
   buildTypes {
