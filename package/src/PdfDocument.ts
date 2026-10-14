@@ -1,6 +1,6 @@
 import { Image } from 'react-native';
 import { NitroModules } from 'react-native-nitro-modules';
-import { abortReason } from './abortReason';
+import { abortable, abortReason, untilAborted } from './abort';
 import { buildOutlineTree } from './outline';
 import { PdfOpenError } from './PdfOpenError';
 import { normalizeSource, type PdfSource } from './source';
@@ -12,7 +12,6 @@ import type { PdfOutlineItem } from './types/PdfOutlineItem';
 import type { PdfPageImage } from './types/PdfPageImage';
 import type { PdfPageSize } from './types/PdfPageSize';
 import type { PdfRenderPageOptions } from './types/PdfRenderPageOptions';
-import { untilAborted } from './untilAborted';
 
 /**
  * A PDF opened without a view: its page count, metadata, page sizes and
@@ -89,33 +88,12 @@ export class PdfDocument {
       if (value.error !== undefined) throw new PdfOpenError(value.error);
       throw new Error('Opening ended without a result');
     };
+    // Also closes the native object on an abort.
     const fail = (error: unknown): never => {
       native.close();
       throw error;
     };
-    if (signal === undefined) return result.then(settle, fail);
-    return new Promise<PdfDocument>((resolve, reject) => {
-      const onAbort = () => {
-        native.close();
-        reject(abortReason(signal));
-      };
-      signal.addEventListener('abort', onAbort, { once: true });
-      result.then(
-        (value) => {
-          signal.removeEventListener('abort', onAbort);
-          try {
-            resolve(settle(value));
-          } catch (error) {
-            reject(error);
-          }
-        },
-        (error: unknown) => {
-          signal.removeEventListener('abort', onAbort);
-          native.close();
-          reject(error);
-        },
-      );
-    });
+    return abortable(result, signal).then(settle, fail);
   }
 
   /**
