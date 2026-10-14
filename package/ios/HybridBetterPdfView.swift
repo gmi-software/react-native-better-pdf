@@ -547,9 +547,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   /// Copies `source` over `destination` in one step, as Android does: the
   /// copy is written beside it and renamed over it, so a failed copy leaves
   /// an existing file as it was, and rename(2) never replaces a directory.
+  /// The copy's name does not repeat the target's, which may already be
+  /// close to the 255-byte limit.
   private static func copyReplacing(_ source: URL, to destination: URL) throws {
     let partial = destination.deletingLastPathComponent()
-      .appendingPathComponent(".\(destination.lastPathComponent).\(UUID().uuidString).partial")
+      .appendingPathComponent(".\(UUID().uuidString).partial")
     defer { try? FileManager.default.removeItem(at: partial) }
     try FileManager.default.copyItem(at: source, to: partial)
     if rename(partial.path, destination.path) != 0 {

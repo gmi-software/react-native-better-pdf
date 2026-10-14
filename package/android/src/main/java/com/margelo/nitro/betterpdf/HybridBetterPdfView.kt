@@ -332,8 +332,9 @@ class HybridBetterPdfView(
     return afterFormSettles(session) {
       val file = target ?: newExportFile(document.name)
       // Written beside the target and renamed over it: a failed write
-      // leaves an existing file as it was.
-      val partial = File(file.absoluteFile.parentFile, ".${file.name}.${UUID.randomUUID()}.partial")
+      // leaves an existing file as it was. The copy's name does not repeat
+      // the target's, which may already be close to the 255-byte limit.
+      val partial = File(file.absoluteFile.parentFile, ".${UUID.randomUUID()}.partial")
       try {
         ParcelFileDescriptor.open(
           partial,
