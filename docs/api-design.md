@@ -839,6 +839,11 @@ restore the position, scroll events, "read to the end"; see
   the initial position is one internal struct (`page`, `scale`, optional
   `x` / `y`) that `PdfView` builds from `initialPage` / `initialScale` or
   `initialViewport`, so there is one code path per platform.
+- **A page outside the document** is clamped, and its point dropped: the
+  nearest page is shown from its top, for `initialViewport` and
+  `goToViewport` on both platforms. Clamping is native because only native
+  knows the page count. In 1.0.0 Android kept the point of a negative
+  initial page and crashed on load (`initialViewport` with `page: -1`).
 - **No animation** for `goToViewport`: it changes zoom and position at once,
   and its uses (resume, go back) are jumps. `goToPage` stays the animated
   navigation.

@@ -475,8 +475,10 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     clearDocument()
     this.session = session
     this.pageSizes = pageSizes.toMutableList()
-    pendingInitialPage = initialPage.coerceIn(0, pageSizes.size - 1)
-    pendingInitialPoint = initialPoint?.takeIf { it.page == initialPage }
+    val page = initialPage.coerceIn(0, pageSizes.size - 1)
+    pendingInitialPage = page
+    // A point on a page outside the document is dropped, as in goToViewport.
+    pendingInitialPoint = initialPoint?.takeIf { it.page == page }
     // Applied by rebuildLayout's initial-page branch (clamped, cross-axis centred).
     scale = initialScale
     rebuildLayout()
@@ -1127,7 +1129,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
 
     val initial = pendingInitialPage
     val initialPoint = pendingInitialPoint
-    if (initial != null && initialPoint != null && initialPoint.page < newLayout.pageCount) {
+    if (initial != null && initialPoint != null && initialPoint.page in 0 until newLayout.pageCount) {
       pendingInitialPage = null
       pendingInitialPoint = null
       shownPage = initialPoint.page

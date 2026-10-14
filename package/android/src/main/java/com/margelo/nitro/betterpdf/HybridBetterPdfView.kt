@@ -501,10 +501,8 @@ class HybridBetterPdfView(
 
   override fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, filePath: String?, isStale: Boolean) {
     val session = session ?: return
-    val position = initialPosition
-    val initial = position?.page?.takeIf { it.isFinite() }?.toInt() ?: 0
-    val scale = position?.scale?.takeIf { it.isFinite() && it > 0 }?.toFloat() ?: 1f
-    documentView.setDocument(session, pageSizes, initial, scale, position?.pagePoint)
+    val initial = ResolvedInitialPosition.of(initialPosition, pageSizes.size)
+    documentView.setDocument(session, pageSizes, initial.page, initial.scale, initial.point)
     loaded = LoadedDocument(session, pageSizes.size, filePath?.let(::File))
     searchController.onDocumentChanged(session)
     val first = pageSizes.first()

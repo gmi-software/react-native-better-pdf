@@ -416,6 +416,8 @@ const saved = storage.get(documentId); // a PdfViewport, or undefined
   page is on screen.
 - `ref.goToViewport(viewport)` jumps back to a position without animation,
   e.g. for "back to where I was" after following a table-of-contents entry.
+- A saved page outside the document (a shorter new version, a corrupted
+  value) opens the nearest page from its top.
 - Paged layouts (`enablePaging`, `singlePage`) restore the page and zoom;
   on iOS the position within a zoomed page is not restored.
 
