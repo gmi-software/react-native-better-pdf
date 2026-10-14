@@ -311,8 +311,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // Resolving outline destinations is slow (measured ~130 ms for 1,000
       // entries) and PDFKit objects are not thread-safe, while the view's
       // document is in use by PDFView on the main thread. Read a separate
-      // instance of the same file off the main thread instead.
-      Self.readQueue.async {
+      // instance of the same file off the main thread instead. Weak: the
+      // read must not keep the view alive, nor release it off the main thread.
+      Self.readQueue.async { [weak self] in
         guard let document = PDFDocument(url: url) else {
           promise.reject(withError: RuntimeError.error(withMessage: "The outline could not be read"))
           return
@@ -342,7 +343,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       let password = self.password
       // Like getOutline: a separate instance of the same file, off the main
       // thread, so a long document does not stall the view's.
-      Self.readQueue.async {
+      Self.readQueue.async { [weak self] in
         guard let document = PDFDocument(url: url) else {
           promise.reject(withError: RuntimeError.error(withMessage: "The page sizes could not be read"))
           return
@@ -425,7 +426,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // Serialized off the main thread on a separate instance of the file,
       // like renderPage.
       let password = self.password
-      Self.writeQueue.async {
+      Self.writeQueue.async { [weak self] in
         let copy = Self.openCopy(of: url, password: password, filledIn: filledForm)
         let data = copy?.dataRepresentation()
         DispatchQueue.main.async { [weak self] in
