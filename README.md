@@ -660,8 +660,9 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
   changing nothing, for an unknown or read-only field or a value its type
   does not take.
 - `exportDocument()` writes the document as shown to a new file (the
-  cache directory by default, or `{ filePath }`), keeping its password
-  protection, off the main thread; the source file is never changed.
+  cache directory by default, or `{ filePath }`, which must name a file,
+  not a directory), keeping its password protection, off the main thread;
+  the source file is never changed.
   Printing and `renderPage` show the form as filled in too.
 - `getFormFields`, `setFormFieldValues`, `exportDocument`, `print` and
   `renderPage` first end text editing, so what the reader is typing counts.

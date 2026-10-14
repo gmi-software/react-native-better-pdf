@@ -1186,6 +1186,12 @@ on iOS; Android showed them read-only.
   showed it). Pages it can read come out identical (the 500-page scan,
   compared pixel for pixel). Default file:
   `<caches>/BetterPdfExports/<uuid>/<document name>.pdf`.
+- **Exports never replace a directory.** A `filePath` naming one (or
+  ending in `/`) is rejected on both platforms: iOS used to remove
+  whatever was at the destination before copying a form as loaded, which
+  deleted a directory with everything in it. Both platforms now write
+  the copy beside the target and rename it over it, so a failed write
+  also leaves an existing file as it was.
 - **Line breaks** are `\n` on both platforms (PDFium reports `\r\n`).
 - **iOS writes off the main thread.** PDFKit writes a long document in
   seconds (30 ms for the fixture, 354 ms for the 100-page `medium`, 5.7 s

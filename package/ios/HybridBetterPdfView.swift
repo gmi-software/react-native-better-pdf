@@ -488,13 +488,13 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       self.container.endEditing(true)
       let destination: URL
       do {
-        destination = try filePath.isEmpty ? Self.newExportFile(named: url) : URL(fileURLWithPath: filePath)
+        destination = try filePath.isEmpty ? Self.newExportFile(named: url) : Self.exportFile(at: filePath)
       } catch {
         promise.reject(withError: error)
         return
       }
       // The displayed file is read while the copy is written, and is never
-      // changed (a copy of an unchanged form would delete it first).
+      // changed (an export over it would replace it).
       if destination.standardizedFileURL.resolvingSymlinksInPath() == url.standardizedFileURL.resolvingSymlinksInPath() {
         promise.reject(withError: RuntimeError.error(withMessage: "The export cannot replace the displayed document's file"))
         return
@@ -522,10 +522,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
             try data.write(to: destination, options: .atomic)
           } else {
             // Nothing changed: the file as it is, its own protection included.
-            if FileManager.default.fileExists(atPath: destination.path) {
-              try FileManager.default.removeItem(at: destination)
-            }
-            try FileManager.default.copyItem(at: url, to: destination)
+            try Self.copyReplacing(url, to: destination)
           }
           promise.resolve(withResult: PdfExportResult(filePath: destination.path))
         } catch {
@@ -534,6 +531,30 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       }
     }
     return promise
+  }
+
+  /// The file `filePath` names. A directory is rejected: replacing it would
+  /// delete everything in it.
+  private static func exportFile(at filePath: String) throws -> URL {
+    var isDirectory: ObjCBool = false
+    if filePath.hasSuffix("/")
+      || (FileManager.default.fileExists(atPath: filePath, isDirectory: &isDirectory) && isDirectory.boolValue) {
+      throw RuntimeError.error(withMessage: "The export path is a directory, not a file: \(filePath)")
+    }
+    return URL(fileURLWithPath: filePath, isDirectory: false)
+  }
+
+  /// Copies `source` over `destination` in one step, as Android does: the
+  /// copy is written beside it and renamed over it, so a failed copy leaves
+  /// an existing file as it was, and rename(2) never replaces a directory.
+  private static func copyReplacing(_ source: URL, to destination: URL) throws {
+    let partial = destination.deletingLastPathComponent()
+      .appendingPathComponent(".\(destination.lastPathComponent).\(UUID().uuidString).partial")
+    defer { try? FileManager.default.removeItem(at: partial) }
+    try FileManager.default.copyItem(at: source, to: partial)
+    if rename(partial.path, destination.path) != 0 {
+      throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+    }
   }
 
   /// A new file in the caches directory with the document's file name.

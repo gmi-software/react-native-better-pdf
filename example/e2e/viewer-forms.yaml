@@ -26,6 +26,11 @@ env:
     visible: "fields 13: name= email=jan@example.com notes= agree=off plan=basic country=Poland colours=Green id=A-1234 phone= address.city= postcode= date= signature=unsigned"
     timeout: 5000
 
+# Rejected while the form is as loaded, when iOS exports a copy of the file:
+# an export into a directory used to delete it with everything in it.
+- tapOn: "Bad"
+- extendedWaitUntil: { visible: "bad: .*read-only.* \\| .*cannot replace the displayed.* \\| .*export path is a directory.*; keep.txt kept", timeout: 10000 }
+
 # By touch: text is reported once, when editing ends; toggles at once.
 - tapOn: { point: "${NAME}" }
 - waitForAnimationToEnd
@@ -82,7 +87,7 @@ env:
     visible: "fields 13: name=Ewa email=jan@example.com notes=First line/Second line agree=on plan=pro country=France colours=Blue id=A-1234 phone= address.city=Kraków postcode=00-950 date= signature=unsigned"
     timeout: 5000
 - tapOn: "Bad"
-- extendedWaitUntil: { visible: "bad: .*read-only.* \\| .*cannot replace the displayed.*", timeout: 10000 }
+- extendedWaitUntil: { visible: "bad: .*read-only.* \\| .*cannot replace the displayed.* \\| .*export path is a directory.*; keep.txt kept", timeout: 10000 }
 - tapOn: "Fields"
 - extendedWaitUntil: { visible: "fields 13: name=Ewa .*", timeout: 5000 }
 

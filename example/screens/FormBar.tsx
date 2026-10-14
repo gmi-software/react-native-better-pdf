@@ -1,3 +1,4 @@
+import { Directory, File, Paths } from 'expo-file-system';
 import { useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { PdfFormField, PdfViewRef } from 'react-native-better-pdf';
@@ -5,10 +6,10 @@ import { Button } from '../ui';
 
 /**
  * Form filling: "Fill" sets values from code, "Fields" lists the current
- * values on the event line, "Bad" tries a read-only field and an export
- * over the displayed file (both rejected), "Touch" turns filling by touch
- * on and off, "Export" writes the filled-in document and "Open" shows that
- * copy.
+ * values on the event line, "Bad" tries a read-only field, an export over
+ * the displayed file and an export into a directory (all rejected; the
+ * directory's file must survive), "Touch" turns filling by touch on and
+ * off, "Export" writes the filled-in document and "Open" shows that copy.
  */
 export function FormBar({
   pdf,
@@ -66,6 +67,12 @@ export function FormBar({
         title="Bad"
         onPress={() => {
           const message = (error: unknown) => String(error).split('\n')[0];
+          const target = directoryWithFile();
+          // First, while the form can still be as loaded (iOS then copies
+          // the file instead of writing it anew).
+          const intoDirectory = pdf
+            ?.exportDocument({ filePath: target.path })
+            .then(() => 'exported into a directory', message);
           void Promise.all([
             pdf
               ?.setFormFieldValues({ name: 'Never', id: 'B-1' })
@@ -73,7 +80,12 @@ export function FormBar({
             pdf
               ?.exportDocument({ filePath: sourcePath })
               .then(() => 'exported over the source', message),
-          ]).then((results) => onEvent(`bad: ${results.join(' | ')}`));
+            intoDirectory,
+          ]).then((results) =>
+            onEvent(
+              `bad: ${results.join(' | ')}; keep.txt ${target.file.exists ? 'kept' : 'deleted'}`,
+            ),
+          );
         }}
       />
       <Button
@@ -100,6 +112,22 @@ export function FormBar({
       />
     </View>
   );
+}
+
+/**
+ * A directory holding a file, as an export target that must be rejected:
+ * replacing it would delete the file. The path has no trailing slash, so
+ * only the directory itself tells it apart from a file.
+ */
+function directoryWithFile(): { path: string; file: File } {
+  const directory = new Directory(Paths.cache, 'export-target');
+  if (!directory.exists) directory.create();
+  const file = new File(directory, 'keep.txt');
+  if (!file.exists) {
+    file.create();
+    file.write('keep');
+  }
+  return { path: directory.uri.replace(/\/$/, ''), file };
 }
 
 /** `name=value`, for the event line. */
