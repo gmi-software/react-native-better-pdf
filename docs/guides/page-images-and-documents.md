@@ -3,7 +3,7 @@
 ## Page images
 
 ```tsx
-const image = await pdf.current?.renderPage(page, {
+const image = await pdf.current!.renderPage(page, {
   width: 160 * PixelRatio.get(), // pixels; the height follows the page
   format: 'jpeg',                // default 'png'
   quality: 0.8,                  // JPEG only, default 0.9

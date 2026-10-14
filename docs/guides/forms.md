@@ -43,5 +43,5 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
   Printing and `renderPage` show the form as filled in too.
 - `getFormFields`, `setFormFieldValues`, `exportDocument`, `print` and
   `renderPage` first end text editing, so what the reader is typing counts.
-- Edits live with the open document: reopening the source shows it as
-  stored. Export to keep them.
+- Edits live only with the open document: reopening the source shows the
+  document as stored, without them. Export to keep them.
