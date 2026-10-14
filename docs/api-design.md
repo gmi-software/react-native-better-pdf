@@ -146,6 +146,16 @@ Navigation after load is imperative (`goToPage`).
 `resetZoom()` was dropped: it is `zoomTo(1)` (or `zoomTo(minScale)`), and
 one fewer method keeps the surface small.
 
+**Numbers that are not finite are ignored.** `PdfView` drops `NaN` and
+`±Infinity` passed to `goToPage`, `zoomTo` and `goToViewport` (and a
+`scale` that is not positive) before they reach native, so both platforms
+behave the same. In 1.0.0 iOS crashed on `goToPage(NaN)` (Swift's
+`Int(_:)` traps), zoomed out on `zoomTo(NaN)`, and Android ignored both.
+`NaN` most often comes from parsing a page field (`Number('a') - 1`), where
+doing nothing is the expected result. Native code still guards: iOS
+converts page numbers through the `Int32` range, so a huge finite page
+(`1e20`) is clamped to the last page, as on Android.
+
 ### Loading state
 
 There is no built-in spinner (react-native-pdf's `renderActivityIndicator`).

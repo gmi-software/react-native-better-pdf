@@ -807,8 +807,8 @@ Screen readers get the document's text and position:
 
 | Method | Description |
 | --- | --- |
-| `goToPage(page, options?)` | Scroll to a zero-based page, animated unless `{ animated: false }` |
-| `zoomTo(scale, options?)` | Zoom relative to the fitted page |
+| `goToPage(page, options?)` | Scroll to a zero-based page (clamped to the document), animated unless `{ animated: false }` |
+| `zoomTo(scale, options?)` | Zoom relative to the fitted page, clamped to `minScale` / `maxScale` |
 | `goToViewport(viewport)` | Jump to a position from `onViewportChange` |
 | `getOutline()` | The table of contents |
 | `getPageSizes()` | Every page's size in PDF points |
@@ -817,6 +817,9 @@ Screen readers get the document's text and position:
 | `getFormFields()` / `setFormFieldValues(values)` / `exportDocument(options?)` | Read, fill in and save the form |
 | `search(query)` / `searchNext()` / `searchPrevious()` / `clearSearch()` | Full-text search |
 | `getStats()` | Render and cache statistics, for diagnostics |
+
+`goToPage`, `zoomTo` and `goToViewport` ignore `NaN` and `±Infinity`, e.g.
+`goToPage(Number(text) - 1)` while a page field holds a letter.
 
 ### Types
 

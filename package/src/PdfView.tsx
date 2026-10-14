@@ -84,16 +84,23 @@ export interface NavigationOptions {
 }
 
 export interface PdfViewRef {
-  /** Scrolls so `page` (zero-based, clamped) is at the top of the viewport. */
+  /**
+   * Scrolls so `page` (zero-based, clamped) is at the top of the viewport.
+   * `NaN` and `±Infinity` are ignored.
+   */
   goToPage(page: number, options?: NavigationOptions): void;
-  /** Zooms around the viewport center. Relative to the fitted page, clamped to [minScale, maxScale]. */
+  /**
+   * Zooms around the viewport center. Relative to the fitted page, clamped
+   * to [minScale, maxScale]. `NaN` and `±Infinity` are ignored.
+   */
   zoomTo(scale: number, options?: NavigationOptions): void;
   /**
    * Jumps, without animation, to a position saved from
    * {@linkcode PdfViewProps.onViewportChange}: its page point at the view's
    * top-left corner, at its zoom. The page is clamped to the document and
    * the position to the scrollable area. Paged layouts settle on the page
-   * unless zoomed in. Ignored before {@linkcode PdfViewProps.onLoad}.
+   * unless zoomed in. Ignored before {@linkcode PdfViewProps.onLoad}, and
+   * when a field is `NaN` or `±Infinity` or `scale` is not positive.
    */
   goToViewport(viewport: PdfViewport): void;
   /** Native diagnostics. `null` before the native view has mounted. */
@@ -604,10 +611,14 @@ export function PdfView({
   useImperativeHandle(
     ref,
     () => ({
+      // Non-finite numbers are dropped here so both platforms ignore them
+      // the same way.
       goToPage(page, options) {
+        if (!Number.isFinite(page)) return;
         nativeRef.current?.goToPage(page, options?.animated ?? true);
       },
       zoomTo(scale, options) {
+        if (!Number.isFinite(scale)) return;
         nativeRef.current?.zoomTo(scale, options?.animated ?? true);
       },
       async getOutline() {
@@ -617,6 +628,7 @@ export function PdfView({
       },
       goToViewport(viewport) {
         const { page, x, y, scale } = viewport;
+        if (![page, x, y, scale].every(Number.isFinite) || scale <= 0) return;
         nativeRef.current?.goToViewport({ page, x, y, scale });
       },
       async getPageSizes() {

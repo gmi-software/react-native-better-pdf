@@ -480,6 +480,37 @@ describe('PdfView', () => {
     expect(ref.current?.getStats()).toBe(stats);
   });
 
+  test('navigation ignores numbers that are not finite', () => {
+    const ref = createRef<PdfViewRef>();
+    render(<PdfView ref={ref} source={{ uri: 'x' }} />);
+    const hybridRef = lastHost().hybridRef as {
+      f: (instance: typeof nativeInstance) => void;
+    };
+    hybridRef.f(nativeInstance);
+
+    const viewport = { page: 2, x: 0, y: 10, scale: 1 };
+    for (const value of [NaN, Infinity, -Infinity]) {
+      ref.current?.goToPage(value);
+      ref.current?.zoomTo(value);
+      ref.current?.goToViewport({ ...viewport, page: value });
+      ref.current?.goToViewport({ ...viewport, x: value });
+      ref.current?.goToViewport({ ...viewport, y: value });
+      ref.current?.goToViewport({ ...viewport, scale: value });
+    }
+    ref.current?.goToViewport({ ...viewport, scale: 0 });
+    expect(nativeCalls).toEqual([]);
+
+    // Finite values outside the document are clamped natively.
+    ref.current?.goToPage(1e20);
+    ref.current?.goToPage(-1);
+    ref.current?.goToViewport({ ...viewport, page: -1e20 });
+    expect(nativeCalls).toEqual([
+      'goToPage(100000000000000000000, true)',
+      'goToPage(-1, true)',
+      'goToViewport({"page":-100000000000000000000,"x":0,"y":10,"scale":1})',
+    ]);
+  });
+
   test('initialViewport takes precedence and keeps the native prop stable', () => {
     const viewport = { page: 7, x: -4, y: 120.5, scale: 2 };
     const renderer = render(

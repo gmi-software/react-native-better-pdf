@@ -252,10 +252,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   // MARK: Methods (JS thread)
 
   func goToPage(page: Double, animated: Bool) throws {
+    guard let index = page.pageIndex else { return }
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
-      self.keepReadingPage(Int(page.rounded()))
-      self.scrollToPage(Int(page.rounded()), animated: animated)
+      self.keepReadingPage(index)
+      self.scrollToPage(index, animated: animated)
     }
   }
 
@@ -267,10 +268,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
 
   func goToViewport(viewport: PdfViewport) throws {
-    guard [viewport.page, viewport.x, viewport.y, viewport.scale].allSatisfy(\.isFinite), viewport.scale > 0 else { return }
+    guard let index = viewport.page.pageIndex,
+          [viewport.x, viewport.y, viewport.scale].allSatisfy(\.isFinite), viewport.scale > 0 else { return }
     DispatchQueue.main.async { [weak self] in
       self?.applyViewport(
-        page: Int(viewport.page.rounded()),
+        page: index,
         point: CGPoint(x: viewport.x, y: viewport.y),
         scale: viewport.scale
       )
@@ -731,7 +733,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     guard let pdfView else { return }
     let pageCount = document.pageCount
     let position = initialPosition
-    let requestedPage = position.map { $0.page.isFinite ? Int($0.page.rounded()) : 0 } ?? 0
+    let requestedPage = position?.page.pageIndex ?? 0
     pendingInitialPage = min(max(requestedPage, 0), pageCount - 1)
     pendingInitialScale = position.flatMap { $0.scale.isFinite && $0.scale > 0 ? $0.scale : nil }
     pendingInitialPoint = nil
