@@ -65,8 +65,15 @@ type PdfSource =
 - The normalized source is memoized **by value** so re-rendering the parent
   with an inline object literal does not reload the document (Nitro diffs
   props by identity — see research notes).
-- Base64 / `data:` URIs are intentionally not supported: they force the whole
-  file through the JS heap, which is precisely what this library avoids.
+- Base64 / `data:` URIs are intentionally not supported. Android's
+  `PdfRenderer` reads a file descriptor, so the library would write the data
+  to a file anyway and then own that file's name, reuse and cleanup; the
+  caller does it in a few lines (README "Base64 documents"). A
+  document-sized string in `source` would also be normalized and compared on
+  the JS thread on every render (the memoization above) and copied again
+  into native memory. An API that returns a PDF as base64 in JSON is better
+  served by returning the PDF and passing `uri` + `headers`: native
+  download, progress, caching, offline.
 
 ### Props
 
@@ -166,7 +173,7 @@ type PdfErrorCode =
 | `source.cache`, `cacheFileName`, `expiration` | → `cache`, `cacheKey`, `maxAgeMs` | See "Caching and offline": `'persistent'` instead of `true`, a key instead of a file name, revalidation instead of deletion. |
 | `source.method`, `source.body`           | Omitted                 | `GET` only for now. (`body`, a request body, is read by react-native-pdf's JS but missing from its types.) |
 | `renderActivityIndicator`, `progressContainerStyle` | Omitted      | App-owned UI; see "Loading state".                                        |
-| base64 `data:` sources                   | Omitted                 | Forces the file through the JS heap.                                       |
+| base64 `data:` sources                   | Omitted                 | Write the data to a file and pass its path; see "Source".                  |
 
 ## Nitro spec mapping
 

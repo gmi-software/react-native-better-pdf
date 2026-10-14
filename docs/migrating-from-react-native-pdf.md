@@ -76,7 +76,7 @@ users see.
 | `source.cacheFileName` | `source.cacheKey` | Identifies the copy instead of the URL and headers. |
 | `source.expiration` (seconds) | `source.maxAgeMs` (milliseconds) | An older copy is revalidated with the server (304 keeps it) instead of deleted, and still shown offline. |
 | `source.method`, `source.body` | — | Only `GET` (`body` is read by react-native-pdf but missing from its types). |
-| `source={{ uri: 'data:application/pdf;base64,…' }}` | — | See [Base64 documents](#base64-documents). |
+| `source={{ uri: 'data:application/pdf;base64,…' }}` | — | Write the data to a file and open it; see [Base64 documents](#base64-documents). |
 | `source={{ uri: 'bundle-assets://…' }}` | `require()` | Bundle the file as an asset instead. |
 | `page` | `initialPage` (0-based) + `ref.goToPage()` | `page` is applied on change in react-native-pdf; here the initial page is a prop and later navigation is imperative. |
 | `scale` | `initialScale` + `ref.zoomTo(scale)` | Relative to the fitted page; applied once on load, like `initialPage`. |
@@ -348,17 +348,34 @@ See the README's "Offline reading and caching" section.
 
 ## Base64 documents
 
-`data:` URIs are not supported: they force the whole document through the JS
-heap, which this library avoids. Write the data to a file once and open the
-file:
+`data:` URIs are not supported. react-native-pdf accepted them by writing the
+data to a cache file itself (named, without `cacheFileName`, by a SHA-1 of
+the whole string computed in JS, and written with react-native-blob-util).
+Here that step is yours, done once:
 
 ```ts
+// Expo: expo-file-system
 import { File, Paths } from 'expo-file-system';
 
-const file = new File(Paths.cache, 'document.pdf');
+const file = new File(Paths.cache, `${id}.pdf`);
 file.write(base64, { encoding: 'base64' });
 <PdfView source={{ uri: file.uri }} />;
 ```
+
+```ts
+// Bare React Native: @dr.pogodin/react-native-fs (the react-native-fs API)
+import { CachesDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
+
+const path = `${CachesDirectoryPath}/${id}.pdf`;
+await writeFile(path, base64, 'base64');
+<PdfView source={{ filePath: path }} />;
+```
+
+Give each document its own file name: a source with the same path does not
+reload the view, even after the file is rewritten. If the base64 comes from
+your own API, returning the PDF itself and passing its URL with `headers` is
+better still: it is then downloaded natively, with progress, caching and
+offline reading. See the README's "Base64 documents" section.
 
 ## Not supported yet
 
