@@ -14,6 +14,7 @@ class PdfDocumentReader(private val source: PdfByteSource) {
   private val xref: Map<Int, XrefEntry>
   private val cache = HashMap<Int, PdfObject>()
   private val objectStreams = HashMap<Int, ObjectStreamIndex>()
+  /** The objects being read, each needed to read the one before (an indirect `/Length`, an object stream). */
   private val resolving = HashSet<Int>()
 
   init {
@@ -49,6 +50,9 @@ class PdfDocumentReader(private val source: PdfByteSource) {
   private fun objectAt(number: Int): PdfObject? {
     cache[number]?.let { return it }
     val entry = xref[number] ?: return null
+    // Each object of a chain recurses: a crafted chain of thousands would
+    // overflow the stack. The read that needed this one fails instead.
+    if (resolving.size >= MAX_NESTED_READS) throw PdfFormatException("Objects nested too deeply at object $number")
     // A /Length that refers back to the object being read would recurse.
     if (!resolving.add(number)) return null
     try {
@@ -260,6 +264,7 @@ class PdfDocumentReader(private val source: PdfByteSource) {
   private companion object {
     const val TAIL_BYTES = 2048
     const val MAX_REFERENCE_HOPS = 16
+    const val MAX_NESTED_READS = 32
     const val MAX_XREF_SECTIONS = 64
     const val MAX_XREF_ENTRIES = 10_000_000
     const val MAX_OBJECTS_PER_STREAM = 100_000

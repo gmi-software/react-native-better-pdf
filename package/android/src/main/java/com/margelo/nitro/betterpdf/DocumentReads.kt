@@ -16,6 +16,7 @@ import com.margelo.nitro.betterpdf.outline.PdfLinkReader
 import com.margelo.nitro.betterpdf.outline.PdfOutlineReader
 import com.margelo.nitro.betterpdf.outline.PdfPageSizeReader
 import java.io.File
+import java.nio.channels.FileChannel
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -101,7 +102,7 @@ internal class DocumentReads(
           DocumentRenderer.open(duplicateDescriptor(), password).use { it.writeUnprotected(target) }
         }
         ParcelFileDescriptor.AutoCloseInputStream(ParcelFileDescriptor.open(copy, ParcelFileDescriptor.MODE_READ_ONLY)).channel.use { channel ->
-          PdfFormReader(PdfDocumentReader(FileChannelByteSource(channel))).read()
+          parse(channel) { PdfFormReader(it).read() }
         }
       } finally {
         copy.delete()
@@ -149,8 +150,19 @@ internal class DocumentReads(
   }
 
   private fun <T> parse(read: (PdfDocumentReader) -> T): T =
-    ParcelFileDescriptor.AutoCloseInputStream(duplicateDescriptor()).channel.use { channel ->
+    ParcelFileDescriptor.AutoCloseInputStream(duplicateDescriptor()).channel.use { parse(it, read) }
+
+  /**
+   * Reads [channel]'s file with [read]. The readers bound their recursion,
+   * but not the stack of the thread they run on: a file that still exhausts
+   * it fails like any unreadable file instead of crashing the app (the
+   * links thread and the render thread catch exceptions, not errors).
+   */
+  private fun <T> parse(channel: FileChannel, read: (PdfDocumentReader) -> T): T =
+    try {
       read(PdfDocumentReader(FileChannelByteSource(channel)))
+    } catch (_: StackOverflowError) {
+      throw PdfFormatException("The PDF's structure is nested too deeply")
     }
 
   private fun readPageSizesFromTree(): List<PdfDocumentLayout.PageSize>? =

@@ -5,9 +5,10 @@ import org.junit.Test
 import kotlin.random.Random
 
 /**
- * Deterministic mutation fuzzing: the readers parse untrusted files, so any
- * corruption must end in a result or a [PdfFormatException] — never another
- * exception, a hang or a stack overflow.
+ * Deterministic mutation fuzzing, and generated deep structures: the
+ * readers parse untrusted files, so any corruption must end in a result or
+ * a [PdfFormatException] — never another exception, a hang or a stack
+ * overflow.
  */
 class PdfOutlineFuzzTest {
   private fun load(vararg names: String) = names.map { name ->
@@ -70,5 +71,47 @@ class PdfOutlineFuzzTest {
   fun `corrupted forms fail cleanly`() {
     val parsed = fuzz(load("forms.pdf", "forms-compressed.pdf", "forms-boxes.pdf")) { PdfFormReader(it).read() }
     assertTrue("parsed $parsed of 500", parsed > 100)
+  }
+
+  /**
+   * What byte flips cannot produce: chains of up to 2,000 objects of mixed
+   * kinds, each needed to read the one before ([deepChainDocument]), below
+   * up to 80 levels of outline, page tree and field tree, half of them with
+   * a broken `startxref` (the rebuild). Every reader runs on a small stack
+   * and must end in a result or a [PdfFormatException] within 2 s.
+   */
+  @Test
+  fun `deep object chains fail cleanly`() {
+    val readers = listOf<(PdfDocumentReader) -> Unit>(
+      { PdfLinkReader(it).read() },
+      { PdfOutlineReader(it).read() },
+      { PdfFormReader(it).read() },
+      { PdfInfoReader(it).read() },
+      { PdfPageSizeReader(it).read() },
+    )
+    val random = Random(20261014)
+    var parsed = 0
+    repeat(60) { iteration ->
+      val chain = List(random.nextInt(2_000)) { ChainStep.entries.random(random) }
+      var bytes = deepChainDocument(chain, nesting = 1 + random.nextInt(80))
+      if (iteration % 2 == 1) {
+        bytes = bytes.toString(Charsets.ISO_8859_1)
+          .replace(Regex("startxref\n\\d+"), "startxref\n999999999")
+          .toByteArray(Charsets.ISO_8859_1)
+      }
+      readers.forEachIndexed { index, read ->
+        val started = System.nanoTime()
+        try {
+          onSmallStack { read(PdfDocumentReader(ByteArraySource(bytes))) }
+          parsed++
+        } catch (expected: PdfFormatException) {
+          // Fine.
+        }
+        val millis = (System.nanoTime() - started) / 1_000_000
+        assertTrue("iteration $iteration, reader $index took $millis ms", millis < 2_000)
+      }
+    }
+    // Only a page tree deeper than the readers' limit fails.
+    assertTrue("parsed $parsed of 300", parsed > 250)
   }
 }

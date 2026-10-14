@@ -611,9 +611,13 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
   do. It reads a duplicate of the file descriptor with positional reads, so
   rendering is not blocked.
 - **Untrusted input**: every recursion and loop is bounded (64 levels,
-  10,000 entries, nesting, string, stream-expansion and xref limits); cycles
-  are broken; a deterministic fuzz test (500 mutated files) must end in a
-  result or `PdfFormatException` within 2 s each. Encrypted documents
+  10,000 entries, nesting, string, stream-expansion and xref limits; objects
+  whose reading needs another object — an indirect `/Length`, an object
+  stream — nest 32 deep at most); cycles are broken; deterministic fuzz
+  tests (500 mutated files, and 300 reads of generated chains of up to
+  2,000 objects on a 256 KB stack) must end in a result or
+  `PdfFormatException` within 2 s each. A stack overflow the limits miss
+  reads as `PdfFormatException` too, never a crash. Encrypted documents
   reject.
 - **Tested against three producers** (the generator in classic and
   object-stream form, PDFKit, pypdf), with PDFKit as the reference.
