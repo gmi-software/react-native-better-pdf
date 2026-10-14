@@ -53,27 +53,24 @@ class DocumentCacheTest {
   }
 
   /** A cache over the same directories, as after an app restart. */
-  private fun newCache() =
-    DocumentCache(
-      createStore = {
-        DocumentCacheStore(
-          sessionDirectory = sessionDirectory,
-          persistentDirectory = persistentDirectory,
-          partialDirectory = partialDirectory,
-          legacyDirectory = root,
-          link = { existing, link -> Files.createLink(link.toPath(), existing.toPath()) },
-        )
-      },
-      executor = executor,
-      clock = clock::get,
+  private fun newCache() = DocumentCache(createStore = ::newStore, executor = executor, clock = clock::get)
+
+  private fun newStore() =
+    DocumentCacheStore(
+      sessionDirectory = sessionDirectory,
+      persistentDirectory = persistentDirectory,
+      partialDirectory = partialDirectory,
+      legacyDirectory = root,
+      link = { existing, link -> Files.createLink(link.toPath(), existing.toPath()) },
     )
 
   private fun source(
     uri: String = server.url(),
+    headers: Map<String, String>? = null,
     cache: PdfCacheMode? = null,
     maxAgeMs: Double? = null,
     cacheKey: String? = null,
-  ) = NativePdfSource(uri, headers = null, cache = cache, maxAgeMs = maxAgeMs, cacheKey = cacheKey)
+  ) = NativePdfSource(uri, headers = headers, cache = cache, maxAgeMs = maxAgeMs, cacheKey = cacheKey)
 
   private fun fetch(source: NativePdfSource, allowStale: Boolean = false) =
     Recorder().also { it.subscription = cache.fetch(source, allowStale, it) }
@@ -180,6 +177,48 @@ class DocumentCacheTest {
   @Test
   fun `non-http sources are rejected`() {
     assertEquals(PdfErrorCode.INVALID_SOURCE, fetch(source("file:///document.pdf")).failure().code)
+    assertEquals(0, server.requests.size)
+  }
+
+  @Test
+  fun `an invalid header is never sent and does not block the source`() {
+    val invalid = source(headers = mapOf("Authorization" to "Bearer a\nb"), cacheKey = "document-1")
+    assertEquals(PdfErrorCode.INVALID_SOURCE, fetch(invalid).failure().code)
+    assertEquals(0, server.requests.size)
+
+    fetch(source(headers = mapOf("Authorization" to "Bearer a"), cacheKey = "document-1")).ready()
+    assertEquals(1, server.requests.size)
+
+    // Checked before the stored copy is looked up, fresh or not: a source
+    // that can never be revalidated is not served.
+    assertEquals(PdfErrorCode.INVALID_SOURCE, fetch(invalid).failure().code)
+    clock.addAndGet(5_000)
+    val stale = fetch(source(headers = invalid.headers, maxAgeMs = 0.0, cacheKey = "document-1"), allowStale = true)
+    assertEquals(PdfErrorCode.INVALID_SOURCE, stale.failure().code)
+    assertEquals(1, server.requests.size)
+  }
+
+  @Test
+  fun `a request the platform rejects still ends the download`() {
+    // DocumentCache checks headers first; this covers whatever it misses.
+    var outcome: DownloadOutcome? = null
+    SharedDownload(
+      key = source().storeKey(),
+      url = server.url(),
+      // Rejected by HttpURLConnection.setRequestProperty, as on Android.
+      headers = mapOf("X-Test" to "a\nb"),
+      existing = null,
+      mode = PdfCacheMode.SESSION,
+      store = newStore(),
+      clock = clock::get,
+      onProgress = { _, _, _, _ -> },
+      onFinished = { _, finished -> outcome = finished },
+    ).run()
+
+    val failed = outcome as DownloadOutcome.Failed
+    assertEquals(PdfErrorCode.INVALID_SOURCE, failed.failure.code)
+    assertFalse(failed.isServerUnreachable)
+    assertNull("the platform's message quotes the value", failed.failure.toPdfError().nativeDescription)
     assertEquals(0, server.requests.size)
   }
 

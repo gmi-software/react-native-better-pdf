@@ -271,6 +271,11 @@ session — or kept for offline reading; see
 `source={{ uri }}` object is fine: the source is compared by value, so
 re-renders never reload the document.
 
+`headers` are sent with the download. Each name must be an HTTP token
+(letters, digits and ``!#$%&'*+-.^_`|~``) and no value may contain a line
+break or another control character (tab is fine): such a source fails with
+`invalid-source` on both platforms, before anything is sent.
+
 ### Base64 documents
 
 `source` does not take base64 or `data:` URIs: the viewer reads files
@@ -948,6 +953,7 @@ flows in [example/e2e](example/e2e).
 | A password-protected document fails with `unsupported-pdf` on Android | The device is below Android 15 without SDK extension 13, where the platform renderer cannot open protected files. |
 | Search reports `isSupported: false`, long presses select nothing | Same devices as above; see the [capability matrix](#capability-matrix). |
 | A remote document fails with `invalid-pdf` | The server answered with something else, often a login page: check the URL and `headers`. |
+| A remote document fails with `invalid-source` | Check that the URL is `http(s)://` and the `headers`: often a token read with a trailing newline. `error.message` names the header. |
 | A signed URL or rotating token downloads the document on every open | Set `cacheKey` on the source to identify the stored copy. |
 | The document is a base64 string | Write it to a file and open the file; see [Base64 documents](#base64-documents). |
 | Tapping a URL link does nothing | The viewer never opens URLs: open them in `onLinkPress`. |

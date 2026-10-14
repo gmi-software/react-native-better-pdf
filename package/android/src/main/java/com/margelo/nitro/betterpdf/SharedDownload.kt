@@ -42,6 +42,19 @@ internal class SharedDownload(
       download()
     } catch (_: InterruptedException) {
       return
+    } catch (e: Throwable) {
+      // Anything else must still end the download: [DocumentCache] keeps it
+      // in flight until [onFinished], and later requests would join it. The
+      // platform rejecting the request (IllegalArgumentException, e.g. for
+      // a header) is the source's fault; its message may quote a header
+      // value, which may hold a token, so it is not passed on.
+      if (cancelled) return
+      val failure = if (e is IllegalArgumentException) {
+        PdfFailure(PdfErrorCode.INVALID_SOURCE, "Downloading $url failed: the request was rejected")
+      } else {
+        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $url failed", cause = e)
+      }
+      DownloadOutcome.Failed(failure, isServerUnreachable = false)
     }
     onFinished(this, outcome)
   }

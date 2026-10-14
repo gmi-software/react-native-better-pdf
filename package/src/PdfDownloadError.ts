@@ -6,7 +6,8 @@ import type { PdfErrorCode } from './types/PdfErrorCode';
  * {@linkcode PdfDownloadError.code}: `'network-error'` (no connection, a
  * timeout), `'http-error'` (see {@linkcode PdfDownloadError.httpStatus}),
  * `'invalid-pdf'` (the server answered with something that is not a PDF,
- * e.g. a login page) or `'invalid-source'` (not an `http(s)://` URL).
+ * e.g. a login page) or `'invalid-source'` (not an `http(s)://` URL, or
+ * an invalid header; see `PdfUriSource.headers`).
  *
  * A cancelled download rejects with an `AbortError` instead.
  */

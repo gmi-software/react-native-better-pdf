@@ -62,6 +62,27 @@ type PdfSource =
 - Remote files are downloaded **natively** (URLSession / HttpURLConnection)
   into a shared cache, keyed by a hash of `cacheKey` or of the URL and
   headers. No blob-util, no JS base64. See "Caching and offline".
+- **Headers are checked natively before any request**, the same way on
+  both platforms: a name must be an RFC 9110 token, a value must not
+  contain control characters other than tab. Otherwise the source fails
+  with `invalid-source`; the message names the header, never the value
+  (it may hold a token). A stored copy is not served for such a source
+  either, fresh or not: it could never be revalidated. Unchecked, the
+  platforms disagreed and neither reported it: Android's
+  `setRequestProperty` throws, which crashed the download thread and left
+  the copy's download in flight forever in 1.0.0; URLSession (tried on
+  macOS CFNetwork) silently drops a value with CR or LF — a broken
+  `Authorization` became the server's 401 —
+  and sends an empty name, or one with spaces or line breaks, as is. The
+  check sits in `DocumentCache` next to the scheme check, so `PdfView`,
+  `PdfCache.download` and `PdfDocument.open` report it through their usual
+  error paths; in JS it would run while `PdfView` renders, where it could
+  only throw. A value ending in a newline, which Android's HTTP stack
+  strips, is rejected too: iOS drops it. Values outside ASCII stay allowed
+  (Android has always sent them as UTF-8), but iOS sends Latin-1 and cuts
+  the value at the first character outside it, so the docs say to keep
+  values ASCII. Android's download thread also turns any other exception
+  into a failure, so a download always ends.
 - The normalized source is memoized **by value** so re-rendering the parent
   with an inline object literal does not reload the document (Nitro diffs
   props by identity — see research notes).
@@ -136,7 +157,7 @@ added later without native changes.
 
 ```ts
 type PdfErrorCode =
-  | 'invalid-source'      // unsupported scheme / empty uri
+  | 'invalid-source'      // unsupported scheme / empty uri / invalid header
   | 'file-not-found'
   | 'network-error'       // transport failure
   | 'http-error'          // non-2xx, see error.httpStatus
@@ -967,8 +988,8 @@ invalidation, prefetch and offline reading (#952, #964, #572, #566, #689,
   background transfers, `POST`.
 - **Tested:** JVM tests run the Android cache against a local HTTP server
   (reuse, 304, changed document, stale fallback, 5xx vs 4xx, non-PDF
-  responses, shared and cancelled downloads, `cacheKey`, promotion,
-  restart, cleanup). `viewer-offline` runs the same story on both
+  responses, invalid headers, shared and cancelled downloads, `cacheKey`,
+  promotion, restart, cleanup). `viewer-offline` runs the same story on both
   platforms with the fixture server's simulated outage
   (`/__control/offline`), including an app restart.
 

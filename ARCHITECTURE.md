@@ -354,6 +354,9 @@ fetch(source) ──► stored copy fresh for source.maxAgeMs? ──yes──�
              unreachable / 5xx → view: stored copy as stale · PdfCache: error
 ```
 
+- **Checked first:** an `http(s)` URL and valid headers (token names, no
+  control characters but tab in values), else `invalid-source` with no
+  request; see `docs/api-design.md` "Source".
 - **Key:** SHA-256 of `cacheKey`, else of `uri` + sorted headers. Files:
   `<key>.pdf` + metadata (`validatedAtMs`, `etag`, `lastModified`).
 - **Where:** session copies in the cache directory (`BetterPdf/session`),

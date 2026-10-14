@@ -23,7 +23,15 @@ import type { PdfCacheMode } from './types/PdfCacheMode';
 export interface PdfUriSource {
   /** `http(s)://`, `file://`, or `content://` (Android). */
   uri: string;
-  /** Request headers for `http(s)://` documents. */
+  /**
+   * Request headers for `http(s)://` documents. Each name must be an HTTP
+   * token (letters, digits and ``!#$%&'*+-.^_`|~``) and no value may contain
+   * a line break or another control character (tab is fine); otherwise
+   * loading fails with `invalid-source` before anything is sent. Keep values
+   * ASCII (encode anything else yourself): Android sends other characters
+   * as UTF-8, iOS as Latin-1 and cuts the value at the first character
+   * outside it.
+   */
   headers?: Readonly<Record<string, string>>;
   /**
    * How long the downloaded copy is kept: for the app session, or across

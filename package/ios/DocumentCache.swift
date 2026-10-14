@@ -72,6 +72,9 @@ final class DocumentCache {
     guard let url = URL(string: source.uri), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
       return deliverFailure(subscriber, .invalidSource(source.uri))
     }
+    if let failure = source.invalidHeaderFailure() {
+      return deliverFailure(subscriber, failure)
+    }
     let key = source.storeKey()
     let copy = store.find(key: key)
     if let copy, copy.metadata.isFresh(maxAgeMs: source.maxAgeMs, nowMs: clock()) {

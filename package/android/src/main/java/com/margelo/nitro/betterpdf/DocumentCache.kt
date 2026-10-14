@@ -84,6 +84,7 @@ internal class DocumentCache(
     if (scheme != "http" && scheme != "https") {
       return deliverFailure(subscriber, PdfFailure(PdfErrorCode.INVALID_SOURCE, "Not an http(s) URL: \"${source.uri}\""))
     }
+    source.invalidHeaderFailure()?.let { return deliverFailure(subscriber, it) }
     val key = source.storeKey()
     val copy = store.find(key)
     if (copy != null && copy.metadata.isFresh(source.maxAgeMs, clock())) {
