@@ -16,6 +16,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
 import java.nio.channels.Channels
+import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.max
 import kotlin.math.roundToInt
@@ -39,12 +40,16 @@ import kotlin.math.sqrt
  * renderer, which closes the FD. Listener callbacks are delivered on the main
  * thread and never after [close].
  */
-class PdfDocumentSession(
+class PdfDocumentSession internal constructor(
   context: Context,
   private val source: NativePdfSource,
   private val password: String?,
   private val bitmapPool: BitmapPool,
   private val listener: Listener,
+  // What needs a device; JVM tests (PdfDocumentSessionTest) pass their own.
+  private val mainThread: Executor = Handler(Looper.getMainLooper()).let { handler -> Executor { handler.post(it) } },
+  private val openSource: PdfSourceResolver.(NativePdfSource, (Long, Long?, Boolean) -> Unit) -> ResolvedSource = PdfSourceResolver::open,
+  private val openRenderer: (ParcelFileDescriptor, String?) -> DocumentRenderer = DocumentRenderer::openOrFail,
 ) {
   interface Listener {
     /**
@@ -92,7 +97,6 @@ class PdfDocumentSession(
 
   private val resolver = PdfSourceResolver(context.applicationContext)
   private val cacheDirectory: File = context.applicationContext.cacheDir
-  private val mainHandler = Handler(Looper.getMainLooper())
   private val queue = RenderQueue<DocumentWork>()
   private val closed: Boolean get() = queue.isClosed
 
@@ -295,13 +299,18 @@ class PdfDocumentSession(
         master?.closeQuietly()
         master = null
       }
+      // When this thread stops on its own (the document did not open), close
+      // as the owner would, so queued form work fails instead of waiting for
+      // good. Posted, so what this thread posted arrives first; a no-op once
+      // closed.
+      mainThread.execute { close() }
     }
   }
 
   /** Opens the document and returns the size of page 0. */
   private fun open(): PdfDocumentLayout.PageSize {
     val progressThrottle = ProgressThrottle()
-    val resolved = resolver.open(source) { loadedBytes, totalBytes, isComplete ->
+    val resolved = resolver.openSource(source) { loadedBytes, totalBytes, isComplete ->
       if (progressThrottle.shouldEmit(SystemClock.uptimeMillis(), loadedBytes, isComplete)) {
         post { listener.onLoadProgress(loadedBytes, totalBytes) }
       }
@@ -330,7 +339,7 @@ class PdfDocumentSession(
   }
 
   private fun createRenderer(descriptor: ParcelFileDescriptor): DocumentRenderer =
-    DocumentRenderer.openOrFail(descriptor, password)
+    openRenderer(descriptor, password)
 
   /** The renderer to open the next page with, re-created when PDFium's cache has grown. */
   private fun rendererForNextPage(): DocumentRenderer {
@@ -370,9 +379,27 @@ class PdfDocumentSession(
           is PageTextQuery -> readPageText(work)
           is FormWork -> doFormWork(work)
         }
+      } catch (error: InterruptedException) {
+        throw error
+      } catch (error: Throwable) {
+        // An Error the work's own handling lets through (out of memory where
+        // none was expected, a stack overflow): only this work fails.
+        failWork(work, error)
       } finally {
         queue.finish()
       }
+    }
+  }
+
+  /** Reports [work] as failed with [error]: its listener call, or its promise. */
+  private fun failWork(work: DocumentWork, error: Throwable) {
+    when (work) {
+      is RenderRequest -> post {
+        listener.onRenderFailed(work, PdfFailure(PdfErrorCode.PAGE_RENDER_FAILED, "Rendering page ${work.page} failed", page = work.page, cause = error))
+      }
+      is TextSelectionQuery -> post { listener.onTextSelected(work, null) }
+      is PageTextQuery -> post { listener.onPageText(work.page, null) }
+      is FormWork -> mainThread.execute { work.fail(IllegalStateException("The form could not be read or changed", error)) }
     }
   }
 
@@ -534,7 +561,7 @@ class PdfDocumentSession(
         } catch (error: OutOfMemoryError) {
           Result.failure(IllegalStateException("Out of memory while reading the form", error))
         }
-        mainHandler.post { work.done(result) }
+        mainThread.execute { work.done(result) }
       }
       is FormWork.SetValues -> {
         val error = try {
@@ -545,7 +572,7 @@ class PdfDocumentSession(
         } catch (error: OutOfMemoryError) {
           IllegalStateException("Out of memory while filling the form in", error)
         }
-        mainHandler.post { work.done(error) }
+        mainThread.execute { work.done(error) }
       }
     }
   }
@@ -631,7 +658,7 @@ class PdfDocumentSession(
 
   /** Runs [block] on the main thread unless the session was closed meanwhile. */
   private inline fun post(crossinline onDropped: () -> Unit = {}, crossinline block: () -> Unit) {
-    mainHandler.post {
+    mainThread.execute {
       if (closed) onDropped() else block()
     }
   }
