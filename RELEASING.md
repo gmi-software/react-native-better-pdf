@@ -16,10 +16,14 @@ goes through a normal reviewed pull request instead.
 
 ```bash
 cd package
-npm version 1.1.0 --no-git-tag-version
+npm version 1.1.0 --no-git-tag-version --no-workspaces-update
+cd .. && bun install
 ```
 
-Open a pull request with that change, then review and merge it as usual.
+`--no-workspaces-update` stops npm from reifying the workspace, which fails on
+the example app's `workspace:*` dependency; `bun install` then records the new
+version in `bun.lock`. Open a pull request with both changes, then review and
+merge it as usual.
 
 **2. Rehearse (optional).** Run the **Release** workflow manually from the
 Actions tab. A manual run is always a dry run: it validates the version and the
