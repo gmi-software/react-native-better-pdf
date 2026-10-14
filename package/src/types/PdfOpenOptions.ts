@@ -12,8 +12,9 @@ export interface PdfOpenOptions {
   onProgress?: (event: PdfLoadProgressEvent) => void;
   /**
    * Cancels opening: the promise rejects with the signal's reason (an
-   * `AbortError` by default). A download that a `PdfView` or `PdfCache` is
-   * also waiting for continues for them.
+   * `AbortError` by default) and `onProgress` is not called again. A
+   * download that a `PdfView` or `PdfCache` is also waiting for continues
+   * for them.
    */
   signal?: AbortSignal;
 }

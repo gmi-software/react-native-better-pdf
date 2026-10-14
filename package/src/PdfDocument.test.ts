@@ -197,6 +197,20 @@ describe('PdfDocument.open', () => {
     expect(lastNative().closeCount).toBe(1);
   });
 
+  test('drops progress that arrives after an abort', async () => {
+    const events: PdfLoadProgressEvent[] = [];
+    const controller = new AbortController();
+    const promise = PdfDocument.open(
+      { uri: 'https://x.test/a.pdf' },
+      { onProgress: (event) => events.push(event), signal: controller.signal },
+    );
+    lastNative().onProgress?.({ loadedBytes: 5, totalBytes: 10 });
+    controller.abort();
+    lastNative().onProgress?.({ loadedBytes: 8, totalBytes: 10 });
+    await promise.catch(() => undefined);
+    expect(events).toEqual([{ loadedBytes: 5, totalBytes: 10 }]);
+  });
+
   test('with a signal, still resolves and maps failures', async () => {
     const controller = new AbortController();
     const success = PdfDocument.open(

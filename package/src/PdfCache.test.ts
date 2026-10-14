@@ -142,6 +142,20 @@ describe('PdfCache.download', () => {
     expect(error).toMatchObject({ name: 'AbortError' });
   });
 
+  test('drops progress that arrives after an abort', async () => {
+    const events: PdfLoadProgressEvent[] = [];
+    const controller = new AbortController();
+    const promise = PdfCache.download(
+      { uri: 'https://x.test/a.pdf' },
+      { onProgress: (event) => events.push(event), signal: controller.signal },
+    );
+    lastDownload().onProgress?.({ loadedBytes: 5, totalBytes: 10 });
+    controller.abort();
+    lastDownload().onProgress?.({ loadedBytes: 8, totalBytes: 10 });
+    await promise.catch(() => undefined);
+    expect(events).toEqual([{ loadedBytes: 5, totalBytes: 10 }]);
+  });
+
   test('rejects with the signal reason when one is given', async () => {
     const controller = new AbortController();
     const promise = PdfCache.download(

@@ -12,6 +12,7 @@ import type { PdfOutlineItem } from './types/PdfOutlineItem';
 import type { PdfPageImage } from './types/PdfPageImage';
 import type { PdfPageSize } from './types/PdfPageSize';
 import type { PdfRenderPageOptions } from './types/PdfRenderPageOptions';
+import { untilAborted } from './untilAborted';
 
 /**
  * A PDF opened without a view: its page count, metadata, page sizes and
@@ -78,7 +79,7 @@ export class PdfDocument {
       native.open(
         normalizeSource(source, Image.resolveAssetSource),
         password,
-        onProgress,
+        untilAborted(onProgress, signal),
       ))();
     const settle = (value: PdfOpenResult): PdfDocument => {
       if (value.document !== undefined) {

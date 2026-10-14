@@ -6,6 +6,7 @@ import { normalizeUriSource, type PdfUriSource } from './source';
 import type { BetterPdfCache } from './specs/BetterPdfCache.nitro';
 import type { PdfCacheEntry } from './types/PdfCacheEntry';
 import type { PdfDownloadResult } from './types/PdfDownloadResult';
+import { untilAborted } from './untilAborted';
 
 let nativeCache: BetterPdfCache | undefined;
 let nextRequestId = 1;
@@ -73,7 +74,7 @@ export const PdfCache = {
     const result = cache.download(
       requestId,
       normalizeUriSource(source),
-      onProgress,
+      untilAborted(onProgress, signal),
     );
     if (signal === undefined) return unwrap(await result);
     return new Promise<PdfCacheEntry>((resolve, reject) => {
