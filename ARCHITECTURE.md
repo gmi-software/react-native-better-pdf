@@ -299,7 +299,7 @@ user zoomed again still lands in the right place.
 | Event                 | Effect                                                                       |
 | --------------------- | ---------------------------------------------------------------------------- |
 | `source`/`password` change | old session `close()`d; new session started                              |
-| `onDropView`          | session closed, all bitmaps dropped                                          |
+| `onDropView`          | `on*` callbacks released, session closed, all bitmaps dropped                |
 | `session.close()`     | queue cleared, download aborted, pending main-thread results dropped; the worker finishes the in-flight render, then closes the renderer (and with it the FD) |
 | Detach from window    | bitmaps dropped, pool emptied, queue emptied                                 |
 
@@ -331,8 +331,10 @@ double-tap, page virtualization and background tile rendering. The wrapper:
   if PDFKit lost it;
 - searches with `beginFindString` (asynchronous; matches arrive through
   `PDFDocumentDidFindMatch`) and shows them with `highlightedSelections`;
-- sets `document = nil` in `onDropView` so PDFKit releases its tiles
-  immediately.
+- in `onDropView`, releases the `on*` callbacks and destroys the `PDFView`
+  with its document, so PDFKit releases its tiles immediately; the search
+  and the form drop their references to the document then and when the
+  source changes.
 
 PDFKit does not expose cache metrics; `getStats()` returns `-1` for those
 fields on iOS.

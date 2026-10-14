@@ -230,7 +230,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
 
   func onDropView() {
+    releaseCallbacks()
     searchController.clear()
+    documentForm = nil
     offsetObservation = nil
     contentSizeObservation = nil
     overlayScrollObservations = []
@@ -247,6 +249,24 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     releaseDisplayedPin()
     scrollView = nil
     setStatsPageCount(0)
+  }
+
+  /// The callbacks hold JS functions, which hold the JS wrapper's state and
+  /// with it this hybrid object (`hybridRef`): a cycle through a JS GC root
+  /// that kept every closed viewer alive (measured, see
+  /// docs/performance/results.md). Also, no events into JS for a dropped view.
+  private func releaseCallbacks() {
+    onLoad = nil
+    onLoadProgress = nil
+    onError = nil
+    onPageChange = nil
+    onLinkPress = nil
+    onPageTap = nil
+    onScaleChange = nil
+    onViewportChange = nil
+    onSearchChange = nil
+    onTextSelectionChange = nil
+    onFormChange = nil
   }
 
   // MARK: Methods (JS thread)
@@ -686,6 +706,10 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     loadTask?.cancel()
     loadTask = nil
     pdfView?.document = nil
+    // The search and the form would keep the old document while the next
+    // one loads, or for the life of the view if it fails to load.
+    searchController.clear()
+    documentForm = nil
     layoutOverlays()
     releaseDisplayedPin()
     container.resetSelection()

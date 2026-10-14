@@ -243,11 +243,33 @@ class HybridBetterPdfView(
     // report a cleared text selection), as on iOS.
     documentView.listener = null
     documentView.onPagesMoved = null
+    releaseCallbacks()
     closeSession()
     // JS may keep this hybrid object alive (through `hybridRef`) until its GC
     // runs; hold no pixels in the meantime. (Measured on iOS: ~7.5 MB per
     // closed viewer when only the document was released.)
     documentView.bitmapPool.clear()
+  }
+
+  /**
+   * The callbacks hold JS functions, which hold the JS wrapper's state and
+   * with it this hybrid object (`hybridRef`): a cycle through a JS GC root
+   * that kept every closed viewer alive (measured, see
+   * docs/performance/results.md), and with it the context of the Activity
+   * it was created in.
+   */
+  private fun releaseCallbacks() {
+    onLoad = null
+    onLoadProgress = null
+    onError = null
+    onPageChange = null
+    onLinkPress = null
+    onPageTap = null
+    onScaleChange = null
+    onViewportChange = null
+    onSearchChange = null
+    onTextSelectionChange = null
+    onFormChange = null
   }
 
   /**

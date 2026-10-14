@@ -217,6 +217,12 @@ The public component is a thin wrapper around the generated host component:
   plumbing.
 - Callbacks are routed through refs so their identity never changes after
   mount; changing `onPageChange` between renders costs no native prop update.
+- `onDropView` releases the callbacks on both platforms. Native holds each
+  as a JS function, a GC root; its closure shares an environment with the
+  ref that `hybridRef` fills, and the hybrid object owns the native view.
+  Kept, that cycle kept every closed viewer alive for the life of the JS
+  runtime (measured, `docs/performance/results.md` §14). The JS side keeps
+  its ref: StrictMode's simulated unmount would not call `hybridRef` again.
 
 ## Links and taps
 

@@ -75,6 +75,8 @@ final class PdfSearchController {
 
   func clear() {
     stopFinding()
+    // Not kept for a closed view or a document being replaced.
+    document = nil
     let hadSearch = !query.isEmpty
     query = ""
     matches = []

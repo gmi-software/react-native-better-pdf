@@ -269,7 +269,8 @@ empties the bitmap pool.
 | growth per round | ~150 MB | ~6 MB |
 
 The remaining ~0.3 MB per opened viewer is the empty native shells and their
-JS wrappers until the JS garbage collector runs.
+JS wrappers until the JS garbage collector runs. (Not so: a reference cycle
+through a GC root kept them for the life of the runtime; see §14.)
 
 ## 11. Re-run after text selection (2026-09-30)
 
@@ -486,3 +487,60 @@ react-native-pdf; peaks 280 / 325 / 197 vs 351 / 353 / 220 MB).
   or lower footprint; after a run its footprint is lower for `small` and
   `medium`. Remote loads are within one run's noise except `medium`, where
   this run was slower.
+
+## 14. Closed viewers never released (2026-10-14)
+
+**Found by**: a code audit (not measured then). Native stores each `on*`
+callback as a JS function, which Nitro keeps as a GC root. The callback's
+closure shares an environment with the `PdfView` ref that `hybridRef`
+fills, and that hybrid object owns the native view, which owns the
+callbacks: a cycle the garbage collector cannot break. Separately, iOS's
+search and form kept the displayed `PDFDocument` after `onDropView`.
+
+**Method**: debug builds of the example (RN 0.86.3, Nitro 0.37.1) with
+temporary probes: a live-instance count of `HybridBetterPdfView` and of
+the displayed `ColorSchemeDocument` (iOS: `init` / `deinit`; Android: weak
+references, counted at each `init`), logged. Maestro opens and closes the
+Viewer screen's bundled sample (which sets `onLoad`) 20 times. Garbage is
+then collected by force: Hermes through Metro's inspector
+(`HeapProfiler.collectGarbage`), Android's ART with `am dumpheap`, in the
+order ART, Hermes, ART, twice. Instances are counted independently with
+`heap <pid>` (iOS simulator) and from the heap dump (Android). iOS
+simulator "iPhone 17 Pro" (iOS 26.5) and Android emulator
+`sdk_gphone64_arm64` (API 37).
+
+**Change**: `onDropView` sets every `on*` callback to `nil` / `null`
+before it tears down, which also stops events into JS for a dropped view.
+iOS: `PdfSearchController.clear()` releases its document, and `onDropView`
+and `reload()` clear the search and the form. Clearing the search on a
+source change (as Android already does) also stops the old document's
+search from reporting while the next one loads.
+
+| Alive after closing | Before | After |
+| --- | ---: | ---: |
+| iOS viewers, after forced GC | 12 of 12 | 0 of 20 |
+| Android viewers, after forced GC | 20 of 20 | 0 of 20 |
+| iOS `PDFDocument`s of searched viewers, no GC | 6 of 6 | 0 of 5 |
+
+- iOS before: `onDropView` ran for every close, `deinit` never, also after
+  five forced collections; `heap` listed 12 `HybridBetterPdfView` and 12
+  `PdfContainerView`. After: 16 of 20 were released by Hermes's own
+  collections during the loop, the rest by the forced one. The final code,
+  without the probes, again left none (`heap`).
+- Android before: the heap dump held 21 `HybridBetterPdfView`,
+  `PdfDocumentView`, `DocumentContainer` and `Func_void_PdfLoadEvent_cxx`
+  (the 20 closed and one more opened to log the count); `dumpsys meminfo`
+  counted 204 views on the document list. After: the view opened to log
+  the count saw only itself; 164 views; the dump held one instance, the
+  last closed (the one closed before it was gone once it had opened).
+- Each closed viewer's `PDFDocument` went about 15 ms after `onDropView`
+  even while the viewer itself waited for a collection; before, every
+  searched one stayed with its viewer.
+- In debug builds React DevTools keeps host components' props: in the
+  example, `SearchBar`'s `pdf` (the `PdfView` ref) kept each viewer that
+  had shown the search bar, now an empty shell without a document. Release
+  builds have no DevTools; not measured there.
+- On React Native 0.81, iOS never calls `onDropView` (Nitro's generated
+  view calls it from `invalidate`, which 0.81 does not call for views that
+  are not recycled), so none of this runs there and closed viewers stay as
+  before.
