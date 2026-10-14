@@ -138,7 +138,8 @@ Kotlin 2.1, AGP 8.12 / Gradle 9.3, Node 24.
 Not supported:
 
 - Expo Go: it cannot load third-party native code.
-- `data:` / base64 sources, by design: they force the file through the JS heap.
+- `data:` / base64 sources, by design: write the data to a file and open the
+  file, see [Base64 documents](#base64-documents).
 - Editing annotations; see [What's next](#whats-next).
 
 ## Capability matrix
@@ -269,6 +270,42 @@ session — or kept for offline reading; see
 [Offline reading and caching](#offline-reading-and-caching). An inline
 `source={{ uri }}` object is fine: the source is compared by value, so
 re-renders never reload the document.
+
+### Base64 documents
+
+`source` does not take base64 or `data:` URIs: the viewer reads files
+(Android's `PdfRenderer` needs one), and a document-sized string in a prop
+would be processed again on the JS thread on every render. Write the data to
+a file once and open the file:
+
+```tsx
+// Expo: expo-file-system
+import { File, Paths } from 'expo-file-system';
+
+const file = new File(Paths.cache, `${id}.pdf`);
+file.write(base64, { encoding: 'base64' });
+
+<PdfView source={{ uri: file.uri }} />;
+```
+
+```tsx
+// Bare React Native: @dr.pogodin/react-native-fs (the react-native-fs API)
+import { CachesDirectoryPath, writeFile } from '@dr.pogodin/react-native-fs';
+
+const path = `${CachesDirectoryPath}/${id}.pdf`;
+await writeFile(path, base64, 'base64');
+
+<PdfView source={{ filePath: path }} />;
+```
+
+Give each document its own file name: a source with the same path does not
+reload the view, even after the file is rewritten.
+
+When the base64 comes from your own API (a PDF wrapped in JSON), return the
+PDF itself and pass its URL with `headers` instead: it is then downloaded
+natively, with progress, caching and offline reading (see
+[Offline reading and caching](#offline-reading-and-caching)), and is a
+quarter smaller than its base64 form.
 
 ### Props
 
@@ -859,8 +896,8 @@ Every type is exported from the package root; see
     process for untrusted input, which this library does not provide.
 - **iOS**: PDFKit does not expose cache statistics; `getStats()` reports
   `-1` for them.
-- `data:`/base64 sources are intentionally unsupported (they force the file
-  through the JS heap).
+- `data:`/base64 sources are intentionally unsupported: the viewer reads
+  files (see [Base64 documents](#base64-documents)).
 - Downloads use `GET` only, run only while the app runs, and are not
   limited in total size (see
   [Offline reading and caching](#offline-reading-and-caching)).
@@ -912,6 +949,7 @@ flows in [example/e2e](example/e2e).
 | Search reports `isSupported: false`, long presses select nothing | Same devices as above; see the [capability matrix](#capability-matrix). |
 | A remote document fails with `invalid-pdf` | The server answered with something else, often a login page: check the URL and `headers`. |
 | A signed URL or rotating token downloads the document on every open | Set `cacheKey` on the source to identify the stored copy. |
+| The document is a base64 string | Write it to a file and open the file; see [Base64 documents](#base64-documents). |
 | Tapping a URL link does nothing | The viewer never opens URLs: open them in `onLinkPress`. |
 | `onPageTap` arrives about 300 ms after the tap | It waits for a possible double tap; `enableDoubleTapZoom={false}` reports taps at once. |
 | The first page sits under the status bar or a header | The viewer adds no safe-area insets: place it in a `SafeAreaView`, or use `contentInset` for translucent bars. |
