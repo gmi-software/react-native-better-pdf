@@ -926,6 +926,11 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     }
     when (request) {
       is RenderRequest.Base -> {
+        // Finished after the window hid (the queue was dropped then); renders again on return.
+        if (windowVisibility != VISIBLE && request.page !in visiblePages()) {
+          bitmapPool.release(bitmap)
+          return
+        }
         cache.put(request.page, bitmap, protectedKeys = visiblePages().toSet())
         staleFormPages -= request.page
         updateCacheStats()
@@ -1013,7 +1018,12 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
 
   override fun onWindowVisibilityChanged(visibility: Int) {
     super.onWindowVisibilityChanged(visibility)
-    if (visibility == VISIBLE) requestRenders()
+    if (visibility == VISIBLE) {
+      requestRenders()
+    } else {
+      session?.submit(emptyList())
+      lastSubmitted = emptyList()
+    }
   }
 
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -1424,9 +1434,8 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       cache.updateBudget(fit.budgetBytes, visible.toSet())
       updateCacheStats()
     }
-    val poolBudget = poolBudget()
-    // After memory pressure the pool stays as trimmed until the backoff ends.
-    if (!constrained && poolBudget != bitmapPool.budgetBytes) bitmapPool.setMaxBytes(poolBudget)
+    val poolBudget = if (constrained) 0L else poolBudget()
+    if (poolBudget != bitmapPool.budgetBytes) bitmapPool.setMaxBytes(poolBudget)
 
     val requests = ArrayList<DocumentWork>(fit.keep + visible.count() * 2)
     val settled = !isTouching && scroller.isFinished && zoomAnimator == null

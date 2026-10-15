@@ -244,8 +244,10 @@ position first and is re-anchored after that page is measured.
   reported once. The `RUNNING_*` levels are not delivered since API 34.
 - App UI hidden (`onTrimMemory(UI_HIDDEN)` and the background levels, on
   every trip to the background): the same trim and queued renders dropped,
-  without the 30 s backoff. Nothing renders while the window is hidden; when
-  it shows again, the visible pages' neighbours are prefetched right away.
+  without the 30 s backoff. Nothing renders while the window is hidden: the
+  queue is dropped when it hides, and an off-screen page that was already
+  rendering is discarded. When it shows again, the visible pages' neighbours
+  are prefetched right away.
 - Detached from window (e.g. a screen hidden under a native stack): all
   bitmaps are dropped; the document stays open and re-renders on attach.
 - Bitmaps that leave the cache go to the pool or are `recycle()`d
@@ -308,7 +310,7 @@ user zoomed again still lands in the right place.
 | `onDropView`          | `on*` callbacks released, session closed, all bitmaps dropped                |
 | `session.close()`     | queue cleared, download aborted, pending main-thread results dropped; the worker finishes the in-flight render, then closes the renderer (and with it the FD) |
 | Detach from window    | bitmaps dropped, pool emptied, queue emptied                                 |
-| Window hidden         | nothing new rendered; on `UI_HIDDEN`, off-screen pages dropped, pool and queue emptied |
+| Window hidden         | queue emptied, a late off-screen render discarded; on `UI_HIDDEN`, off-screen pages dropped and pool emptied |
 | Window shown again    | render plan resubmitted, so neighbours of the visible pages are prefetched   |
 
 `PdfRenderer` and `PdfRenderer.Page` are created *and* closed on the worker
