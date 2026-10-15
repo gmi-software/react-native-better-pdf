@@ -4,15 +4,7 @@ import android.content.ComponentCallbacks2
 
 /** How the viewer answers [ComponentCallbacks2.onTrimMemory]. */
 object TrimPolicy {
-  enum class Response {
-    NONE,
-
-    /** Free what is off screen; the UI is hidden, so nothing scrolls until it shows again. */
-    RELEASE,
-
-    /** Free what is off screen and keep only the visible pages for a while. */
-    RELEASE_AND_BACK_OFF,
-  }
+  enum class Response { NONE, RELEASE, RELEASE_AND_BACK_OFF }
 
   /**
    * `UI_HIDDEN` and the background levels above it come on every trip to the

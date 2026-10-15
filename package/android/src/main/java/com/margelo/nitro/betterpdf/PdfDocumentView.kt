@@ -1013,7 +1013,6 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
 
   override fun onWindowVisibilityChanged(visibility: Int) {
     super.onWindowVisibilityChanged(visibility)
-    // Back from the background: render what was skipped or released while hidden.
     if (visibility == VISIBLE) requestRenders()
   }
 
@@ -1514,17 +1513,12 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
 
   // region Memory management
 
-  /** Memory pressure: keep only the visible pages, and render no others for a while. */
   private fun trimToVisible() {
     constrainedUntilMs = SystemClock.uptimeMillis() + MEMORY_PRESSURE_BACKOFF_MS
     releaseOffscreen()
   }
 
-  /**
-   * The app's UI is hidden: drop queued work and keep only the visible pages,
-   * without the backoff. Nothing scrolls until the UI shows again, and then
-   * [onWindowVisibilityChanged] resumes rendering with prefetch.
-   */
+  /** No backoff: nothing scrolls until the UI shows again ([onWindowVisibilityChanged]). */
   private fun releaseWhileHidden() {
     session?.submit(emptyList())
     lastSubmitted = emptyList()
