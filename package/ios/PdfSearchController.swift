@@ -158,10 +158,11 @@ final class PdfSearchController {
     return index == NSNotFound ? nil : index
   }
 
+  /// Observers first: `cancelFindString()` posts `PDFDocumentDidEndFind` before it returns.
   private func stopFinding() {
-    if let document, document.isFinding { document.cancelFindString() }
     observers.forEach { NotificationCenter.default.removeObserver($0) }
     observers = []
+    if let document, document.isFinding { document.cancelFindString() }
   }
 
   private func emitNow() {

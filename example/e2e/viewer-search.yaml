@@ -47,3 +47,27 @@ appId: software.gmi.betterpdf.example
 - extendedWaitUntil: { visible: { id: "search-status", text: "0 / 0" }, timeout: 15000 }
 - tapOn: "Find"
 - tapOn: "‹ Back"
+
+# A stopped search leaves the reader on the last page.
+- scrollUntilVisible: { element: "outline-large.*", centerElement: true }
+- tapOn: "outline-large.*"
+- extendedWaitUntil: { visible: "1 / 1000", timeout: 60000 }
+- tapOn: "Last"
+- extendedWaitUntil: { visible: "1000 / 1000", timeout: 10000 }
+- tapOn: "Find"
+- tapOn: { id: "search-input" }
+# Cleared mid-search.
+- inputText: "l"
+- runFlow:
+    when: { platform: iOS }
+    commands:
+      - assertVisible: { id: "search-status", text: "0 / [0-9]+…" }
+- eraseText: 1
+- waitForAnimationToEnd: { timeout: 2000 }
+- assertVisible: "1000 / 1000"
+# Typed letter by letter.
+- inputText: "lorem"
+- extendedWaitUntil: { visible: { id: "search-status", text: "[0-9]+ / [0-9]+" }, timeout: 60000 }
+- assertVisible: "1000 / 1000"
+- tapOn: "Find"
+- tapOn: "‹ Back"
