@@ -74,6 +74,8 @@ class BitmapPool(private var maxBytes: Long) {
 
   val pooledBytes: Long get() = synchronized(lock) { freeBytes }
 
+  val budgetBytes: Long get() = synchronized(lock) { maxBytes }
+
   private fun trimLocked(into: MutableList<Bitmap>) {
     while (freeBytes > maxBytes && free.isNotEmpty()) {
       val bitmap = free.removeFirst()

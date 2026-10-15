@@ -451,9 +451,12 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   }
 
   private val memoryCallbacks = object : ComponentCallbacks2 {
-    @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
-      if (level >= ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW) trimToVisible()
+      when (TrimPolicy.of(level)) {
+        TrimPolicy.Response.NONE -> Unit
+        TrimPolicy.Response.RELEASE -> releaseWhileHidden()
+        TrimPolicy.Response.RELEASE_AND_BACK_OFF -> trimToVisible()
+      }
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) = Unit
@@ -1008,6 +1011,12 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     super.onDetachedFromWindow()
   }
 
+  override fun onWindowVisibilityChanged(visibility: Int) {
+    super.onWindowVisibilityChanged(visibility)
+    // Back from the background: render what was skipped or released while hidden.
+    if (visibility == VISIBLE) requestRenders()
+  }
+
   override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
     super.onSizeChanged(w, h, oldw, oldh)
     cache.updateBudget(defaultCacheBudget(), visiblePages().toSet())
@@ -1397,7 +1406,8 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private fun requestRenders(force: Boolean = false) {
     val session = session ?: return
     val layout = layout ?: return
-    if (!isAttachedToWindow || width <= 0 || height <= 0) return
+    // Nothing renders while the app's UI is hidden; onWindowVisibilityChanged resumes.
+    if (!isAttachedToWindow || windowVisibility != VISIBLE || width <= 0 || height <= 0) return
     val visible = visiblePages()
     val center = layout.pageAt((areaStart + areaLength / 2f) / scale)
     // A single page never shows its neighbours; don't spend memory on them.
@@ -1415,6 +1425,9 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       cache.updateBudget(fit.budgetBytes, visible.toSet())
       updateCacheStats()
     }
+    val poolBudget = poolBudget()
+    // After memory pressure the pool stays as trimmed until the backoff ends.
+    if (!constrained && poolBudget != bitmapPool.budgetBytes) bitmapPool.setMaxBytes(poolBudget)
 
     val requests = ArrayList<DocumentWork>(fit.keep + visible.count() * 2)
     val settled = !isTouching && scroller.isFinished && zoomAnimator == null
@@ -1501,8 +1514,24 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
 
   // region Memory management
 
+  /** Memory pressure: keep only the visible pages, and render no others for a while. */
   private fun trimToVisible() {
     constrainedUntilMs = SystemClock.uptimeMillis() + MEMORY_PRESSURE_BACKOFF_MS
+    releaseOffscreen()
+  }
+
+  /**
+   * The app's UI is hidden: drop queued work and keep only the visible pages,
+   * without the backoff. Nothing scrolls until the UI shows again, and then
+   * [onWindowVisibilityChanged] resumes rendering with prefetch.
+   */
+  private fun releaseWhileHidden() {
+    session?.submit(emptyList())
+    lastSubmitted = emptyList()
+    releaseOffscreen()
+  }
+
+  private fun releaseOffscreen() {
     val visible = visiblePages().toSet()
     cache.trimTo(0, visible)
     bitmapPool.clear()

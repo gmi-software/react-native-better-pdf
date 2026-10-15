@@ -237,9 +237,15 @@ position first and is re-anchored after that page is measured.
   tiles supply detail when zoomed.
 - Cache key is the page; entries rendered at a different width (rotation,
   resize) are re-requested and replaced.
-- Memory pressure: `onTrimMemory(RUNNING_LOW+)`/`onLowMemory` trims the cache
-  to the visible pages and empties the pool. `out-of-memory` during a render
-  trims the same way and is reported once.
+- Memory pressure: `onTrimMemory(RUNNING_LOW, RUNNING_CRITICAL)`/`onLowMemory`
+  trims the cache to the visible pages and empties the pool, then keeps only
+  visible pages for 30 s; the pool comes back on the first render request
+  after that. `out-of-memory` during a render trims the same way and is
+  reported once. The `RUNNING_*` levels are not delivered since API 34.
+- App UI hidden (`onTrimMemory(UI_HIDDEN)` and the background levels, on
+  every trip to the background): the same trim and queued renders dropped,
+  without the 30 s backoff. Nothing renders while the window is hidden; when
+  it shows again, the visible pages' neighbours are prefetched right away.
 - Detached from window (e.g. a screen hidden under a native stack): all
   bitmaps are dropped; the document stays open and re-renders on attach.
 - Bitmaps that leave the cache go to the pool or are `recycle()`d
@@ -302,6 +308,8 @@ user zoomed again still lands in the right place.
 | `onDropView`          | `on*` callbacks released, session closed, all bitmaps dropped                |
 | `session.close()`     | queue cleared, download aborted, pending main-thread results dropped; the worker finishes the in-flight render, then closes the renderer (and with it the FD) |
 | Detach from window    | bitmaps dropped, pool emptied, queue emptied                                 |
+| Window hidden         | nothing new rendered; on `UI_HIDDEN`, off-screen pages dropped, pool and queue emptied |
+| Window shown again    | render plan resubmitted, so neighbours of the visible pages are prefetched   |
 
 `PdfRenderer` and `PdfRenderer.Page` are created *and* closed on the worker
 thread; pages are always closed via `use {}`.
