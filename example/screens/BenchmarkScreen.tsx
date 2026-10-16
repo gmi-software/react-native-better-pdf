@@ -26,6 +26,8 @@ export interface BenchRequest {
    * the time to load includes each library's download.
    */
   remote?: boolean;
+  /** Zoom of the scroll window; below 1 also lowers `minScale` to it. */
+  zoom?: number;
 }
 
 interface ActiveRun {
@@ -96,12 +98,14 @@ export function BenchmarkScreen({ autoRun }: { autoRun: BenchRequest | null }) {
           log: benchLog,
         },
         request.scrollWindowMs,
+        request.zoom,
       );
     } catch (error) {
       result = {
         library: request.library,
         fixture: request.fixture,
         platform: Platform.OS,
+        zoom: request.zoom ?? 1,
         pageCount: 0,
         timeToLoadMs: -1,
         jumps: [],
@@ -166,6 +170,7 @@ export function BenchmarkScreen({ autoRun }: { autoRun: BenchRequest | null }) {
             ref={viewer}
             library={active.request.library}
             uri={active.uri}
+            minScale={Math.min(1, active.request.zoom ?? 1)}
             onLoad={(pageCount) => loadResolver.current?.(pageCount)}
             onError={(message) => loadRejecter.current?.(new Error(message))}
             onPageChange={(page) => {

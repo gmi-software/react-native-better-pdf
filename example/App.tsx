@@ -19,7 +19,7 @@ import { Button, colors } from './ui';
 type Tab = 'viewer' | 'embedded' | 'offline' | 'documents' | 'benchmark';
 
 /**
- * `betterpdfexample://bench?library=better&fixture=large&run=3[&scrollSeconds=300][&source=remote]`
+ * `betterpdfexample://bench?library=better&fixture=large&run=3[&scrollSeconds=300][&source=remote][&zoom=0.05]`
  * starts a benchmark run.
  */
 function parseBenchLink(url: string | null): BenchRequest | null {
@@ -45,6 +45,7 @@ function parseBenchLink(url: string | null): BenchRequest | null {
       ? Number(params.get('scrollSeconds')) * 1000
       : undefined,
     remote: params.get('source') === 'remote',
+    zoom: params.has('zoom') ? Number(params.get('zoom')) : undefined,
   };
 }
 

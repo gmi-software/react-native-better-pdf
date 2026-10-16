@@ -635,3 +635,55 @@ queued when the document closes rejects.
   process, but opening renderers, PNG encoding and file writes ran in
   parallel before. A list's first screenful arrives 9–35× sooner instead,
   since those images no longer wait behind the rest.
+
+## 17. Android zoomed out below the fitted width (2026-10-16)
+
+**Found by**: issue #30. With `minScale` below 1, every visible page was
+still rendered and kept at fit width whatever the zoom, and the cache
+keeps visible pages beyond its cap, so their memory grew with 1 / zoom².
+
+**Method**: `run-android.mjs --zoom 0.05 --fixtures extreme --libraries
+better` (new: `minScale` 0.05, `zoomTo(0.05)` before the scroll window,
+stats read 3 s after it), release builds (arm64) with the same JS, the
+API 37 emulator (1080×2400; the bench viewer is ~1080×1800). Three runs
+of each build, then three interleaved pairs. Other emulators loaded the
+host for all but the first "before" set (95–100% janky frames in both
+builds, also at zoom 1; 21% in that set), so only counts and PSS are
+compared, and render times only within pairs. Zoom 1:
+`--fixtures medium,extreme`, three runs of each build. Raw JSON:
+`android-2026-10-16T17-24-28-711Z.json` (before) and
+`android-2026-10-16T17-36-10-405Z.json` (after), the pairs from
+`android-2026-10-16T17-42-16-509Z.json` on.
+
+**Change**: `BaseResolution` renders the base layer at half the fitted
+size at zoom ½ and below, and at a quarter at ¼ and below, never with
+fewer pixels than the screen shows. A cached page of another width renders
+again, as after a rotation. Above ½ nothing changes.
+
+| Zoom 0.05, `extreme` | before | after |
+| --- | ---: | ---: |
+| Pages cached 3 s after scrolling | 23–24 at fit width | 81 at a quarter |
+| `cacheBytes` (cap 128 MB) | 145–151 MB | 32 MB |
+| Peak PSS | 238–246 MB | 144–155 MB |
+| Pages rendered in the window (pairs) | 98–136 | 156–200 |
+| Mean render (pairs) | 117–181 ms | 87–101 ms |
+| Bitmap allocations | 34–104 | 98–102 |
+| Page changes while scrolling (pairs) | 38 / 88 / 87 | 46 / 92 / 86 |
+
+| Zoom 1 | `medium` before | after | `extreme` before | after |
+| --- | ---: | ---: | ---: | ---: |
+| Peak PSS | 131–132 MB | 128–133 MB | 145–150 MB | 139–148 MB |
+| Pages rendered | 59–63 | 56–60 | 56–59 | 54–67 |
+| Bitmap allocations | 20–23 | 19–20 | 17–20 | 15–19 |
+| `cacheBytes` | 38–44 MB | 38 MB | 38 MB | 38 MB |
+
+- More allocations, each 1/16 the size: 38–39 MB allocated per run in the
+  pairs instead of 214–252 MB. The cache's budget (at least 4 viewports)
+  now holds ~100 pages, and the allocations are it filling up.
+- More pages render with the same render-thread CPU (62–75% of a core in
+  both builds).
+- On screen: at 0.05 every visible page was drawn; a double tap back to
+  zoom 2 was sharp within 3 s.
+- Below ¼ the visible pages' memory grows with 1 / zoom again. It stays
+  under 128 MB down to zoom 0.01 on phones and tablets
+  (`BaseResolutionTest`); at 0.005 a tablet shows 225 pages (194 MB).

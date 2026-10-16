@@ -229,7 +229,7 @@ position first and is re-anchored after that page is measured.
 
 | Layer        | What                                             | Bound                                                   |
 | ------------ | ------------------------------------------------ | ------------------------------------------------------- |
-| Base cache   | one fit-width bitmap per page (`LruByteCache`)   | `clamp(maxHeap / 6, 24 MB, 128 MB)`, ≥ 4 viewports      |
+| Base cache   | one bitmap per page, ≤ fit width (`LruByteCache`)| `clamp(maxHeap / 6, 24 MB, 128 MB)`, ≥ 4 viewports      |
 | Zoom tiles   | one viewport-sized full-res crop per visible page| visible pages × 1 viewport                              |
 | Bitmap pool  | free bitmaps for reuse                           | `max(8 MB, 1 viewport, 1 base page)`, or base page + 1 viewport when tiles are drawn at zoom 1; 0 while detached |
 
@@ -237,6 +237,13 @@ position first and is re-anchored after that page is measured.
   budget can be exceeded only by what is on screen.
 - Very tall pages have their base bitmap capped at 2 viewports of pixels;
   tiles supply detail when zoomed.
+- Zoomed out (`minScale < 1`), pages render at half their fit-width size
+  at zoom ½ and below, and at a quarter at ¼ and below
+  (`BaseResolution`): never fewer pixels than are on screen, and the
+  visible pages' memory stays a few viewports instead of growing with
+  1 / zoom² as more of them come into view: they fit the 128 MB cap down
+  to zoom 0.01 on phones and tablets. Pages stay at a quarter below ¼, so
+  zooming back in starts from a usable picture.
 - The pool fits the largest base page of the current render plan. In portrait
   a fit-width page is smaller than the viewport; in landscape, on tablets and
   on unfolded foldables it is larger, and the pool recycles any bitmap larger
@@ -245,7 +252,7 @@ position first and is re-anchored after that page is measured.
   are drawn even at zoom 1, and the pool fits a page and a tile together so
   the two do not push each other out.
 - Cache key is the page; entries rendered at a different width (rotation,
-  resize) are re-requested and replaced.
+  resize, crossing zoom ½ or ¼) are re-requested and replaced.
 - Memory pressure: `onTrimMemory(RUNNING_LOW, RUNNING_CRITICAL)`/`onLowMemory`
   trims the cache to the visible pages and empties the pool, then keeps only
   visible pages for 30 s; the pool comes back on the first render request
@@ -305,11 +312,13 @@ unless it is already fully visible).
 Pinch zooms around the focal point; double-tap toggles between `minScale`
 and `max(2, 2 × minScale)`; horizontal pan is enabled when content is wider
 than the view. During a gesture the base bitmaps are simply scaled (cheap,
-slightly soft). When the viewport settles for 80 ms and the screen shows
-≥ 15% more pixels than the base layer has, one full-resolution tile per
-visible page is rendered using `PdfRenderer`'s clip + matrix. Tiles carry
-their own content-space rect and scale, so a tile that finishes after the
-user zoomed again still lands in the right place.
+slightly soft); zooming out past ½ or ¼ also renders the visible pages
+again at half or a quarter of their size. When the viewport settles for
+80 ms and the screen shows ≥ 15% more pixels than the base layer has, one
+full-resolution tile per visible page is rendered using `PdfRenderer`'s
+clip + matrix. Tiles carry their own content-space rect and scale, so a
+tile that finishes after the user zoomed again still lands in the right
+place.
 
 ### Lifecycle
 

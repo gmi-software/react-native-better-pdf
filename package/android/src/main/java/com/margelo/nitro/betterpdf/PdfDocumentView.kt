@@ -31,7 +31,6 @@ import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
-import kotlin.math.sqrt
 
 /**
  * The Android PDF viewer: one `View` that draws the visible pages of a
@@ -39,8 +38,9 @@ import kotlin.math.sqrt
  *
  * - **Virtualization**: there are no child views. Each frame draws only the
  *   pages intersecting the viewport ([PdfDocumentLayout.visibleRange]).
- * - **Base layer**: every page is rendered once at fit-width resolution and
- *   kept in a byte-budgeted LRU ([LruByteCache]); evicted bitmaps go back to a
+ * - **Base layer**: every page is rendered once at fit-width resolution (half
+ *   or a quarter of it zoomed out, see [BaseResolution]) and kept in a
+ *   byte-budgeted LRU ([LruByteCache]); evicted bitmaps go back to a
  *   [BitmapPool] for reuse.
  * - **Zoom tiles**: when zoomed beyond the base resolution, each visible page
  *   gets one viewport-sized, full-resolution crop rendered after the gesture
@@ -1440,7 +1440,9 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       updateCacheStats()
     }
     plannedBaseBytes = pageBytes.take(fit.keep).maxOrNull() ?: 0L
-    plannedTilesAtFit = bases.take(fit.keep).any { it.bitmapWidth * TILE_THRESHOLD < layout.pageWidth(it.page) }
+    plannedTilesAtFit = bases.take(fit.keep).any {
+      baseRequest(layout, it.page, scale = 1f).bitmapWidth * TILE_THRESHOLD < layout.pageWidth(it.page)
+    }
     val poolBudget = if (constrained) 0L else poolBudget()
     if (poolBudget != bitmapPool.budgetBytes) bitmapPool.setMaxBytes(poolBudget)
 
@@ -1474,19 +1476,9 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     session.submit(requests)
   }
 
-  private fun baseRequest(layout: PdfDocumentLayout, page: Int): RenderRequest.Base {
-    var bitmapWidth = layout.pageWidth(page)
-    var bitmapHeight = layout.pageHeight(page)
-    // Very tall pages (receipts, posters) would otherwise allocate enormous
-    // bitmaps; cap the base layer and let tiles supply detail.
-    val maxPixels = max(width.toFloat() * height * MAX_BASE_VIEWPORTS, 1f)
-    val pixels = bitmapWidth * bitmapHeight
-    if (pixels > maxPixels) {
-      val factor = sqrt(maxPixels / pixels)
-      bitmapWidth *= factor
-      bitmapHeight *= factor
-    }
-    return RenderRequest.Base(page, max(1, bitmapWidth.roundToInt()), max(1, bitmapHeight.roundToInt()), maxPixels.toLong())
+  private fun baseRequest(layout: PdfDocumentLayout, page: Int, scale: Float = this.scale): RenderRequest.Base {
+    val size = BaseResolution.size(layout.pageWidth(page), layout.pageHeight(page), width, height, scale)
+    return RenderRequest.Base(page, size.width, size.height, size.maxPixels)
   }
 
   private fun tileRequest(layout: PdfDocumentLayout, page: Int): RenderRequest.Tile? {
@@ -1628,8 +1620,6 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     const val MEMORY_PRESSURE_BACKOFF_MS = 30_000L
     /** Render zoom tiles once the screen shows 15% more pixels than the base layer has. */
     const val TILE_THRESHOLD = 1.15f
-    /** Upper bound for a page's base bitmap, in viewports worth of pixels. */
-    const val MAX_BASE_VIEWPORTS = 2f
     const val MIN_CACHE_BYTES = 24L * 1024 * 1024
     const val MAX_CACHE_BYTES = 128L * 1024 * 1024
   }

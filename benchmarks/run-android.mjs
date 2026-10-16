@@ -4,6 +4,7 @@
 //   node benchmarks/run-android.mjs [--runs 3] [--fixtures small,medium] [--libraries better,react-native-pdf]
 //   node benchmarks/run-android.mjs --scroll-seconds 300 --fixtures extreme --runs 1   # memory soak
 //   node benchmarks/run-android.mjs --source remote   # open from the fixture server: load includes the download
+//   node benchmarks/run-android.mjs --zoom 0.05 --fixtures extreme --libraries better   # scroll zoomed out (minScale lowered to it)
 //
 // Prerequisites:
 // - A RELEASE build of the example app installed on a single connected device
@@ -36,6 +37,8 @@ const SCROLL_SECONDS = args['scroll-seconds']
   : null;
 // `--reverse-every 0` scrolls in one direction only (isolates direction changes).
 const REVERSE_EVERY = Number(args['reverse-every'] ?? 5);
+// The scroll window's zoom; below 1 the viewers' minScale is lowered to it.
+const ZOOM = args.zoom ? Number(args.zoom) : null;
 
 const adb = async (...command) =>
   (await run('adb', command, { maxBuffer: 64 * 1024 * 1024 })).stdout;
@@ -143,7 +146,7 @@ async function runOnce({ library, fixture, runId, device, clockTicks }) {
     '-a',
     'android.intent.action.VIEW',
     '-d',
-    `'betterpdfexample://bench?library=${library}&fixture=${fixture}&run=${runId}${SCROLL_SECONDS ? `&scrollSeconds=${SCROLL_SECONDS}` : ''}${REMOTE ? '&source=remote' : ''}'`,
+    `'betterpdfexample://bench?library=${library}&fixture=${fixture}&run=${runId}${SCROLL_SECONDS ? `&scrollSeconds=${SCROLL_SECONDS}` : ''}${REMOTE ? '&source=remote' : ''}${ZOOM ? `&zoom=${ZOOM}` : ''}'`,
     PACKAGE,
   );
   const pid = (await adb('shell', 'pidof', PACKAGE)).trim();
@@ -198,6 +201,7 @@ async function runOnce({ library, fixture, runId, device, clockTicks }) {
     library,
     fixture,
     source: REMOTE ? 'remote' : 'local',
+    zoom: ZOOM ?? 1,
     runId,
     app,
     scroll,

@@ -19,6 +19,8 @@ export interface BenchViewerHandle {
 interface Props {
   library: Library;
   uri: string;
+  /** 1 unless a zoomed-out variant runs. */
+  minScale: number;
   onLoad: (pageCount: number) => void;
   /** Zero-based. */
   onPageChange: (page: number) => void;
@@ -28,11 +30,13 @@ interface Props {
 
 /**
  * The two viewers behind one interface, configured as equivalently as their
- * APIs allow: vertical continuous scrolling, fit width, 1x-4x zoom, 8pt gaps.
+ * APIs allow: vertical continuous scrolling, fit width, 1x-4x zoom (from
+ * `minScale` in a zoomed-out variant), 8pt gaps.
  */
 export function BenchViewer({
   library,
   uri,
+  minScale,
   onLoad,
   onPageChange,
   onError,
@@ -65,7 +69,7 @@ export function BenchViewer({
         ref={better}
         style={styles.fill}
         source={{ uri }}
-        minScale={1}
+        minScale={minScale}
         maxScale={4}
         pageSpacing={8}
         onLoad={(event) => onLoad(event.pageCount)}
@@ -83,7 +87,7 @@ export function BenchViewer({
       // Android ("Use of own trust manager but none defined") and every
       // remote load fails. Better PDF always validates certificates.
       trustAllCerts={false}
-      minScale={1}
+      minScale={minScale}
       maxScale={4}
       scale={legacyScale}
       spacing={8}

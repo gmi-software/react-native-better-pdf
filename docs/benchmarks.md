@@ -85,7 +85,10 @@ before the viewer mounts and is not part of any measurement.
 Useful switches: `--libraries better`, `--fixtures extreme`,
 `--scroll-seconds 320` (memory soak with PSS at 1 and 5 minutes),
 `--reverse-every 0` (scroll in one direction only), `--source remote`
-(open from the fixture server; load includes the download).
+(open from the fixture server; load includes the download), `--zoom 0.05`
+(scroll window zoomed out: `minScale` lowered to it, `zoomTo` it before the
+swipes, and the stats read 3 s after them, once the dozens of visible pages
+have rendered).
 
 **iOS simulator** (Release build installed):
 

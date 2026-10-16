@@ -10,9 +10,10 @@ sealed class RenderRequest : DocumentWork {
   abstract val bitmapHeight: Int
 
   /**
-   * The whole page at fit-width resolution. [bitmapHeight] follows the
-   * layout's (possibly estimated) page size; the render thread corrects it
-   * to the page's real aspect ratio, capped at [maxPixels].
+   * The whole page at fit-width resolution, or less when zoomed out
+   * ([BaseResolution]). [bitmapHeight] follows the layout's (possibly
+   * estimated) page size; the render thread corrects it to the page's real
+   * aspect ratio, capped at [maxPixels].
    */
   data class Base(
     override val page: Int,
