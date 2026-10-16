@@ -1439,8 +1439,8 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       cache.updateBudget(fit.budgetBytes, visible.toSet())
       updateCacheStats()
     }
-    plannedBaseBytes = pageBytes.maxOrNull() ?: 0L
-    plannedTilesAtFit = bases.any { it.bitmapWidth * TILE_THRESHOLD < layout.pageWidth(it.page) }
+    plannedBaseBytes = pageBytes.take(fit.keep).maxOrNull() ?: 0L
+    plannedTilesAtFit = bases.take(fit.keep).any { it.bitmapWidth * TILE_THRESHOLD < layout.pageWidth(it.page) }
     val poolBudget = if (constrained) 0L else poolBudget()
     if (poolBudget != bitmapPool.budgetBytes) bitmapPool.setMaxBytes(poolBudget)
 
