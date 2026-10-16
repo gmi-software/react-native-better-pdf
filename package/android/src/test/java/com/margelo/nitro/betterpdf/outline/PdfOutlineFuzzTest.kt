@@ -114,4 +114,60 @@ class PdfOutlineFuzzTest {
     // Only a page tree deeper than the readers' limit fails.
     assertTrue("parsed $parsed of 300", parsed > 250)
   }
+
+  /**
+   * Objects whose parse runs on to the end of the file ([PdfReadTimeTest]),
+   * mixed: up to 3,000 streams without `endstream` and unterminated literal
+   * and hex strings, in the file or in an object stream, behind up to
+   * 20,000 links, form fields, the outline, the crop box and an
+   * information entry, half of the files with a broken `startxref` (the
+   * rebuild). Every reader must end in a result or a [PdfFormatException]
+   * within 2 s.
+   */
+  @Test
+  fun `runaway objects end quickly`() {
+    val readers = listOf<(PdfDocumentReader) -> Unit>(
+      { PdfLinkReader(it).read() },
+      { PdfOutlineReader(it).read() },
+      { PdfFormReader(it).read() },
+      { PdfInfoReader(it).read() },
+      { PdfPageSizeReader(it).read() },
+    )
+    val random = Random(20261016)
+    repeat(40) { iteration ->
+      val pdf = TestPdfWriter()
+      val catalog = pdf.reserve()
+      val pages = pdf.reserve()
+      val page = pdf.reserve()
+      val info = pdf.reserve()
+      val objectStream = pdf.reserve().also { pdf.objectStream(it, "") }
+      val runaways = List(1 + random.nextInt(3_000)) { pdf.reserve() }
+      for (number in runaways) {
+        val body = listOf("(", "<", "<< /Subtype /Link /Contents (", "<< /Subtype /Link >>\nstream\n").random(random)
+        if ("stream" !in body && random.nextBoolean()) pdf.addCompressed(number, objectStream, body) else pdf.add(number, body)
+      }
+      fun reference() = "${runaways.random(random)} 0 R"
+      val references = List(random.nextInt(20_000)) { reference() }.joinToString(" ")
+      pdf.add(catalog, "<< /Type /Catalog /Pages $pages 0 R /Outlines ${reference()} /AcroForm << /Fields [$references] >> >>")
+      pdf.add(pages, "<< /Type /Pages /Kids [$page 0 R] /Count 1 >>")
+      pdf.add(page, "<< /Type /Page /Parent $pages 0 R /MediaBox [0 0 200 300] /CropBox ${reference()} /Annots [$references] >>")
+      pdf.add(info, "<< /Title ${reference()} >>")
+      var bytes = pdf.build("/Root $catalog 0 R /Info $info 0 R")
+      if (iteration % 2 == 1) {
+        bytes = bytes.toString(Charsets.ISO_8859_1)
+          .replace(Regex("startxref\n\\d+"), "startxref\n999999999")
+          .toByteArray(Charsets.ISO_8859_1)
+      }
+      readers.forEachIndexed { index, read ->
+        val started = System.nanoTime()
+        try {
+          read(PdfDocumentReader(ByteArraySource(bytes)))
+        } catch (expected: PdfFormatException) {
+          // Fine.
+        }
+        val millis = (System.nanoTime() - started) / 1_000_000
+        assertTrue("iteration $iteration, reader $index took $millis ms", millis < 2_000)
+      }
+    }
+  }
 }

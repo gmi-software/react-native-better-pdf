@@ -19,6 +19,6 @@ class FileChannelByteSource(private val channel: FileChannel) : PdfByteSource {
       if (read <= 0) break
       at += read
     }
-    return buffer.array().copyOf(buffer.position())
+    return if (buffer.hasRemaining()) buffer.array().copyOf(buffer.position()) else buffer.array()
   }
 }

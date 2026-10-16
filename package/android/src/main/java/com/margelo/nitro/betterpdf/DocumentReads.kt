@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Matrix
 import android.os.ParcelFileDescriptor
+import com.margelo.nitro.betterpdf.outline.CrossReferenceCache
 import com.margelo.nitro.betterpdf.outline.FileChannelByteSource
 import com.margelo.nitro.betterpdf.outline.FormFieldEntry
 import com.margelo.nitro.betterpdf.outline.OutlineEntry
@@ -27,7 +28,9 @@ import kotlin.math.roundToInt
  * descriptor ([duplicateDescriptor]), with positional reads or a renderer
  * that is closed afterwards, so it never blocks rendering and PDFium keeps
  * nothing once it returns. Blocking: call off the main thread. The outline,
- * metadata and page sizes are cached.
+ * metadata and page sizes are cached, and so are the file's
+ * cross-references: a damaged file is rebuilt by scanning it once, not on
+ * every read.
  *
  * @param duplicateDescriptor a duplicate of the open document's descriptor,
  *   the caller's to close; throws [IllegalStateException] once the document
@@ -40,6 +43,7 @@ internal class DocumentReads(
   @Volatile private var outline: List<OutlineEntry>? = null
   @Volatile private var info: PdfInfo? = null
   @Volatile private var pageSizes: List<PdfDocumentLayout.PageSize>? = null
+  private val crossReferences = CrossReferenceCache()
 
   /**
    * The document outline, parsed from the file.
@@ -102,7 +106,8 @@ internal class DocumentReads(
           DocumentRenderer.open(duplicateDescriptor(), password).use { it.writeUnprotected(target) }
         }
         ParcelFileDescriptor.AutoCloseInputStream(ParcelFileDescriptor.open(copy, ParcelFileDescriptor.MODE_READ_ONLY)).channel.use { channel ->
-          parse(channel) { PdfFormReader(it).read() }
+          // Another file: its own cross-references.
+          parse(channel, crossReferences = null) { PdfFormReader(it).read() }
         }
       } finally {
         copy.delete()
@@ -150,17 +155,19 @@ internal class DocumentReads(
   }
 
   private fun <T> parse(read: (PdfDocumentReader) -> T): T =
-    ParcelFileDescriptor.AutoCloseInputStream(duplicateDescriptor()).channel.use { parse(it, read) }
+    ParcelFileDescriptor.AutoCloseInputStream(duplicateDescriptor()).channel.use { parse(it, crossReferences, read) }
 
   /**
-   * Reads [channel]'s file with [read]. The readers bound their recursion,
-   * but not the stack of the thread they run on: a file that still exhausts
-   * it fails like any unreadable file instead of crashing the app (the
-   * links thread and the render thread catch exceptions, not errors).
+   * Reads [channel]'s file with [read], with its cross-references from
+   * [crossReferences] when given. The readers bound their recursion, but
+   * not the stack of the thread they run on: a file that still exhausts it
+   * fails like any unreadable file instead of crashing the app (the links
+   * thread and the render thread catch exceptions, not errors).
    */
-  private fun <T> parse(channel: FileChannel, read: (PdfDocumentReader) -> T): T =
+  private fun <T> parse(channel: FileChannel, crossReferences: CrossReferenceCache?, read: (PdfDocumentReader) -> T): T =
     try {
-      read(PdfDocumentReader(FileChannelByteSource(channel)))
+      val source = FileChannelByteSource(channel)
+      read(if (crossReferences == null) PdfDocumentReader(source) else PdfDocumentReader(source, crossReferences.get(source)))
     } catch (_: StackOverflowError) {
       throw PdfFormatException("The PDF's structure is nested too deeply")
     }

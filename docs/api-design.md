@@ -646,17 +646,30 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
   (incl. `/Prev` chains and hybrid files), object streams, the outline,
   explicit/GoTo/named destinations (name tree and PDF 1.1 `/Dests`) and the
   page tree, and rebuilds broken cross-references by scanning like viewers
-  do. It reads a duplicate of the file descriptor with positional reads, so
-  rendering is not blocked.
+  do (`startxref` is looked for in the last 64 KB: files may end in junk).
+  The rebuild takes the newest trailer naming a catalog — a `trailer`
+  dictionary or a cross-reference stream's — and without one looks for the
+  catalog among the objects, those in object streams too.
+  The cross-references are read once per document and shared by every
+  read, so a damaged file is scanned once. It reads a duplicate of the file
+  descriptor with positional reads, so rendering is not blocked.
 - **Untrusted input**: every recursion and loop is bounded (64 levels,
   10,000 entries, nesting, string, stream-expansion and xref limits; objects
   whose reading needs another object — an indirect `/Length`, an object
-  stream — nest 32 deep at most); cycles are broken; deterministic fuzz
-  tests (500 mutated files, and 300 reads of generated chains of up to
-  2,000 objects on a 256 KB stack) must end in a result or
-  `PdfFormatException` within 2 s each. A stack overflow the limits miss
-  reads as `PdfFormatException` too, never a crash. Encrypted documents
-  reject.
+  stream — nest 32 deep at most); cycles are broken. So is time: the
+  parsers of one read examine at most 16 bytes for each byte of the file
+  and of the object streams it decodes, plus 1 Mi, and the read fails
+  beyond that. Without it, objects whose parse runs on to the end of the
+  file — a stream without `endstream`, an unterminated string — were parsed
+  once per object or per reference, in time growing with the square of the
+  file's size (`PdfReadTimeTest`: 4–14 s for crafted files of a few hundred
+  KB, now under 0.3 s); the fixtures and files from PDFKit, Quartz and pypdf
+  use at most 1.4 per byte, rebuilds included. Deterministic fuzz tests
+  (500 mutated files, 300 reads of generated chains of up to 2,000 objects
+  on a 256 KB stack, and 200 reads of generated files of such runaway
+  objects) must end in a result or `PdfFormatException` within 2 s each. A
+  stack overflow the limits miss reads as `PdfFormatException` too, never
+  a crash. Encrypted documents reject.
 - **Tested against three producers** (the generator in classic and
   object-stream form, PDFKit, pypdf), with PDFKit as the reference.
 - **iOS** walks `PDFOutline` with the same limits and title normalization.

@@ -21,8 +21,10 @@ internal enum class ChainStep {
  * can only be read after the next one. The outline, the page tree and the
  * field tree are [nesting] levels deep, with the chain at the bottom. A
  * second link (a URL) and the rest of the document do not depend on it.
+ * [padding], when given, is the body of one more object, which nothing
+ * refers to.
  */
-internal fun deepChainDocument(chain: List<ChainStep>, nesting: Int = 1): ByteArray {
+internal fun deepChainDocument(chain: List<ChainStep>, nesting: Int = 1, padding: String? = null): ByteArray {
   val pdf = TestPdfWriter()
   // Each step's object and, for an object stream, the stream; the head is object 1.
   val objects = chain.map { step -> pdf.reserve() to if (step == ChainStep.LENGTH) null else pdf.reserve() }
@@ -82,6 +84,7 @@ internal fun deepChainDocument(chain: List<ChainStep>, nesting: Int = 1): ByteAr
     catalog,
     "<< /Type /Catalog /Pages ${nodes.first()} 0 R /Outlines $outline 0 R /AcroForm << /Fields [${fields.first()} 0 R] >> >>",
   )
+  padding?.let { pdf.add(pdf.reserve(), it) }
   return pdf.build("/Root $catalog 0 R /Info $info 0 R")
 }
 

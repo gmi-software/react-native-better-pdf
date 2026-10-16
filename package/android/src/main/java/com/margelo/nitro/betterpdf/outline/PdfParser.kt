@@ -8,17 +8,28 @@ import java.io.ByteArrayOutputStream
  *
  * The input is untrusted: nesting, string and dictionary sizes are capped
  * and every malformed construct fails with [PdfFormatException] instead of
- * looping or allocating without bound.
+ * looping or allocating without bound. Each byte examined is charged to
+ * [budget], which the parsers of one read share.
  */
-class PdfParser(private val source: PdfByteSource, var position: Long) {
+class PdfParser internal constructor(
+  private val source: PdfByteSource,
+  var position: Long,
+  private val budget: ScanBudget?,
+) {
+  constructor(source: PdfByteSource, position: Long) : this(source, position, null)
+
   private var window = ByteArray(0)
   private var windowStart = 0L
 
   private fun byteAt(at: Long): Int {
     if (at < 0 || at >= source.size) return EOF
+    budget?.spend()
     if (at < windowStart || at >= windowStart + window.size) {
+      // Most objects are small: read a little at a new position, more and
+      // more while reading on (a long string, a stream scanned to its end).
+      val length = if (at == windowStart + window.size) window.size * 2 else 0
       windowStart = at
-      window = source.read(at, WINDOW_BYTES)
+      window = source.read(at, length.coerceIn(MIN_WINDOW_BYTES, MAX_WINDOW_BYTES))
       if (window.isEmpty()) return EOF
     }
     return window[(at - windowStart).toInt()].toInt() and 0xff
@@ -87,19 +98,27 @@ class PdfParser(private val source: PdfByteSource, var position: Long) {
   fun readIndirectBody(resolveLength: (PdfObject) -> Int?): PdfObject {
     val value = readObject()
     if (value !is PdfObject.Dictionary) return value
-    val afterValue = position
+    return readStream(value, resolveLength) ?: value
+  }
+
+  /**
+   * The stream whose [dictionary] was just read, when the `stream` keyword
+   * follows; null (position unchanged) otherwise. See [readIndirectBody].
+   */
+  internal fun readStream(dictionary: PdfObject.Dictionary, resolveLength: (PdfObject) -> Int?): PdfObject.Stream? {
+    val afterDictionary = position
     if (!matchKeyword("stream")) {
-      position = afterValue
-      return value
+      position = afterDictionary
+      return null
     }
     // The keyword is followed by CRLF or LF (tolerate a lone CR).
     if (peek() == '\r'.code) position++
     if (peek() == '\n'.code) position++
     val dataOffset = position
-    val declared = value["Length"]?.let(resolveLength)
+    val declared = dictionary["Length"]?.let(resolveLength)
     val length = declared?.takeIf { it >= 0 && endstreamFollows(dataOffset + it) } ?: findEndstream(dataOffset)
     position = dataOffset + length
-    return PdfObject.Stream(value, dataOffset, length)
+    return PdfObject.Stream(dictionary, dataOffset, length)
   }
 
   private fun endstreamFollows(at: Long): Boolean {
@@ -302,14 +321,16 @@ class PdfParser(private val source: PdfByteSource, var position: Long) {
     }
   }
 
-  private companion object {
-    const val EOF = -1
-    const val WINDOW_BYTES = 64 * 1024
-    const val MAX_NESTING = 64
-    const val MAX_TOKEN_LENGTH = 1024
-    const val MAX_STRING_BYTES = 1 shl 20
-    const val MAX_COLLECTION_SIZE = 1_000_000
-    const val MAX_STREAM_SCAN_BYTES = 64L * 1024 * 1024
+  // Internal for the rebuild's scan for objects (isWhitespace, isDelimiter).
+  internal companion object {
+    private const val EOF = -1
+    private const val MIN_WINDOW_BYTES = 512
+    private const val MAX_WINDOW_BYTES = 64 * 1024
+    private const val MAX_NESTING = 64
+    private const val MAX_TOKEN_LENGTH = 1024
+    private const val MAX_STRING_BYTES = 1 shl 20
+    private const val MAX_COLLECTION_SIZE = 1_000_000
+    private const val MAX_STREAM_SCAN_BYTES = 64L * 1024 * 1024
 
     fun isWhitespace(c: Int): Boolean = c == 0 || c == 9 || c == 10 || c == 12 || c == 13 || c == 32
 
@@ -317,7 +338,7 @@ class PdfParser(private val source: PdfByteSource, var position: Long) {
       c == '('.code || c == ')'.code || c == '<'.code || c == '>'.code || c == '['.code ||
         c == ']'.code || c == '{'.code || c == '}'.code || c == '/'.code || c == '%'.code
 
-    fun hexValue(c: Int): Int = when (c) {
+    private fun hexValue(c: Int): Int = when (c) {
       in '0'.code..'9'.code -> c - '0'.code
       in 'a'.code..'f'.code -> c - 'a'.code + 10
       in 'A'.code..'F'.code -> c - 'A'.code + 10

@@ -38,8 +38,9 @@ Documents are parsed inside the app's process: by PDFKit on iOS, by the
 platform `PdfRenderer` on Android, and on Android also by this library's own
 Kotlin readers (the outline, the page tree, links, form fields and the
 information dictionary). The readers are memory-safe JVM code with limits on
-recursion and sizes, fuzz tested with corrupted files and with generated,
-deeply nested ones. See [the audit](docs/audit.md) (H1).
+recursion, sizes and the work of each read, fuzz tested with corrupted files
+and with generated ones: deeply nested, or with objects that run on to the end
+of the file. See [the audit](docs/audit.md) (H1).
 
 What we want to hear about:
 
