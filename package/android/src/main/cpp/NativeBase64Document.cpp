@@ -32,7 +32,7 @@ namespace {
     const uint8_t* data = size == 0 ? nullptr : text->getDirectBytes();
     Base64Check check = checkBase64Document(data, size);
     if (check.problem.has_value()) return jni::make_jstring(*check.problem);
-    std::vector<uint8_t> chunk(256 * 1024);
+    std::vector<uint8_t> chunk(kBase64ChunkSize);
     int error = 0;
     bool written = decodeBase64Document(data, size, chunk.data(), chunk.size(), [&](const uint8_t* bytes, size_t count) {
       if (writeAll(fd, bytes, count)) return true;

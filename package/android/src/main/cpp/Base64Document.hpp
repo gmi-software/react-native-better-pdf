@@ -16,6 +16,9 @@ struct Base64Check {
 
 Base64Check checkBase64Document(const uint8_t* text, size_t length);
 
+/** The chunk `NativeBase64Document` decodes into, also tested at this size. */
+inline constexpr size_t kBase64ChunkSize = 256 * 1024;
+
 namespace base64detail {
   inline constexpr std::array<int8_t, 256> kValues = [] {
     std::array<int8_t, 256> values{};

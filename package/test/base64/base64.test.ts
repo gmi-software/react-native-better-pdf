@@ -63,9 +63,9 @@ const hex = (bytes: ArrayBuffer | Uint8Array) =>
     bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes),
   ).toString('hex');
 
-function run(decoder: string, texts: string[]): string[] {
+function run(decoder: string, texts: string[], args: string[] = []): string[] {
   const input = texts.map((text) => hex(base64Bytes(text))).join('\n') + '\n';
-  const result = spawnSync(decoder, [], {
+  const result = spawnSync(decoder, args, {
     input,
     encoding: 'utf8',
     maxBuffer: 1 << 26,
@@ -101,6 +101,28 @@ describe.each(decoders)('the %s decoder', (_, decoder) => {
     const results = run(decoder, [padded, padded.replace(/=+$/, ''), mime]);
     for (const result of results) expect(result).toBe(`ok ${hex(bytes)}`);
   });
+});
+
+test('the C++ decoder at the production chunk size, around each flush', () => {
+  const chunkSize = Number(
+    spawnSync(join(out, 'cpp'), ['chunk-size'], { encoding: 'utf8' }).stdout,
+  );
+  // A chunk is written once fewer than 3 bytes are left in it.
+  const perChunk = chunkSize - (chunkSize % 3);
+  expect(perChunk).toBeGreaterThan(0);
+  const bytes = new Uint8Array(2 * perChunk + 4).map(
+    (_, i) => (i * 131 + (i >> 9)) & 0xff,
+  );
+  const sizes = [perChunk, 2 * perChunk].flatMap((size) =>
+    [-3, -2, -1, 0, 1, 2, 3].map((delta) => size + delta),
+  );
+  const texts = sizes.map((size) =>
+    Buffer.from(bytes.subarray(0, size)).toString('base64'),
+  );
+  const results = run(join(out, 'cpp'), texts, ['production']);
+  sizes.forEach((size, index) =>
+    expect(results[index]).toBe(`ok ${hex(bytes.subarray(0, size))}`),
+  );
 });
 
 const alphabet = Buffer.from([...'AQR/+= \n-dat:'].map((c) => c.charCodeAt(0)))

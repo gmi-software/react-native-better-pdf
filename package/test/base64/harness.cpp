@@ -1,7 +1,10 @@
-// Runs Base64Document.cpp for base64.test.ts: hex cases on stdin, or
+// Runs Base64Document.cpp for base64.test.ts: hex cases on stdin, decoded
+// 3 bytes per write (or `production`: kBase64ChunkSize), `chunk-size`, or
 // `exhaustive <hex> N` for a digest of every text of up to N bytes.
 #include "Base64Document.hpp"
 
+#include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <cstdio>
 #include <iostream>
@@ -18,18 +21,25 @@ namespace {
     return bytes;
   }
 
-  bool run(const std::vector<uint8_t>& text, std::vector<uint8_t>& bytes, std::string& problem) {
+  bool run(const std::vector<uint8_t>& text, size_t chunkSize, std::vector<uint8_t>& bytes, std::string& problem) {
     Base64Check check = checkBase64Document(text.data(), text.size());
     if (check.problem.has_value()) {
       problem = *check.problem;
       return false;
     }
-    uint8_t chunk[3];
+    // The bytes past `chunkSize` keep 0xa5 unless the decoder overruns it.
+    std::vector<uint8_t> chunk(chunkSize + 16, 0xa5);
+    bool fits = true;
     bytes.clear();
-    decodeBase64Document(text.data(), text.size(), chunk, sizeof chunk, [&](const uint8_t* data, size_t count) {
+    decodeBase64Document(text.data(), text.size(), chunk.data(), chunkSize, [&](const uint8_t* data, size_t count) {
+      fits = fits && count <= chunkSize;
       bytes.insert(bytes.end(), data, data + count);
       return true;
     });
+    if (!fits || std::any_of(chunk.begin() + static_cast<std::ptrdiff_t>(chunkSize), chunk.end(), [](uint8_t b) { return b != 0xa5; })) {
+      problem = "wrote past the chunk";
+      return false;
+    }
     if (bytes.size() != check.decodedSize) {
       problem = "decodedSize " + std::to_string(check.decodedSize) + " != " + std::to_string(bytes.size());
       return false;
@@ -51,6 +61,10 @@ namespace {
 int main(int argc, char** argv) {
   std::vector<uint8_t> bytes;
   std::string problem;
+  if (argc == 2 && std::string(argv[1]) == "chunk-size") {
+    std::printf("%zu\n", kBase64ChunkSize);
+    return 0;
+  }
   if (argc == 4 && std::string(argv[1]) == "exhaustive") {
     std::vector<uint8_t> alphabet = fromHex(argv[2]);
     size_t maxLength = std::stoul(argv[3]);
@@ -62,7 +76,7 @@ int main(int argc, char** argv) {
       while (true) {
         for (size_t i = 0; i < length; i++) text[i] = alphabet[digits[i]];
         digest.add(text.data(), text.size());
-        if (run(text, bytes, problem)) {
+        if (run(text, 3, bytes, problem)) {
           digest.add('o');
           digest.add(bytes.data(), bytes.size());
         } else {
@@ -79,9 +93,10 @@ int main(int argc, char** argv) {
     std::printf("%zu %016llx\n", count, static_cast<unsigned long long>(digest.value));
     return 0;
   }
+  size_t chunkSize = argc == 2 && std::string(argv[1]) == "production" ? kBase64ChunkSize : 3;
   std::string line;
   while (std::getline(std::cin, line)) {
-    if (run(fromHex(line), bytes, problem)) {
+    if (run(fromHex(line), chunkSize, bytes, problem)) {
       std::printf("ok ");
       for (uint8_t byte : bytes) std::printf("%02x", byte);
       std::printf("\n");
