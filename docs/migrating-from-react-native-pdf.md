@@ -379,7 +379,9 @@ Pass the base64 itself as `{ base64 }` (1.1+), without the `data:` prefix:
 react-native-pdf wrote the data to a cache file itself (named, without
 `cacheFileName`, by a SHA-1 of the whole string computed in JS, and written
 with react-native-blob-util), and kept the file. Here the string is decoded
-natively, `onLoad`'s `filePath` is `undefined`, and nothing stays on disk.
+natively and `onLoad`'s `filePath` is `undefined`. Nothing stays on disk
+once the document closes: iOS keeps a temporary copy only while it is
+shown, Android not even that.
 Line breaks in the base64 are ignored; URL-safe base64 is not accepted.
 
 While the document is shown, its text is held twice (your string and a

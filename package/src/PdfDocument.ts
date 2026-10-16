@@ -40,8 +40,8 @@ export class PdfDocument {
   readonly pageCount: number;
   /**
    * Absolute path of the opened file, as in `PdfView`'s `onLoad`: the
-   * downloaded copy for remote sources; `undefined` without a file on disk
-   * (`{ base64 }`, Android `content://`).
+   * downloaded copy for remote sources; `undefined` for `{ base64 }` and
+   * Android `content://` sources.
    */
   readonly filePath?: string;
   /**

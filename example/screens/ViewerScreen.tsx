@@ -111,7 +111,9 @@ export function ViewerScreen() {
   /** onLoad events since the entry was opened: each one is a (re)load. */
   const [loadCount, setLoadCount] = useState(0);
   /** Showing the entry's `alternate` source ("Swap"). */
-  const [isAlternate, setIsAlternate] = useState(false);
+  const isAlternate = useRef(false);
+  /** The latest "Swap": only its source, or its failure, is applied. */
+  const swapRequest = useRef(0);
   /** Counts onTextSelectionChange events: one per settled selection. */
   const selectionEvents = useRef(0);
   /** Counts onScaleChange events: one per settled zoom, never per frame. */
@@ -139,7 +141,8 @@ export function ViewerScreen() {
       setSearch(null);
       setShowSearch(false);
       setLoadCount(0);
-      setIsAlternate(false);
+      isAlternate.current = false;
+      swapRequest.current += 1;
       scaleEvents.current = 0;
       selectionEvents.current = 0;
       setState({ kind: 'resolving' });
@@ -152,6 +155,24 @@ export function ViewerScreen() {
     },
     [],
   );
+
+  const swap = async (target: DocumentEntry) => {
+    isAlternate.current = !isAlternate.current;
+    swapRequest.current += 1;
+    const request = swapRequest.current;
+    const resolve = isAlternate.current ? target.alternate : target.resolve;
+    if (resolve == null) return;
+    try {
+      const source = await resolve();
+      if (request === swapRequest.current) {
+        setState({ kind: 'loading', source });
+      }
+    } catch (error) {
+      if (request === swapRequest.current) {
+        setState({ kind: 'failed', source: null, error: String(error) });
+      }
+    }
+  };
 
   if (entry == null) {
     return (
@@ -395,16 +416,7 @@ export function ViewerScreen() {
 
       {entry.alternate != null && (
         <View style={styles.toolbar}>
-          <Button
-            title="Swap"
-            onPress={() => {
-              const next = isAlternate ? entry.resolve : entry.alternate;
-              setIsAlternate((value) => !value);
-              next?.().then((nextSource) =>
-                setState({ kind: 'loading', source: nextSource }),
-              );
-            }}
-          />
+          <Button title="Swap" onPress={() => swap(entry)} />
           <Button
             title="Same"
             // An equal source in a new object: PdfView must not reload.

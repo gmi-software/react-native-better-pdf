@@ -44,9 +44,12 @@ setSource({ base64: await pdf.saveAsBase64() });
 - Pass only the base64, not a `data:` URI: remove the
   `data:application/pdf;base64,` prefix. URL-safe base64 (with `-` and `_`)
   needs converting: `value.replace(/-/g, '+').replace(/_/g, '/')`.
-- The string is decoded natively, off the main thread. There is no file
-  behind the document, so `onLoad`'s `filePath` is `undefined`; to share or
-  upload the document, export a copy with `ref.exportDocument()`.
+- The string is decoded natively, off the main thread. `onLoad`'s
+  `filePath` is `undefined`, as there is no file to hand to the app: iOS
+  keeps the decoded document in a temporary file in the app's caches while
+  it is shown (deleted when it closes, or at the next launch after a
+  crash), and Android deletes its file as soon as the document is open. To
+  share or upload the document, export a copy with `ref.exportDocument()`.
 - The view reloads when the string's content changes, not when an equal
   string arrives in a new source object. Comparing two equal strings costs
   time in proportion to their length on every render (unless they are the
