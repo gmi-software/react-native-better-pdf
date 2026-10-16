@@ -39,7 +39,9 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
 - `exportDocument()` writes the document as shown to a new file (the
   cache directory by default, or `{ filePath }`, which must name a file,
   not a directory), keeping its password protection, off the main thread;
-  the source file is never changed.
+  the source file is never changed. A remote document's `onLoad`
+  `filePath` is the library's downloaded copy: exporting over it, or
+  anywhere else in that cache, is rejected.
   Printing and `renderPage` show the form as filled in too.
 - Password protection of an export: the password that opened the document
   opens the export, with the same permissions (printing, copying, form

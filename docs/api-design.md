@@ -1277,6 +1277,17 @@ on iOS; Android showed them read-only.
   deleted a directory with everything in it. Both platforms now write
   the copy beside the target and rename it over it, so a failed write
   also leaves an existing file as it was.
+- **Exports never go into the download cache.** A remote document's
+  `onLoad` `filePath` is the cache's copy. iOS displays it through a pin
+  (a hard link) and compared the export path with the pin only, so an
+  export to `filePath` replaced the copy: reopened within `maxAgeMs`,
+  after a `304` or offline, the form came back filled in as if the server
+  had sent it (seen on a simulator). Both platforms now reject `onLoad`'s
+  `filePath` as the displayed file, and any path in the store's session,
+  persistent, partial or pin directories (another document's copy,
+  `PdfCache`'s `filePath`) with "The export path is in the cache of
+  downloaded documents". Paths are compared after resolving symlinks, so
+  `/data/data` and `/data/user/0` (Android) are the same directory.
 - **Line breaks** are `\n` on both platforms (PDFium reports `\r\n`).
 - **iOS writes off the main thread.** PDFKit writes a long document in
   seconds (30 ms for the fixture, 354 ms for the 100-page `medium`, 5.7 s
@@ -1295,7 +1306,9 @@ on iOS; Android showed them read-only.
   formatting), signing, XFA, flattening, resetting a form; on Android
   typing a choice's custom text by touch and screen-reader access to
   fields; on iOS several options in a list box.
-- **Tested:** `viewer-forms` on both platforms; JVM tests for the AcroForm
+- **Tested:** `viewer-forms` on both platforms, a downloaded form included
+  (exports over and beside its copy rejected, reopened as served); JVM
+  tests for the cache directories' check and the AcroForm
   reader (order, inherited types and flags, values, radio options from
   appearance states, cropped and rotated pages, object streams, widgets
   found through page annotations, encrypted files), widget matching, value

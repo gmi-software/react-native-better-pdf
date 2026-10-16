@@ -99,6 +99,13 @@ export const DOCUMENTS: DocumentEntry[] = [
     resolve: async () => ({ uri: `${FIXTURE_SERVER}/does-not-exist.pdf` }),
   },
   {
+    id: 'remote-forms',
+    title: 'Remote form',
+    subtitle: 'The forms fixture, downloaded natively',
+    resolve: async () => ({ uri: `${FIXTURE_SERVER}/forms.pdf` }),
+    form: true,
+  },
+  {
     id: 'missing-file',
     title: 'Missing file',
     subtitle: 'Expect file-not-found',

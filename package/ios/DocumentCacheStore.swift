@@ -145,6 +145,16 @@ final class DocumentCacheStore {
     try? fileManager.removeItem(at: pin)
   }
 
+  /// Whether `file` is in one of the store's directories or below them,
+  /// where writing it would replace a copy or a pin, or be deleted with
+  /// them. `file` need not exist; its directory does when it is written.
+  func contains(_ file: URL) -> Bool {
+    let directory = Self.resolvedComponents(of: file.standardizedFileURL.deletingLastPathComponent())
+    return [sessionDirectory, persistentDirectory, partialDirectory, pinDirectory].contains {
+      directory.starts(with: Self.resolvedComponents(of: $0))
+    }
+  }
+
   // MARK: - Private (called with the lock held)
 
   private func prepare() {
@@ -218,6 +228,10 @@ final class DocumentCacheStore {
   private func pdfFiles(in directory: URL) -> [URL] {
     let files = (try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
     return files.filter { $0.pathExtension == "pdf" }
+  }
+
+  private static func resolvedComponents(of directory: URL) -> [String] {
+    return directory.standardizedFileURL.resolvingSymlinksInPath().pathComponents
   }
 
   /// Downloads (`<sha256>.pdf`) of versions before the cache API.

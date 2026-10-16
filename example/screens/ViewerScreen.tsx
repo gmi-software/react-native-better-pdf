@@ -372,6 +372,12 @@ export function ViewerScreen() {
         <FormBar
           pdf={ref.current}
           sourcePath={loadedFilePath}
+          isDownloaded={
+            typeof source === 'object' &&
+            source != null &&
+            'uri' in source &&
+            /^https?:/i.test(source.uri)
+          }
           isFillingEnabled={formFilling}
           onToggleFilling={() => setFormFilling((value) => !value)}
           onEvent={setLastEvent}
