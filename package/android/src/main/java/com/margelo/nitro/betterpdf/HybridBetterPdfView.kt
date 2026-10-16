@@ -283,8 +283,8 @@ class HybridBetterPdfView(
   // region Methods (JS thread)
 
   override fun goToPage(page: Double, animated: Boolean) {
-    if (!page.isFinite()) return
-    mainHandler.post { documentView.goToPage(page.toInt(), animated) }
+    val index = page.toPageIndex() ?: return
+    mainHandler.post { documentView.goToPage(index, animated) }
   }
 
   override fun zoomTo(scale: Double, animated: Boolean) {
@@ -293,9 +293,10 @@ class HybridBetterPdfView(
   }
 
   override fun goToViewport(viewport: PdfViewport) {
-    val values = listOf(viewport.page, viewport.x, viewport.y, viewport.scale)
+    val page = viewport.page.toPageIndex() ?: return
+    val values = listOf(viewport.x, viewport.y, viewport.scale)
     if (!values.all { it.isFinite() } || viewport.scale <= 0) return
-    val point = PagePoint(viewport.page.toInt(), viewport.x.toFloat(), viewport.y.toFloat())
+    val point = PagePoint(page, viewport.x.toFloat(), viewport.y.toFloat())
     mainHandler.post { documentView.goToViewport(point, viewport.scale.toFloat()) }
   }
 

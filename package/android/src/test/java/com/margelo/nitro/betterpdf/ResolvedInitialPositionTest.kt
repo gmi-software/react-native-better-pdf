@@ -30,10 +30,13 @@ class ResolvedInitialPositionTest {
   }
 
   @Test
-  fun `fractional pages are truncated`() {
-    // iOS rounds instead (1.6 opens page 2 there).
-    assertEquals(ResolvedInitialPosition(1, 1f, PagePoint(1, 10f, 20f)), resolve(1.6))
-    assertEquals(ResolvedInitialPosition(0, 1f, PagePoint(0, 10f, 20f)), resolve(-0.6))
+  fun `fractional pages are rounded, as on iOS`() {
+    assertEquals(ResolvedInitialPosition(2, 1f, PagePoint(2, 10f, 20f)), resolve(1.6))
+    assertEquals(ResolvedInitialPosition(1, 1f, PagePoint(1, 10f, 20f)), resolve(1.4))
+    assertEquals(ResolvedInitialPosition(1, 1f, PagePoint(1, 10f, 20f)), resolve(0.5))
+    assertEquals(ResolvedInitialPosition(0, 1f, PagePoint(0, 10f, 20f)), resolve(-0.4))
+    // -0.6 is page -1: clamped, so shown from the top.
+    assertEquals(ResolvedInitialPosition(0, 1f, null), resolve(-0.6))
   }
 
   @Test

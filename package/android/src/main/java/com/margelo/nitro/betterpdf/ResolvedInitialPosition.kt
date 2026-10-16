@@ -13,8 +13,7 @@ internal data class ResolvedInitialPosition(val page: Int, val scale: Float, val
      * clamped and shown from its top, as by goToViewport and on iOS.
      */
     fun of(position: PdfInitialPosition?, pageCount: Int): ResolvedInitialPosition {
-      // toInt() truncates and saturates (Int.MAX_VALUE for 1e20).
-      val requested = position?.page?.takeIf { it.isFinite() }?.toInt() ?: 0
+      val requested = position?.page?.toPageIndex() ?: 0
       val page = requested.coerceIn(0, pageCount - 1)
       val scale = position?.scale?.takeIf { it.isFinite() && it > 0 }?.toFloat() ?: 1f
       val x = position?.x?.takeIf { it.isFinite() }

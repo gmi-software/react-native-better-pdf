@@ -85,8 +85,8 @@ export interface NavigationOptions {
 
 export interface PdfViewRef {
   /**
-   * Scrolls so `page` (zero-based, clamped) is at the top of the viewport.
-   * `NaN` and `±Infinity` are ignored.
+   * Scrolls so `page` (zero-based, rounded to the nearest page, clamped) is
+   * at the top of the viewport. `NaN` and `±Infinity` are ignored.
    */
   goToPage(page: number, options?: NavigationOptions): void;
   /**
@@ -97,10 +97,11 @@ export interface PdfViewRef {
   /**
    * Jumps, without animation, to a position saved from
    * {@linkcode PdfViewProps.onViewportChange}: its page point at the view's
-   * top-left corner, at its zoom. The page is clamped to the document and
-   * the position to the scrollable area. Paged layouts settle on the page
-   * unless zoomed in. Ignored before {@linkcode PdfViewProps.onLoad}, and
-   * when a field is `NaN` or `±Infinity` or `scale` is not positive.
+   * top-left corner, at its zoom. The page is rounded to the nearest page
+   * and clamped to the document, and the position to the scrollable area.
+   * Paged layouts settle on the page unless zoomed in. Ignored before
+   * {@linkcode PdfViewProps.onLoad}, and when a field is `NaN` or
+   * `±Infinity` or `scale` is not positive.
    */
   goToViewport(viewport: PdfViewport): void;
   /** Native diagnostics. `null` before the native view has mounted. */
@@ -187,7 +188,10 @@ export interface PdfViewRef {
 export interface PdfViewProps extends ViewProps {
   source: PdfSource;
   password?: string;
-  /** Zero-based page shown when a document finishes loading. Default `0`. */
+  /**
+   * Zero-based page shown when a document finishes loading, rounded to the
+   * nearest page. Default `0`.
+   */
   initialPage?: number;
   /**
    * Zoom applied once when a document finishes loading, relative to the
