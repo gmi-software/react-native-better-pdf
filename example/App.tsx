@@ -2,7 +2,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Linking, StyleSheet, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
-import type { Library } from './bench/BenchViewer';
+import { MAX_SCALE, type Library } from './bench/BenchViewer';
 import { BENCHMARK_FIXTURES, type FixtureName } from './documents';
 import { BenchmarkScreen, type BenchRequest } from './screens/BenchmarkScreen';
 import { DocumentsScreen } from './screens/DocumentsScreen';
@@ -19,7 +19,7 @@ import { Button, colors } from './ui';
 type Tab = 'viewer' | 'embedded' | 'offline' | 'documents' | 'benchmark';
 
 /**
- * `betterpdfexample://bench?library=better&fixture=large&run=3[&scrollSeconds=300][&source=remote]`
+ * `betterpdfexample://bench?library=better&fixture=large&run=3[&scrollSeconds=300][&source=remote][&zoom=0.05]`
  * starts a benchmark run.
  */
 function parseBenchLink(url: string | null): BenchRequest | null {
@@ -37,6 +37,9 @@ function parseBenchLink(url: string | null): BenchRequest | null {
   const fixture = params.get('fixture');
   if (library !== 'better' && library !== 'react-native-pdf') return null;
   if (!BENCHMARK_FIXTURES.some((name) => name === fixture)) return null;
+  const zoom = params.has('zoom') ? Number(params.get('zoom')) : undefined;
+  // Beyond the viewers' range the zoom would be clamped and recorded wrong.
+  if (zoom !== undefined && !(zoom > 0 && zoom <= MAX_SCALE)) return null;
   return {
     library: library satisfies Library,
     fixture: fixture as FixtureName,
@@ -45,6 +48,7 @@ function parseBenchLink(url: string | null): BenchRequest | null {
       ? Number(params.get('scrollSeconds')) * 1000
       : undefined,
     remote: params.get('source') === 'remote',
+    zoom,
   };
 }
 

@@ -137,7 +137,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private var loadTask: PdfLoadTask?
   /// The pin of the displayed downloaded copy, released with the document.
   private var displayedPin: URL?
-  private var isDisplayedFileNamed = false
+  /// `onLoad`'s `filePath` of the displayed document: the downloaded copy
+  /// itself for a remote one, which displays its pin; nil for `{ base64 }`.
+  private var displayedFile: URL?
   private var pendingInitialPage: Int?
   /// With `pendingInitialPage`: the page point to put at the top-left corner.
   private var pendingInitialPoint: CGPoint?
@@ -524,16 +526,26 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       let destination: URL
       do {
         destination = try filePath.isEmpty
-          ? Self.newExportFile(named: self.isDisplayedFileNamed ? url : nil)
+          ? Self.newExportFile(named: self.displayedFile != nil ? url : nil)
           : Self.exportFile(at: filePath)
       } catch {
         promise.reject(withError: error)
         return
       }
       // The displayed file is read while the copy is written, and is never
-      // changed (an export over it would replace it).
-      if destination.standardizedFileURL.resolvingSymlinksInPath() == url.standardizedFileURL.resolvingSymlinksInPath() {
+      // changed (an export over it would replace it). A remote document's
+      // is the cache's copy, which displays through its pin.
+      let resolvedDestination = destination.standardizedFileURL.resolvingSymlinksInPath()
+      if [url, self.displayedFile].compactMap({ $0 }).contains(where: {
+        $0.standardizedFileURL.resolvingSymlinksInPath() == resolvedDestination
+      }) {
         promise.reject(withError: RuntimeError.error(withMessage: "The export cannot replace the displayed document's file"))
+        return
+      }
+      // Nor any other copy: the cache would serve the export as the
+      // server's document, with the server's ETag.
+      if DocumentCache.shared.store.contains(destination) {
+        promise.reject(withError: RuntimeError.error(withMessage: "The export path is in the cache of downloaded documents"))
         return
       }
       let password = self.password
@@ -729,7 +741,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     documentForm = nil
     layoutOverlays()
     releaseDisplayedPin()
-    isDisplayedFileNamed = false
+    displayedFile = nil
     container.resetSelection()
     fitScale = 0
     lastReportedPage = -1
@@ -766,7 +778,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private func present(_ loaded: LoadedDocument) {
     let document = loaded.document
     displayedPin = loaded.pin
-    isDisplayedFileNamed = loaded.filePath != nil
+    displayedFile = loaded.filePath.map { URL(fileURLWithPath: $0) }
     searchController.clear()
     lastReportedScale = nil
     lastReportedViewport = nil

@@ -7,13 +7,15 @@ import { Button } from '../ui';
 /**
  * Form filling: "Fill" sets values from code, "Fields" lists the current
  * values on the event line, "Bad" tries a read-only field, an export over
- * the displayed file and an export into a directory (all rejected; the
+ * the displayed file, an export into a directory and, for a downloaded
+ * document, an export beside its copy in the cache (all rejected; the
  * directory's file must survive), "Touch" turns filling by touch on and
  * off, "Export" writes the filled-in document and "Open" shows that copy.
  */
 export function FormBar({
   pdf,
   sourcePath,
+  isDownloaded,
   isFillingEnabled,
   onToggleFilling,
   onEvent,
@@ -22,6 +24,8 @@ export function FormBar({
   pdf: PdfViewRef | null;
   /** The displayed file (`onLoad`'s `filePath`). */
   sourcePath: string | undefined;
+  /** The source is a URL: `sourcePath` is the cache's copy. */
+  isDownloaded: boolean;
   isFillingEnabled: boolean;
   onToggleFilling: () => void;
   onEvent: (text: string) => void;
@@ -73,6 +77,17 @@ export function FormBar({
           const intoDirectory = pdf
             ?.exportDocument({ filePath: target.path })
             .then(() => 'exported into a directory', message);
+          // Where another document's copy would be.
+          const besideCopy =
+            isDownloaded && sourcePath != null
+              ? [
+                  pdf
+                    ?.exportDocument({
+                      filePath: sourcePath.replace(/[^/]*$/, 'beside.pdf'),
+                    })
+                    .then(() => 'exported beside the copy', message),
+                ]
+              : [];
           void Promise.all([
             pdf
               ?.setFormFieldValues({ name: 'Never', id: 'B-1' })
@@ -81,6 +96,7 @@ export function FormBar({
               ?.exportDocument({ filePath: sourcePath })
               .then(() => 'exported over the source', message),
             intoDirectory,
+            ...besideCopy,
           ]).then((results) =>
             onEvent(
               `bad: ${results.join(' | ')}; keep.txt ${target.file.exists ? 'kept' : 'deleted'}`,

@@ -50,7 +50,7 @@ internal class DocumentCache(
     internal var download: SharedDownload? = null
   }
 
-  /** Created on first use, which is always on [executor] or a promise thread: it touches the disk. */
+  /** Created on first use, which is always on [executor], a promise thread or a document's write thread: it touches the disk. */
   private val store by lazy(createStore)
   private val lock = Any()
   private val inFlight = HashMap<String, SharedDownload>()
@@ -77,6 +77,9 @@ internal class DocumentCache(
 
   /** Blocking; see [DocumentCacheStore.byteSize]. */
   fun byteSize(): Long = store.byteSize()
+
+  /** Blocking; see [DocumentCacheStore.contains]. */
+  fun contains(file: File): Boolean = store.contains(file)
 
   private fun start(subscriber: Subscriber) {
     val source = subscriber.source

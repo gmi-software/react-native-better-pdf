@@ -121,6 +121,16 @@ internal class DocumentCacheStore(
     return (persistent + session).sumOf { it.length() }
   }
 
+  /**
+   * Whether [file] is in one of the store's directories or below them,
+   * where writing it would replace a copy or be deleted with them. [file]
+   * need not exist.
+   */
+  fun contains(file: File): Boolean {
+    val canonical = file.canonicalFile
+    return listOf(sessionDirectory, persistentDirectory, partialDirectory).any { canonical.startsWith(it.canonicalFile) }
+  }
+
   private fun prepare() {
     if (isPrepared) return
     isPrepared = true

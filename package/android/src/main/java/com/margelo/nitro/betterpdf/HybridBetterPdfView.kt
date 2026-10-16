@@ -353,6 +353,11 @@ class HybridBetterPdfView(
       return Promise.rejected(IllegalArgumentException("The export cannot replace the displayed document's file"))
     }
     return afterFormSettles(session, session::write, commitTyping = true) {
+      // Nor any downloaded copy: the cache would serve the export as the
+      // server's document, with the server's ETag.
+      if (target != null && DocumentCache.shared(context).contains(target)) {
+        throw IllegalArgumentException("The export path is in the cache of downloaded documents")
+      }
       val file = target ?: newExportFile(document.name)
       // Written beside the target and renamed over it: a failed write
       // leaves an existing file as it was. The copy's name does not repeat

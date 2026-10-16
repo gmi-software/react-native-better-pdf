@@ -310,6 +310,27 @@ class DocumentCacheTest {
   }
 
   @Test
+  fun `contains files in the store's directories and below them, wherever the path leads`() {
+    sessionDirectory.mkdirs()
+    val exports = File(temp.root, "exports").also { it.mkdirs() }
+    // As `/data/data` and `/data/user/0`: two paths to the same directory.
+    val link = Files.createSymbolicLink(File(temp.root, "link").toPath(), sessionDirectory.toPath()).toFile()
+
+    assertTrue(cache.contains(File(sessionDirectory, "a.pdf")))
+    assertTrue(cache.contains(File(persistentDirectory, "a.pdf")))
+    assertTrue(cache.contains(File(partialDirectory, "a.1.part")))
+    assertTrue(cache.contains(File(sessionDirectory, "sub/a.pdf")))
+    assertTrue(cache.contains(File(link, "a.pdf")))
+    assertTrue(cache.contains(File(exports, "../cache/BetterPdf/session/a.pdf")))
+
+    assertFalse(cache.contains(File(exports, "a.pdf")))
+    assertFalse(cache.contains(File(sessionDirectory, "../a.pdf")))
+    assertFalse(cache.contains(File(root, "session-old/a.pdf")))
+    // The app's own files beside the store's directories.
+    assertFalse(cache.contains(File(root, "renders/page.png")))
+  }
+
+  @Test
   fun `the first use deletes the previous session, unfinished downloads and the old layout`() {
     val hash = "a".repeat(64)
     val oldSession = File(sessionDirectory, "$hash.pdf").also { it.parentFile!!.mkdirs(); it.writeText("x") }
