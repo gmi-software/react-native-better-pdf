@@ -38,7 +38,9 @@ final class PdfSearchController {
   }
   private static let emitInterval: TimeInterval = 0.1
   /// Pages either side of the visible ones whose matches are highlighted
-  /// too, so a page scrolled into view has them already.
+  /// too. The list is refreshed only once a visible page is outside that
+  /// range (every second page while scrolling), so a page coming into view
+  /// is highlighted in advance or as it appears (see `viewportDidChange`).
   private static let pageMargin = 1
   /// Height kept clear at the top and bottom of the view (`contentInset`).
   var clearance: () -> (top: CGFloat, bottom: CGFloat) = { (0, 0) }
