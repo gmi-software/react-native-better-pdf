@@ -70,7 +70,7 @@ class DocumentCacheTest {
     cache: PdfCacheMode? = null,
     maxAgeMs: Double? = null,
     cacheKey: String? = null,
-  ) = NativePdfSource(uri, headers = headers, cache = cache, maxAgeMs = maxAgeMs, cacheKey = cacheKey)
+  ) = NativePdfSource(uri, base64 = null, headers = headers, cache = cache, maxAgeMs = maxAgeMs, cacheKey = cacheKey)
 
   private fun fetch(source: NativePdfSource, allowStale: Boolean = false) =
     Recorder().also { it.subscription = cache.fetch(source, allowStale, it) }

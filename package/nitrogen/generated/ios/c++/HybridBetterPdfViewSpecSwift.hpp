@@ -14,6 +14,8 @@ namespace NitroBetterPdf { class HybridBetterPdfViewSpec_cxx; }
 
 // Forward declaration of `NativePdfSource` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct NativePdfSource; }
+// Forward declaration of `ArrayBufferHolder` to properly resolve imports.
+namespace NitroModules { class ArrayBufferHolder; }
 // Forward declaration of `PdfCacheMode` to properly resolve imports.
 namespace margelo::nitro::betterpdf { enum class PdfCacheMode; }
 // Forward declaration of `PdfInitialPosition` to properly resolve imports.
@@ -82,6 +84,8 @@ namespace margelo::nitro::betterpdf { struct PdfExportResult; }
 #include "NativePdfSource.hpp"
 #include <optional>
 #include <string>
+#include <NitroModules/ArrayBuffer.hpp>
+#include <NitroModules/ArrayBufferHolder.hpp>
 #include <unordered_map>
 #include "PdfCacheMode.hpp"
 #include "PdfInitialPosition.hpp"

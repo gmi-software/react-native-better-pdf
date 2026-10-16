@@ -39,6 +39,8 @@ namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
 #include <NitroModules/JUnit.hpp>
 #include "NativePdfSource.hpp"
 #include "JNativePdfSource.hpp"
+#include <NitroModules/ArrayBuffer.hpp>
+#include <NitroModules/JArrayBuffer.hpp>
 #include <unordered_map>
 #include "PdfLoadProgressEvent.hpp"
 #include <functional>

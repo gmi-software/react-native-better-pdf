@@ -29,6 +29,7 @@ import { nativeColor } from './nativeColor';
 import { OverlayRegistryContext, type OverlayRegistry } from './PdfPageOverlay';
 import { buildOutlineTree } from './outline';
 import { defaultPrintJobName } from './printJobName';
+import { toNativeSource } from './nativeSource';
 import { normalizeSource, sourceKey, type PdfSource } from './source';
 import type {
   PdfViewMethods,
@@ -479,9 +480,20 @@ function useInitialPosition(
 function useStableSource(source: PdfSource): NativePdfSource {
   const normalized = normalizeSource(source, Image.resolveAssetSource);
   const key = sourceKey(normalized);
-  const cached = useRef<{ key: string; value: NativePdfSource } | null>(null);
-  if (cached.current?.key !== key) {
-    cached.current = { key, value: normalized };
+  const cached = useRef<{
+    key: string;
+    base64: string | undefined;
+    value: NativePdfSource;
+  } | null>(null);
+  if (
+    cached.current?.key !== key ||
+    !Object.is(cached.current.base64, normalized.base64)
+  ) {
+    cached.current = {
+      key,
+      base64: normalized.base64,
+      value: toNativeSource(normalized),
+    };
   }
   return cached.current.value;
 }

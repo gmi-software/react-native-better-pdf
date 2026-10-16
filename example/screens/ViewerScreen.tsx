@@ -105,6 +105,10 @@ export function ViewerScreen() {
   const [formFilling, setFormFilling] = useState(true);
   /** The displayed file, from onLoad. */
   const [loadedFilePath, setLoadedFilePath] = useState<string>();
+  /** onLoad events since the entry was opened: each one is a (re)load. */
+  const [loadCount, setLoadCount] = useState(0);
+  /** Showing the entry's `alternate` source ("Swap"). */
+  const [isAlternate, setIsAlternate] = useState(false);
   /** Counts onTextSelectionChange events: one per settled selection. */
   const selectionEvents = useRef(0);
   /** Counts onScaleChange events: one per settled zoom, never per frame. */
@@ -131,6 +135,8 @@ export function ViewerScreen() {
       setOutline(null);
       setSearch(null);
       setShowSearch(false);
+      setLoadCount(0);
+      setIsAlternate(false);
       scaleEvents.current = 0;
       selectionEvents.current = 0;
       setState({ kind: 'resolving' });
@@ -337,6 +343,35 @@ export function ViewerScreen() {
         />
       )}
 
+      {entry.alternate != null && (
+        <View style={styles.toolbar}>
+          <Button
+            title="Swap"
+            onPress={() => {
+              const next = isAlternate ? entry.resolve : entry.alternate;
+              setIsAlternate((value) => !value);
+              next?.().then((nextSource) =>
+                setState({ kind: 'loading', source: nextSource }),
+              );
+            }}
+          />
+          <Button
+            title="Same"
+            // An equal source in a new object: PdfView must not reload.
+            onPress={() =>
+              setState((current) =>
+                current.kind === 'loaded' && typeof current.source === 'object'
+                  ? { ...current, source: { ...current.source } }
+                  : current,
+              )
+            }
+          />
+          <Text testID="load-count" style={styles.pageLabel}>
+            {`loads: ${loadCount}`}
+          </Text>
+        </View>
+      )}
+
       {showSearch && (
         <SearchBar
           pdf={ref.current}
@@ -397,6 +432,7 @@ export function ViewerScreen() {
             }}
             onLoad={(event) => {
               setState({ kind: 'loaded', source, pageCount: event.pageCount });
+              setLoadCount((count) => count + 1);
               setLoadedFilePath(event.filePath);
               // The local file behind the document, e.g. for sharing.
               setLastEvent(

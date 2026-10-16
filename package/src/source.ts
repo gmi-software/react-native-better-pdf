@@ -62,26 +62,43 @@ export interface PdfUriSource {
 }
 
 /**
+ * A document as a base64 string, e.g. from pdfmake, pdf-lib or an API. Meant
+ * for documents of up to a few MB; keep the string in state.
+ */
+export interface PdfBase64Source {
+  /** Standard base64 without a `data:` prefix; whitespace and missing padding are fine. */
+  base64: string;
+}
+
+/**
  * Where to load a PDF from.
  *
  * - {@linkcode PdfUriSource} — `http(s)://` (downloaded natively into the
  *   app's cache), `file://`, or `content://` on Android.
  * - `{ filePath }` — an absolute path on the device.
+ * - {@linkcode PdfBase64Source} — the document's bytes as a base64 string.
  * - `number` — a bundled asset, i.e. `require('./document.pdf')`.
  *   `pdf` is one of Metro's default asset extensions, so no config is needed.
  */
-export type PdfSource = PdfUriSource | { filePath: string } | number;
+export type PdfSource =
+  PdfUriSource | { filePath: string } | PdfBase64Source | number;
 
 /** Resolves `require()` asset ids. Injected so this module stays pure. */
 export type AssetResolver = (asset: number) => { uri: string } | null;
+
+export type NormalizedSource = Omit<NativePdfSource, 'base64'> & {
+  base64?: string;
+};
 
 /**
  * The native shape of a URI source. Copies `headers` so later mutation of
  * the caller's object cannot leak into native code, and leaves absent
  * options absent.
  */
-export function normalizeUriSource(source: PdfUriSource): NativePdfSource {
-  const normalized: NativePdfSource = { uri: source.uri };
+export function normalizeUriSource(
+  source: PdfUriSource,
+): Omit<NativePdfSource, 'base64'> {
+  const normalized: Omit<NativePdfSource, 'base64'> = { uri: source.uri };
   if (source.headers != null) normalized.headers = { ...source.headers };
   if (source.cache != null) normalized.cache = source.cache;
   if (source.maxAgeMs != null) normalized.maxAgeMs = source.maxAgeMs;
@@ -92,12 +109,15 @@ export function normalizeUriSource(source: PdfUriSource): NativePdfSource {
 export function normalizeSource(
   source: PdfSource,
   resolveAsset: AssetResolver,
-): NativePdfSource {
+): NormalizedSource {
   if (typeof source === 'number') {
     return { uri: resolveAsset(source)?.uri ?? '' };
   }
   if ('filePath' in source) {
     return { uri: source.filePath };
+  }
+  if ('base64' in source) {
+    return { uri: '', base64: source.base64 };
   }
   return normalizeUriSource(source);
 }
@@ -108,7 +128,7 @@ export function normalizeSource(
  * source reloads the document is decided natively: a changed `uri` or
  * `headers` does not when the `cacheKey` is the same.)
  */
-export function sourceKey(source: NativePdfSource): string {
+export function sourceKey(source: NormalizedSource): string {
   const headers = Object.keys(source.headers ?? {})
     .sort()
     .map((name) => [name, source.headers?.[name]]);
@@ -118,5 +138,6 @@ export function sourceKey(source: NativePdfSource): string {
     source.cache ?? null,
     source.maxAgeMs ?? null,
     source.cacheKey ?? null,
+    source.base64 !== undefined,
   ]);
 }

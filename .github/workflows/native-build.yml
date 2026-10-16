@@ -60,6 +60,11 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ runner.arch }}-pods-
 
+      # Only here is swiftc available for the Swift decoder and its C++ parity check.
+      - name: Test the native base64 decoders
+        working-directory: package
+        run: bun test ./test/base64
+
       # `--no-install` skips the JS install and pod install; pods are installed
       # explicitly below.
       - name: Prebuild the example app

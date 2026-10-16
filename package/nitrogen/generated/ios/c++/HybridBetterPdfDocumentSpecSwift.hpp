@@ -22,6 +22,8 @@ namespace margelo::nitro::betterpdf { struct PdfError; }
 namespace margelo::nitro::betterpdf { enum class PdfErrorCode; }
 // Forward declaration of `NativePdfSource` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct NativePdfSource; }
+// Forward declaration of `ArrayBufferHolder` to properly resolve imports.
+namespace NitroModules { class ArrayBufferHolder; }
 // Forward declaration of `PdfCacheMode` to properly resolve imports.
 namespace margelo::nitro::betterpdf { enum class PdfCacheMode; }
 // Forward declaration of `PdfLoadProgressEvent` to properly resolve imports.
@@ -47,6 +49,8 @@ namespace margelo::nitro::betterpdf { enum class PdfImageFormat; }
 #include "PdfError.hpp"
 #include "PdfErrorCode.hpp"
 #include "NativePdfSource.hpp"
+#include <NitroModules/ArrayBuffer.hpp>
+#include <NitroModules/ArrayBufferHolder.hpp>
 #include <unordered_map>
 #include "PdfCacheMode.hpp"
 #include "PdfLoadProgressEvent.hpp"

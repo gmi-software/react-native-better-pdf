@@ -3,9 +3,11 @@ package com.margelo.nitro.betterpdf
 import android.content.Context
 import android.net.Uri
 import android.os.ParcelFileDescriptor
+import com.margelo.nitro.core.ArrayBuffer
 import java.io.File
 import java.io.FileNotFoundException
 import java.io.IOException
+import java.util.UUID
 import java.util.concurrent.CountDownLatch
 
 /**
@@ -39,6 +41,7 @@ class PdfSourceResolver(private val context: Context) {
     source: NativePdfSource,
     onProgress: (loadedBytes: Long, totalBytes: Long?, isComplete: Boolean) -> Unit,
   ): ResolvedSource {
+    source.base64?.let { return openBase64(it) }
     val uri = source.uri
     if (uri.isBlank()) throw invalidSource(uri)
     if (uri.startsWith("/")) return openFile(File(uri))
@@ -74,6 +77,37 @@ class PdfSourceResolver(private val context: Context) {
     } catch (e: SecurityException) {
       throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No permission to read $uri", cause = e)
     }
+  }
+
+  /** Like `content://`, the session needs only the descriptor, so the file is deleted at once. */
+  private fun openBase64(text: ArrayBuffer): ResolvedSource {
+    if (!text.isOwner) throw IllegalStateException("The base64 text is not in a native buffer")
+    val file = File(base64Directory(), "${UUID.randomUUID()}.pdf")
+    try {
+      val mode = ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE
+      ParcelFileDescriptor.open(file, mode).use { output ->
+        NativeBase64Document.writeDecoded(text.getBuffer(false), output.fd)?.let {
+          throw PdfFailure(PdfErrorCode.INVALID_SOURCE, it)
+        }
+      }
+      if (cancelled) throw InterruptedException()
+      return ResolvedSource(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY), file = null)
+    } finally {
+      file.delete()
+    }
+  }
+
+  /** Emptied once per process, for files left by a crash before deletion. */
+  private fun base64Directory(): File {
+    val directory = File(cacheDirectory(), "open")
+    synchronized(Companion) {
+      if (!isBase64DirectorySwept) {
+        directory.listFiles()?.forEach { it.delete() }
+        isBase64DirectorySwept = true
+      }
+    }
+    directory.mkdirs()
+    return directory
   }
 
   private fun openRawResource(name: String): ResolvedSource {
@@ -143,4 +177,8 @@ class PdfSourceResolver(private val context: Context) {
 
   private fun invalidSource(uri: String) =
     PdfFailure(PdfErrorCode.INVALID_SOURCE, "Unsupported PDF source: \"$uri\"")
+
+  private companion object {
+    var isBase64DirectorySwept = false
+  }
 }

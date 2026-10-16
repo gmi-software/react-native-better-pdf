@@ -1,0 +1,115 @@
+[
+  { "text": "JVBERi0xLjQK", "bytes": "255044462d312e340a" },
+  { "text": "QQ==", "bytes": "41" },
+  { "text": "QQ", "bytes": "41" },
+  { "text": "QUI=", "bytes": "4142" },
+  { "text": "QUI", "bytes": "4142" },
+  { "text": "QUJD", "bytes": "414243" },
+  { "text": "+/+/", "bytes": "fbffbf" },
+  { "text": "AAAA", "bytes": "000000" },
+  { "text": "QR==", "bytes": "41" },
+  { "text": "QUJ", "bytes": "4142" },
+  { "text": " Q U\tJ\r\nD\n", "bytes": "414243" },
+  { "text": "QUJD\r\nRA==\r\n", "bytes": "41424344" },
+  { "text": "QQ=\n=", "bytes": "41" },
+  { "text": "\n\nQUI \n", "bytes": "4142" },
+  { "text": "JVBER i0xLjQK\n", "bytes": "255044462d312e340a" },
+  { "text": "", "error": "The base64 source is empty" },
+  { "text": "  \r\n\t", "error": "The base64 source is empty" },
+  {
+    "text": "data:application/pdf;base64,QUJD",
+    "error": "The base64 source is a data: URI; pass only the part after \"base64,\""
+  },
+  {
+    "text": "  DATA:application/pdf;base64,QUJD",
+    "error": "The base64 source is a data: URI; pass only the part after \"base64,\""
+  },
+  {
+    "text": " data:\u00e9",
+    "error": "The base64 source is a data: URI; pass only the part after \"base64,\""
+  },
+  {
+    "text": "Data:",
+    "error": "The base64 source is a data: URI; pass only the part after \"base64,\""
+  },
+  {
+    "text": "-_-_",
+    "error": "The base64 source is URL-safe base64 (- or _ at index 0); use the standard alphabet (+ and /)"
+  },
+  {
+    "text": "QUJD\nQ_",
+    "error": "The base64 source is URL-safe base64 (- or _ at index 6); use the standard alphabet (+ and /)"
+  },
+  {
+    "text": "QUJD!",
+    "error": "The base64 source is not valid base64: unexpected character at index 4"
+  },
+  {
+    "text": "QUJD\u00e9",
+    "error": "The base64 source is not valid base64: unexpected character at index 4"
+  },
+  {
+    "text": "QU\u0000JD",
+    "error": "The base64 source is not valid base64: unexpected character at index 2"
+  },
+  {
+    "text": "QU.JD",
+    "error": "The base64 source is not valid base64: unexpected character at index 2"
+  },
+  {
+    "text": "QUJD\u000b",
+    "error": "The base64 source is not valid base64: unexpected character at index 4"
+  },
+  {
+    "text": "QUJD\ud83d\ude00QUJD",
+    "error": "The base64 source is not valid base64: unexpected character at index 4"
+  },
+  {
+    "text": "QUJD\ud800",
+    "error": "The base64 source is not valid base64: unexpected character at index 4"
+  },
+  {
+    "text": "\u00e9QUJD",
+    "error": "The base64 source is not valid base64: unexpected character at index 0"
+  },
+  {
+    "text": "QU\u0130J",
+    "error": "The base64 source is not valid base64: unexpected character at index 2"
+  },
+  {
+    "text": "dat:",
+    "error": "The base64 source is not valid base64: unexpected character at index 3"
+  },
+  {
+    "text": "Q",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  },
+  {
+    "text": "QUJDR",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  },
+  {
+    "text": "QQ===",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  },
+  {
+    "text": "QUJD=",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  },
+  {
+    "text": "QQ=A",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  },
+  {
+    "text": "QQ==QQ==",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  },
+  {
+    "text": "=",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  },
+  {
+    "text": "==",
+    "error": "The base64 source is not valid base64: wrong length or padding"
+  }
+]

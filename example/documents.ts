@@ -52,6 +52,8 @@ export interface DocumentEntry {
   form?: boolean;
   /** Translucent bars over the viewer, which pages scroll under (`contentInset`). */
   contentInset?: { top: number; bottom: number };
+  /** Another source for "Swap"; also shows "Same" and the onLoad count. */
+  alternate?: () => Promise<PdfSource>;
 }
 
 const fixtureDirectory = () => {
@@ -66,6 +68,10 @@ export async function ensureFixture(name: FixtureName): Promise<File> {
   if (file.exists && file.size > 0) return file;
   if (file.exists) file.delete();
   return File.downloadFileAsync(`${FIXTURE_SERVER}/${name}.pdf`, file);
+}
+
+async function base64Fixture(name: FixtureName): Promise<PdfSource> {
+  return { base64: await (await ensureFixture(name)).base64() };
 }
 
 export const DOCUMENTS: DocumentEntry[] = [
@@ -147,4 +153,45 @@ export const DOCUMENTS: DocumentEntry[] = [
     resolve: async () => ({ uri: (await ensureFixture(name)).uri }),
     form: name.startsWith('forms'),
   })),
+  {
+    id: 'base64',
+    title: 'Base64',
+    subtitle: '{ base64 } of outline; Swap to single-page',
+    resolve: () => base64Fixture('outline'),
+    alternate: () => base64Fixture('single-page'),
+  },
+  {
+    id: 'base64-encrypted',
+    title: 'Base64 encrypted',
+    subtitle: '{ base64 } of encrypted, password "secret"',
+    resolve: () => base64Fixture('encrypted'),
+  },
+  {
+    id: 'base64-form',
+    title: 'Base64 form',
+    subtitle: '{ base64 } of forms; exports as document.pdf',
+    resolve: () => base64Fixture('forms'),
+    form: true,
+  },
+  {
+    id: 'base64-invalid',
+    title: 'Base64 not base64',
+    subtitle: 'Expect invalid-source',
+    resolve: async () => ({ base64: 'JVBERi0xLjQK!' }),
+  },
+  {
+    id: 'base64-data-uri',
+    title: 'Base64 data: URI',
+    subtitle: 'Expect invalid-source',
+    resolve: async () => ({
+      base64: 'data:application/pdf;base64,JVBERi0xLjQK',
+    }),
+  },
+  {
+    id: 'base64-not-a-pdf',
+    title: 'Base64 not a PDF',
+    subtitle: 'Expect invalid-pdf',
+    // "Hello, world!"
+    resolve: async () => ({ base64: 'SGVsbG8sIHdvcmxkIQ==' }),
+  },
 ];

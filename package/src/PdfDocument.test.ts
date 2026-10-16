@@ -86,6 +86,7 @@ mock.module('react-native-nitro-modules', () => ({
       if (name !== 'BetterPdfDocument') throw new Error(`Unexpected ${name}`);
       return createNativeDocument();
     },
+    createNativeArrayBuffer: (size: number) => new ArrayBuffer(size),
   },
 }));
 
@@ -140,6 +141,11 @@ describe('PdfDocument.open', () => {
     expect(lastNative().source).toEqual({ uri: 'asset://42' });
     void PdfDocument.open({ filePath: '/docs/a.pdf' });
     expect(lastNative().source).toEqual({ uri: '/docs/a.pdf' });
+    void PdfDocument.open({ base64: 'JVBERi0=' }, { password: 'secret' });
+    const { base64, ...rest } = lastNative().source as NativePdfSource;
+    expect(rest).toEqual({ uri: '' });
+    expect(new TextDecoder().decode(base64)).toBe('JVBERi0=');
+    expect(lastNative().password).toBe('secret');
   });
 
   test('a failure rejects with a PdfOpenError and releases the native object', async () => {

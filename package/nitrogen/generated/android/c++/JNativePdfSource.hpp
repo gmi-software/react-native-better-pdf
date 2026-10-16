@@ -12,6 +12,8 @@
 
 #include "JPdfCacheMode.hpp"
 #include "PdfCacheMode.hpp"
+#include <NitroModules/ArrayBuffer.hpp>
+#include <NitroModules/JArrayBuffer.hpp>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -37,6 +39,8 @@ namespace margelo::nitro::betterpdf {
       static const auto clazz = javaClassStatic();
       static const auto fieldUri = clazz->getField<jni::JString>("uri");
       jni::local_ref<jni::JString> uri = this->getFieldValue(fieldUri);
+      static const auto fieldBase64 = clazz->getField<JArrayBuffer::javaobject>("base64");
+      jni::local_ref<JArrayBuffer::javaobject> base64 = this->getFieldValue(fieldBase64);
       static const auto fieldHeaders = clazz->getField<jni::JMap<jni::JString, jni::JString>>("headers");
       jni::local_ref<jni::JMap<jni::JString, jni::JString>> headers = this->getFieldValue(fieldHeaders);
       static const auto fieldCache = clazz->getField<JPdfCacheMode>("cache");
@@ -47,6 +51,7 @@ namespace margelo::nitro::betterpdf {
       jni::local_ref<jni::JString> cacheKey = this->getFieldValue(fieldCacheKey);
       return NativePdfSource(
         uri->toStdString(),
+        base64 != nullptr ? std::make_optional(base64->cthis()->getArrayBuffer()) : std::nullopt,
         headers != nullptr ? std::make_optional([&]() {
           std::unordered_map<std::string, std::string> __map;
           __map.reserve(headers->size());
@@ -67,12 +72,13 @@ namespace margelo::nitro::betterpdf {
      */
     [[maybe_unused]]
     static jni::local_ref<JNativePdfSource::javaobject> fromCpp(const NativePdfSource& value) {
-      using JSignature = JNativePdfSource(jni::alias_ref<jni::JString>, jni::alias_ref<jni::JMap<jni::JString, jni::JString>>, jni::alias_ref<JPdfCacheMode>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JString>);
+      using JSignature = JNativePdfSource(jni::alias_ref<jni::JString>, jni::alias_ref<JArrayBuffer::javaobject>, jni::alias_ref<jni::JMap<jni::JString, jni::JString>>, jni::alias_ref<JPdfCacheMode>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
         clazz,
         jni::make_jstring(value.uri),
+        value.base64.has_value() ? JArrayBuffer::wrap(value.base64.value()) : nullptr,
         value.headers.has_value() ? [&]() -> jni::local_ref<jni::JMap<jni::JString, jni::JString>> {
           auto __map = jni::JHashMap<jni::JString, jni::JString>::create(value.headers.value().size());
           for (const auto& __entry : value.headers.value()) {

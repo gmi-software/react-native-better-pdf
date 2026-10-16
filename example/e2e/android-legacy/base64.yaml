@@ -1,0 +1,18 @@
+# `{ base64 }` on the legacy renderer (e.g. the API 34 emulator image).
+#   maestro --device <id> test example/e2e/android-legacy/base64.yaml
+appId: software.gmi.betterpdf.example
+---
+- launchApp: { stopApp: true }
+- runFlow: ../_dismiss-dev-menu.yaml
+- tapOn: "Viewer"
+- scrollUntilVisible: { element: "Base64, .*", timeout: 60000 }
+- tapOn: "Base64, .*"
+- extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
+- assertVisible: "file: none"
+- tapOn: "Image"
+- extendedWaitUntil: { visible: "image p1: 300x.*", timeout: 10000 }
+- tapOn: "‹ Back"
+- scrollUntilVisible: { element: "Base64 encrypted, .*", timeout: 60000 }
+- tapOn: "Base64 encrypted, .*"
+- extendedWaitUntil: { visible: "unsupported-pdf", timeout: 15000 }
+- tapOn: "‹ Back"

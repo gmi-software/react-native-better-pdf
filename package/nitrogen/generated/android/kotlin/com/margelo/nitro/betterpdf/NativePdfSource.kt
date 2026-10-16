@@ -10,7 +10,7 @@ package com.margelo.nitro.betterpdf
 import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
 import java.util.Objects
-
+import com.margelo.nitro.core.ArrayBuffer
 
 /**
  * Represents the JavaScript object/struct "NativePdfSource".
@@ -21,6 +21,9 @@ data class NativePdfSource(
   @DoNotStrip
   @Keep
   val uri: String,
+  @DoNotStrip
+  @Keep
+  val base64: ArrayBuffer?,
   @DoNotStrip
   @Keep
   val headers: Map<String, String>?,
@@ -40,6 +43,7 @@ data class NativePdfSource(
     if (this === other) return true
     if (other !is NativePdfSource) return false
     return Objects.deepEquals(this.uri, other.uri)
+      && Objects.deepEquals(this.base64, other.base64)
       && Objects.deepEquals(this.headers, other.headers)
       && Objects.deepEquals(this.cache, other.cache)
       && Objects.deepEquals(this.maxAgeMs, other.maxAgeMs)
@@ -49,6 +53,7 @@ data class NativePdfSource(
   override fun hashCode(): Int {
     return arrayOf<Any?>(
       uri,
+      base64,
       headers,
       cache,
       maxAgeMs,
@@ -64,8 +69,8 @@ data class NativePdfSource(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(uri: String, headers: Map<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?): NativePdfSource {
-      return NativePdfSource(uri, headers, cache, maxAgeMs, cacheKey)
+    private fun fromCpp(uri: String, base64: ArrayBuffer?, headers: Map<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?): NativePdfSource {
+      return NativePdfSource(uri, base64, headers, cache, maxAgeMs, cacheKey)
     }
   }
 }

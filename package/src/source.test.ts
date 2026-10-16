@@ -61,6 +61,20 @@ describe('normalizeSource', () => {
     ).toEqual(['uri']);
   });
 
+  test('passes base64 through with an empty uri, without copying it', () => {
+    const base64 = 'JVBERi0xLjQK';
+    const normalized = normalizeSource({ base64 }, resolveAsset);
+    expect(normalized).toEqual({ uri: '', base64 });
+    expect(Object.keys(normalized)).toEqual(['uri', 'base64']);
+  });
+
+  test('passes an empty base64 string on, for native code to reject', () => {
+    expect(normalizeSource({ base64: '' }, resolveAsset)).toEqual({
+      uri: '',
+      base64: '',
+    });
+  });
+
   test('unresolvable assets become an empty uri, which native reports as invalid-source', () => {
     expect(normalizeSource(99, resolveAsset)).toEqual({ uri: '' });
   });
@@ -94,6 +108,14 @@ describe('sourceKey', () => {
       sourceKey({ uri: 'a', cacheKey: 'doc', cache: 'persistent' }),
     ).not.toBe(base);
     expect(sourceKey({ uri: 'b', cacheKey: 'doc' })).not.toBe(base);
+  });
+
+  test('marks base64 sources without their content', () => {
+    const key = sourceKey({ uri: '', base64: 'JVBERi0xLjQK' });
+    expect(key).not.toContain('JVBERi0xLjQK');
+    // The content is compared separately (see useStableSource).
+    expect(sourceKey({ uri: '', base64: 'b3RoZXI=' })).toBe(key);
+    expect(sourceKey({ uri: '' })).not.toBe(key);
   });
 
   test('cannot be spoofed by a uri containing the separator', () => {

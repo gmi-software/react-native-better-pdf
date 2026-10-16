@@ -1,4 +1,5 @@
 import Foundation
+import NitroModules
 import PDFKit
 
 /// Resolves a `NativePdfSource` to a local file and opens it as a
@@ -52,7 +53,7 @@ final class PdfDocumentLoader {
               if let pin = file.pin { DocumentCache.shared.store.unpin(pin) }
               return
             }
-            switch openDocument(at: file.url, password: password, isDisplayed: isDisplayed) {
+            switch openDocument(file, password: password, isDisplayed: isDisplayed) {
             case .failure(let failure):
               if let pin = file.pin { DocumentCache.shared.store.unpin(pin) }
               finish(.failure(failure))
@@ -74,6 +75,9 @@ final class PdfDocumentLoader {
     progress: @escaping (Int64, Int64?, Bool) -> Void,
     completion: @escaping (Result<ResolvedFile, PdfLoadFailure>) -> Void
   ) {
+    if let base64 = source.base64 {
+      return completion(decodedFile(base64))
+    }
     let uri = source.uri
     if uri.isEmpty {
       return completion(.failure(.invalidSource(uri)))
@@ -112,14 +116,39 @@ final class PdfDocumentLoader {
     return .success(ResolvedFile(url: url, filePath: url.path, isStale: false, pin: nil))
   }
 
+  private static func decodedFile(_ text: ArrayBuffer) -> Result<ResolvedFile, PdfLoadFailure> {
+    guard text.isOwner else {
+      return .failure(PdfLoadFailure(code: .invalidSource, message: "The base64 text is not in a native buffer"))
+    }
+    switch Base64Document.decode(UnsafeBufferPointer(start: text.data, count: text.size)) {
+    case .failure(let failure):
+      return .failure(failure)
+    case .success(let data):
+      do {
+        let pin = try DocumentCache.shared.store.pin(data: data)
+        return .success(ResolvedFile(url: pin, filePath: nil, isStale: false, pin: pin))
+      } catch {
+        return .failure(PdfLoadFailure(
+          code: .invalidPdf,
+          message: "The decoded base64 source could not be written",
+          nativeDescription: error.localizedDescription
+        ))
+      }
+    }
+  }
+
   // MARK: - Opening
 
-  private static func openDocument(at url: URL, password: String?, isDisplayed: Bool) -> Result<PDFDocument, PdfLoadFailure> {
+  private static func openDocument(_ file: ResolvedFile, password: String?, isDisplayed: Bool) -> Result<PDFDocument, PdfLoadFailure> {
+    let url = file.url
     // PDFDocument(url:) parses the cross-reference table synchronously; this
     // is why the whole load runs on `workQueue`.
     // The displayed document draws dark pages (see ColorSchemeDocument).
     let opened: PDFDocument? = isDisplayed ? ColorSchemeDocument(url: url) : PDFDocument(url: url)
     guard let document = opened else {
+      if file.filePath == nil {
+        return .failure(PdfLoadFailure(code: .invalidPdf, message: "The base64 source is not a readable PDF document"))
+      }
       return .failure(.invalidPdf(url.path))
     }
     if document.isLocked {
@@ -131,7 +160,8 @@ final class PdfDocumentLoader {
       }
     }
     if document.pageCount == 0 {
-      return .failure(PdfLoadFailure(code: .invalidPdf, message: "The PDF at \(url.path) has no pages"))
+      let name = file.filePath == nil ? "The base64 PDF" : "The PDF at \(url.path)"
+      return .failure(PdfLoadFailure(code: .invalidPdf, message: "\(name) has no pages"))
     }
     return .success(document)
   }

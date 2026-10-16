@@ -78,6 +78,8 @@ namespace margelo::nitro::betterpdf { struct NativePdfFormValue; }
 #include <optional>
 #include "JNativePdfSource.hpp"
 #include <string>
+#include <NitroModules/ArrayBuffer.hpp>
+#include <NitroModules/JArrayBuffer.hpp>
 #include <unordered_map>
 #include "PdfCacheMode.hpp"
 #include "JPdfCacheMode.hpp"

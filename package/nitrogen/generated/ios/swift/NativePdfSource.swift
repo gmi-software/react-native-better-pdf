@@ -18,8 +18,14 @@ public extension NativePdfSource {
   /**
    * Create a new instance of `NativePdfSource`.
    */
-  init(uri: String, headers: Dictionary<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?) {
-    self.init(std.string(uri), { () -> bridge.std__optional_std__unordered_map_std__string__std__string__ in
+  init(uri: String, base64: ArrayBuffer?, headers: Dictionary<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?) {
+    self.init(std.string(uri), { () -> bridge.std__optional_std__shared_ptr_ArrayBuffer__ in
+      if let __unwrappedValue = base64 {
+        return bridge.create_std__optional_std__shared_ptr_ArrayBuffer__(__unwrappedValue.getArrayBuffer())
+      } else {
+        return .init()
+      }
+    }(), { () -> bridge.std__optional_std__unordered_map_std__string__std__string__ in
       if let __unwrappedValue = headers {
         return bridge.create_std__optional_std__unordered_map_std__string__std__string__({ () -> bridge.std__unordered_map_std__string__std__string_ in
           var __map = bridge.create_std__unordered_map_std__string__std__string_(__unwrappedValue.count)
@@ -55,6 +61,18 @@ public extension NativePdfSource {
   @inline(__always)
   var uri: String {
     return String(self.__uri)
+  }
+  
+  @inline(__always)
+  var base64: ArrayBuffer? {
+    return { () -> ArrayBuffer? in
+      if bridge.has_value_std__optional_std__shared_ptr_ArrayBuffer__(self.__base64) {
+        let __unwrapped = bridge.get_std__optional_std__shared_ptr_ArrayBuffer__(self.__base64)
+        return ArrayBuffer(__unwrapped)
+      } else {
+        return nil
+      }
+    }()
   }
   
   @inline(__always)

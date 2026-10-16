@@ -32,3 +32,17 @@ appId: software.gmi.betterpdf.example
     visible: "invalid-pdf|1 / 3"
     timeout: 15000
 - tapOn: "‹ Back"
+- scrollUntilVisible: { element: "Base64 not base64.*", timeout: 60000 }
+- tapOn: "Base64 not base64.*"
+- extendedWaitUntil: { visible: "invalid-source", timeout: 10000 }
+- assertVisible: "The base64 source is not valid base64: unexpected character at index 12"
+- tapOn: "‹ Back"
+- scrollUntilVisible: { element: "Base64 data: URI.*", timeout: 60000 }
+- tapOn: "Base64 data: URI.*"
+- extendedWaitUntil: { visible: "invalid-source", timeout: 10000 }
+- assertVisible: "The base64 source is a data: URI; pass only the part after \"base64,\""
+- tapOn: "‹ Back"
+- scrollUntilVisible: { element: "Base64 not a PDF.*", timeout: 60000 }
+- tapOn: "Base64 not a PDF.*"
+- extendedWaitUntil: { visible: "invalid-pdf", timeout: 10000 }
+- tapOn: "‹ Back"

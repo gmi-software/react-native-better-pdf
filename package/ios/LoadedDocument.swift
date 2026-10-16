@@ -5,7 +5,7 @@ import PDFKit
 struct LoadedDocument {
   let document: PDFDocument
   /// `onLoad`'s `filePath`.
-  let filePath: String
+  let filePath: String?
   /// `onLoad`'s `isStale`.
   let isStale: Bool
   /// Unpinned (`DocumentCacheStore.unpin`) when the view stops displaying it.

@@ -1,0 +1,57 @@
+# `{ base64 }` sources: "Same" (an equal source) must not reload, "Swap" must;
+# "loads" counts onLoad.
+appId: software.gmi.betterpdf.example
+---
+- launchApp: { stopApp: true }
+- runFlow: _dismiss-dev-menu.yaml
+- tapOn: "Viewer"
+- scrollUntilVisible: { element: "Base64, .*", timeout: 60000 }
+- tapOn: "Base64, .*"
+- extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
+- assertVisible: "loads: 1"
+- assertVisible: "file: none"
+
+- tapOn: "Same"
+- tapOn: "Same"
+- tapOn: "Sizes"
+- extendedWaitUntil: { visible: "sizes 12: .*", timeout: 10000 }
+- assertVisible: "loads: 1"
+
+- tapOn: "Find"
+- tapOn: { id: "search-input" }
+- inputText: "Page 7"
+- extendedWaitUntil: { visible: { id: "search-status", text: "1 / 1" }, timeout: 15000 }
+- extendedWaitUntil: { visible: "7 / 12", timeout: 5000 }
+- tapOn: "Image"
+- extendedWaitUntil: { visible: "image p7: 300x.*", timeout: 10000 }
+- takeScreenshot: viewer-base64
+# Closes the search, whose "1 / 1" would match the page label below.
+- tapOn: "Find"
+
+- tapOn: "Swap"
+- extendedWaitUntil: { visible: "loads: 2", timeout: 15000 }
+- assertVisible: "1 / 1"
+- tapOn: "Swap"
+- extendedWaitUntil: { visible: "loads: 3", timeout: 15000 }
+- assertVisible: "1 / 12"
+- tapOn: "Same"
+- tapOn: "Sizes"
+- extendedWaitUntil: { visible: "sizes 12: .*", timeout: 10000 }
+- assertVisible: "loads: 3"
+- tapOn: "‹ Back"
+
+- scrollUntilVisible: { element: "Base64 encrypted, .*", timeout: 60000 }
+- tapOn: "Base64 encrypted, .*"
+- extendedWaitUntil: { visible: "password-required", timeout: 15000 }
+- tapOn: "Try wrong"
+- extendedWaitUntil: { visible: "invalid-password", timeout: 15000 }
+- tapOn: "Try fixture"
+- extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
+- tapOn: "‹ Back"
+
+- scrollUntilVisible: { element: "Base64 form, .*", timeout: 60000 }
+- tapOn: "Base64 form, .*"
+- extendedWaitUntil: { visible: "1 / .*", timeout: 15000 }
+- tapOn: "Export"
+- extendedWaitUntil: { visible: "export: document.pdf", timeout: 10000 }
+- tapOn: "‹ Back"
