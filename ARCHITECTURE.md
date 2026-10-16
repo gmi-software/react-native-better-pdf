@@ -340,7 +340,9 @@ double-tap, page virtualization and background tile rendering. The wrapper:
   relayout are not reported, and the page from before a resize is restored
   if PDFKit lost it;
 - searches with `beginFindString` (asynchronous; matches arrive through
-  `PDFDocumentDidFindMatch`) and shows them with `highlightedSelections`;
+  `PDFDocumentDidFindMatch`) and shows them with `highlightedSelections`:
+  one selection per page, for the visible pages and one either side, and
+  the current match;
 - in `onDropView`, releases the `on*` callbacks and destroys the `PDFView`
   with its document, so PDFKit releases its tiles immediately; the search
   and the form drop their references to the document then and when the

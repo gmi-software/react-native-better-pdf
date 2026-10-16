@@ -544,3 +544,58 @@ search from reporting while the next one loads.
   view calls it from `invalidate`, which 0.81 does not call for views that
   are not recycled), so none of this runs there and closed viewers stay as
   before.
+
+## 15. iOS search highlights (2026-10-16)
+
+**Found by**: issue #29. While a search ran, every new match could hand
+PDFKit's `highlightedSelections` the full list of matches again (at most
+every 100 ms), and next, previous and colour changes did it too.
+
+**Method**: the harness that became
+`benchmarks/ios-search-highlights/run.sh` (same phases and checks; see its
+README; "before" is `REV` at the commit before the change), on the iOS
+26.5 simulator (Apple Silicon Mac, quiet host): `PdfSearchController.swift`
+and real PDFKit in a simulator process, a continuous `PDFView` (402×874 pt)
+in an off-screen `UIWindow`, no app. `outline-large` (1,000 text pages),
+searched from page 1. Stall: the longest wait of a main-queue ping sent in
+a loop from another thread while searching. Colour change: setting
+`matchColor`. Next / previous: the call, scroll included. Drag: 60 steps
+of 200 pt to the scroll view's offset, with the view's per-frame hook.
+Each run of the new code also checked that on every visible page the
+highlighted ranges cover each occurrence of the query and nothing else,
+and that PDFKit drew one `PDFSelectionLayer` per match, the current one in
+its own colour. Not measured: a device, and Time Profiler on the example
+app.
+
+**Finding**: PDFKit's setter costs time per selection object on the
+visible pages, not per match: 1,602 matches on three pages took 870–990 ms
+as separate selections and 3–5 ms as one selection per page. Both draw the
+same layers, one per match (`bounds(for:)` of all 1,602 took 0.3 ms). A
+list of only the visible pages' matches, as separate selections, still
+took 1.2 s at 528,449 matches.
+
+**Change**: `PdfSearchController` hands PDFKit one selection per page,
+holding the page's matches except the current one, for the visible pages
+and one page either side, plus the current match. A page's selection is
+kept until a match arrives on the page or the current match moves to or
+from it. On every scroll frame the view checks whether the pages at its
+corners left that range (~2 µs; `visiblePages` takes ~0.1 ms), and once
+the viewport settles, whether any visible page did.
+
+| | `or`, 102,528 matches: before | after | `e`, 528,449 matches: before | after |
+| --- | ---: | ---: | ---: | ---: |
+| Colour change | 72–76 ms | 1.2–1.6 ms | 1.25–1.30 s | 9–11 ms |
+| Next / previous | 71–85 ms | 1.4–2.5 ms | 1.23–1.34 s | 10–19 ms |
+| Longest main-thread stall while searching | 134 ms | 10 ms | 2.15 s | 20 ms |
+| Stalls over 16 ms while searching | 41 | 0 | 48 | 1 |
+| Search | 7.8 s | 3.9 s | 84 s | 5.1 s |
+| Drag, mean / longest step | 6.2 / 21 ms | 0.8 / 7.9 ms | 127 / 542 ms | 3.1 / 25 ms |
+| Jump to page 700 | 96 ms | 6.6 ms | 1.84 s | 29 ms |
+
+- Before, a drag assigned nothing; its cost is PDFKit drawing the
+  separate selections of the pages that come into view.
+- The search is now mostly PDFKit's own find (`lorem`, 14,740 matches:
+  3.4 s). In `viewer-search`, Maestro could no longer see a search of `l`
+  on `outline-large` still running before clearing it (each view hierarchy
+  snapshot of that document takes ~4 s), so that check was removed; the
+  clear still comes ~1 s into the ~4 s search.

@@ -778,6 +778,12 @@ The most requested missing feature of react-native-pdf (7 issues, see
 - **Highlights**: all matches in translucent yellow, the current one in
   orange, on both platforms (PDFKit `highlightedSelections`; Android draws
   them over the page bitmaps, so zoom and tiles keep them aligned).
+  PDFKit's setter costs time per selection on the visible pages (measured:
+  1,602 matches on three pages, 900 ms as separate selections, 5 ms as one
+  selection per page, drawn the same), so iOS hands it each page's matches
+  as one selection, for the visible pages and one either side, plus the
+  current match, and updates the list as pages come into view (see
+  `performance/results.md`, section 15).
 - **Colours are props** (`searchHighlightColor`, `searchCurrentHighlightColor`,
   `ColorValue`), not arguments of `search()`: they are styling, belong with
   the rest of the view's appearance and apply to a search already shown.
@@ -790,9 +796,9 @@ The most requested missing feature of react-native-pdf (7 issues, see
   (measured: without it, the old colour stayed on screen).
 - **Tested:** `viewer-search` (both platforms) checks counts, next,
   previous, wrapping backwards, the page scrolled to, a query in different
-  case, a custom highlight colour (checked on the screenshots), and no
-  matches. `SearchResultsTest` covers ordering, indexes and
-  wrapping.
+  case, a custom highlight colour and the highlights on a 1,000-page
+  document (checked on the screenshots), and no matches.
+  `SearchResultsTest` covers ordering, indexes and wrapping.
 
 ## Viewport
 
