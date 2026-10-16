@@ -7,14 +7,28 @@ import java.util.zip.Inflater
 /**
  * Decodes stream data for the filters that carry document structure in
  * practice: FlateDecode, optionally with PNG predictors (xref and object
- * streams). Output is capped: a small compressed stream can expand to
- * gigabytes ("zip bomb").
+ * streams). A stream's data, read or decoded, is capped: a small compressed
+ * stream can expand to gigabytes ("zip bomb").
  */
 object StreamDecoder {
-  private const val MAX_DECODED_BYTES = 32 * 1024 * 1024
+  /** The most a stream's data may be, read or decoded. */
+  const val MAX_DECODED_BYTES = 32 * 1024 * 1024
 
-  /** Decodes [data]; it and what it decodes to are charged to [budget], as it decodes. */
-  internal fun decode(
+  /**
+   * Reads [stream]'s data from [source] and decodes it; it and what it
+   * decodes to are charged to [budget], as it decodes.
+   */
+  internal fun read(
+    source: PdfByteSource,
+    stream: PdfObject.Stream,
+    budget: ScanBudget,
+    resolve: (PdfObject?) -> PdfObject?,
+  ): ByteArray {
+    if (stream.dataLength > MAX_DECODED_BYTES) throw PdfFormatException("Stream longer than $MAX_DECODED_BYTES bytes")
+    return decode(stream.dictionary, source.read(stream.dataOffset, stream.dataLength), budget, resolve)
+  }
+
+  private fun decode(
     dictionary: PdfObject.Dictionary,
     data: ByteArray,
     budget: ScanBudget,

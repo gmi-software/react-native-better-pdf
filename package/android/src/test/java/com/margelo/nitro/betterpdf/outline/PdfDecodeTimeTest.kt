@@ -154,6 +154,20 @@ class PdfDecodeTimeTest {
     assertEquals(mapOf(0 to List(10) { urlLink }), links(bytes).first)
   }
 
+  /** Data that is not compressed has no limit of its own: 40 MB would be kept. */
+  @Test
+  fun `an object stream of 40 MB is not read`() {
+    val bytes = objectStreamDocument(
+      1,
+      references = 1,
+      body = "<< /Type /Annot /Subtype /Link /Rect [0 0 10 10] /A << /S /URI /URI (https://example.com) >> >>",
+      padding = 40 * 1024 * 1024,
+    )
+    val (links, bytesRead) = links(bytes)
+    assertEquals(mapOf(0 to listOf(urlLink)), links)
+    assertTrue("read $bytesRead bytes of ${bytes.size}", bytesRead < 1024 * 1024)
+  }
+
   /** 3 MB of file, 3 GB decoded and kept. */
   @Test
   fun `100 object streams that expand to 31 MB each`() {

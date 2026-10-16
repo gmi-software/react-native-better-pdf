@@ -2,6 +2,7 @@ package com.margelo.nitro.betterpdf.outline
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertThrows
 import org.junit.Test
 import java.io.ByteArrayOutputStream
 
@@ -24,6 +25,33 @@ class PdfCrossReferencesTest {
       .toByteArray(Charsets.ISO_8859_1)
 
   private fun outline(bytes: ByteArray) = PdfOutlineReader(PdfDocumentReader(ByteArraySource(bytes))).read()
+
+  /**
+   * A one-page document with a classic table and one outline item, [title]:
+   * catalog 1, pages 2, page 3, outlines 4, item 5; [add] writes more.
+   */
+  private fun outlinedDocument(title: String, add: (TestPdfWriter) -> Unit = {}): ByteArray {
+    val pdf = TestPdfWriter()
+    repeat(5) { pdf.reserve() }
+    pdf.add(1, "<< /Type /Catalog /Pages 2 0 R /Outlines 4 0 R >>")
+    pdf.add(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+    pdf.add(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>")
+    pdf.add(4, "<< /Type /Outlines /First 5 0 R >>")
+    pdf.add(5, "<< /Title ($title) /Dest [3 0 R /Fit] >>")
+    add(pdf)
+    return pdf.build("/Root 1 0 R")
+  }
+
+  /** [bytes] with the classic table's row for object [number] replaced by [row] (20 bytes). */
+  private fun withRow(bytes: ByteArray, number: Int, row: String): ByteArray {
+    val text = bytes.toString(Charsets.ISO_8859_1)
+    val table = text.indexOf("xref\n0 ")
+    val rows = text.indexOf('\n', text.indexOf('\n', table) + 1) + 1
+    val at = rows + 20 * number
+    return (text.substring(0, at) + row + text.substring(at + 20)).toByteArray(Charsets.ISO_8859_1)
+  }
+
+  private fun offsetOf(bytes: ByteArray, number: Int) = bytes.toString(Charsets.ISO_8859_1).indexOf("\n$number 0 obj") + 1
 
   @Test
   fun `the rebuild finds objects however their headers are spaced`() {
@@ -98,6 +126,50 @@ class PdfCrossReferencesTest {
     val expected = listOf(OutlineEntry("After the update", page = 0, depth = 0))
     assertEquals(expected, outline(updated))
     assertEquals(expected, outline(damaged(updated)))
+  }
+
+  /** The table and trailer read, but the catalog's entry is lost: the objects are where the scan finds them. */
+  @Test
+  fun `a table that does not lead to the catalog is rebuilt`() {
+    val intact = outlinedDocument("Found")
+    val expected = listOf(OutlineEntry("Found", page = 0, depth = 0))
+    assertEquals(expected, outline(withRow(intact, 1, "0000000000 65535 f\r\n")))
+    // The catalog's row points at the page tree.
+    assertEquals(expected, outline(withRow(intact, 1, "%010d 00000 n\r\n".format(offsetOf(intact, 2)))))
+  }
+
+  /** An incremental update adds a catalog, and no trailer names one: the newest is used. */
+  @Test
+  fun `without a trailer the newest catalog is used`() {
+    val updated = appendUpdate(
+      outlinedDocument("Before the update"),
+      mapOf(
+        6 to "<< /Type /Catalog /Pages 2 0 R /Outlines 7 0 R >>",
+        7 to "<< /Type /Outlines /First 8 0 R >>",
+        8 to "<< /Title (After the update) /Dest [3 0 R /Fit] >>",
+      ),
+      root = 6,
+    )
+    val bytes = damaged(updated).toString(Charsets.ISO_8859_1).replace("/Root", "/Roof").toByteArray(Charsets.ISO_8859_1)
+    assertEquals(listOf(OutlineEntry("After the update", page = 0, depth = 0)), outline(bytes))
+  }
+
+  /** Its header is a token longer than the parser reads. */
+  @Test
+  fun `an object stream that cannot be listed does not stop the rebuild`() {
+    val bytes = outlinedDocument("Found") { pdf ->
+      pdf.add(pdf.reserve(), "<< /Type /ObjStm /N 1 /First 0 /Length 1500 >>\nstream\n${"1".repeat(1500)}\nendstream")
+    }
+    assertEquals(listOf(OutlineEntry("Found", page = 0, depth = 0)), outline(damaged(bytes)))
+  }
+
+  /** Each object found is kept until the rebuild ends: millions would exhaust the memory. */
+  @Test
+  fun `a rebuild of more than a million objects is rejected`() {
+    val text = StringBuilder(damaged(outlinedDocument("Found")).toString(Charsets.ISO_8859_1))
+    for (number in 6..1_100_000) text.append(number).append(" 0 obj null endobj\n")
+    val bytes = text.toString().toByteArray(Charsets.ISO_8859_1)
+    assertThrows(PdfFormatException::class.java) { PdfCrossReferences.read(ByteArraySource(bytes)) }
   }
 
   /** When no trailer names the catalog, it is looked for among the objects, those in object streams too. */

@@ -55,8 +55,7 @@ class PdfDocumentReader internal constructor(
    *   budget for streams is spent.
    */
   fun streamData(stream: PdfObject.Stream): ByteArray {
-    val raw = source.read(stream.dataOffset, stream.dataLength)
-    return StreamDecoder.decode(stream.dictionary, raw, budget, ::resolve)
+    return StreamDecoder.read(source, stream, budget, ::resolve)
   }
 
   private fun objectAt(number: Int): PdfObject? {
@@ -131,6 +130,7 @@ class PdfDocumentReader internal constructor(
    * when needed.
    */
   private fun keep(number: Int, index: ObjectStreamIndex) {
+    if (index.data.size > MAX_KEPT_STREAM_BYTES) return
     objectStreams[number] = index
     keptStreamBytes += index.data.size
     val eldest = objectStreams.entries.iterator()

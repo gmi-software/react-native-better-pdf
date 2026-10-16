@@ -647,9 +647,11 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
   explicit/GoTo/named destinations (name tree and PDF 1.1 `/Dests`) and the
   page tree, and rebuilds broken cross-references by scanning like viewers
   do (`startxref` is looked for in the last 64 KB: files may end in junk).
-  The rebuild takes the newest trailer naming a catalog — a `trailer`
-  dictionary or a cross-reference stream's — and without one looks for the
-  catalog among the objects, those in object streams too.
+  Cross-references that read but do not lead to the catalog are rebuilt
+  too. The rebuild takes the newest trailer naming a catalog — a `trailer`
+  dictionary or a cross-reference stream's — and without one the newest
+  catalog among the objects, those in object streams too; it stops at
+  1,000,000 objects.
   The cross-references are read once per document and shared by every
   read, so a damaged file is scanned once. It reads a duplicate of the file
   descriptor with positional reads, so rendering is not blocked.
@@ -663,10 +665,11 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
   file — a stream without `endstream`, an unterminated string — were parsed
   once per object or per reference, in time growing with the square of the
   file's size (`PdfReadTimeTest`: 4–14 s for crafted files of a few hundred
-  KB, now under 0.3 s). Decoding is bounded too: one read reads and
-  decodes at most 16 bytes of streams for each byte of the file, plus
-  64 MB; it keeps the most recently used object streams up to 32 MB of
-  decoded data (others are decoded again when needed), and an object
+  KB, now under 0.3 s). Decoding is bounded too: a stream's data is at
+  most 32 MB, read or decoded; one read reads and decodes at most 16 bytes
+  of streams for each byte of the file, plus 64 MB; it keeps the most
+  recently used object streams up to 32 MB of decoded data (others are
+  decoded again when needed), and an object
   stream it cannot decode (an unsupported filter, data expanding beyond
   the 32 MB limit) is not decoded again for every object needed from it
   (`PdfDecodeTimeTest`: 100 object streams expanding to 31 MB each, 3 GB
