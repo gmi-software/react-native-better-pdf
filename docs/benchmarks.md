@@ -99,6 +99,20 @@ physical footprint with `footprint`. That is a host-process proxy — fine
 for comparisons and leak detection, not a device number. Device memory and
 CPU need Instruments (Allocations, Leaks, Time Profiler) on hardware.
 
+**iOS search highlights** (no app; a simulator, booted if needed):
+
+```sh
+node benchmarks/generate-fixtures.mjs outline-large
+benchmarks/ios-search-highlights/run.sh <simulator-udid>
+REV=<commit> benchmarks/ios-search-highlights/run.sh <simulator-udid>   # the controller as of <commit>
+```
+
+Runs the real `PdfSearchController` and PDFKit in a simulator process and
+times a search's main-thread stalls, colour changes, next/previous, a drag
+and a jump, checking the highlights after each; see
+[its README](../benchmarks/ios-search-highlights/README.md). Run it before
+a release that touches iOS search.
+
 **Native traces (Android)**:
 
 ```sh
