@@ -40,6 +40,10 @@ class HybridBetterPdfDocument : HybridBetterPdfDocumentSpec() {
   private var master: ParcelFileDescriptor? = null
   private var opened: Opened? = null
 
+  /** Nominal: Nitro reads it when the object reaches JS, before `open()`. */
+  override val memorySize: Long
+    get() = 1L shl 20
+
   override fun open(
     source: NativePdfSource,
     password: String?,

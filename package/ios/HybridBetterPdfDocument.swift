@@ -24,6 +24,9 @@ final class HybridBetterPdfDocument: HybridBetterPdfDocumentSpec {
   private var pageSizesCache: [PdfPageSize]?
   private var outlineCache: [PdfOutlineEntry]?
 
+  /// Nominal: Nitro reads it when the object reaches JS, before `open()`.
+  var memorySize: Int { return 1 << 20 }
+
   func open(
     source: NativePdfSource,
     password: String?,
