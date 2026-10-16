@@ -292,30 +292,46 @@ export function ViewerScreen() {
               );
           }}
           onLongPress={() => {
-            // A list's images requested at once (probe-render-burst).
+            // A list's images requested at once (probe-render-burst), with
+            // the page sizes asked for right after the first one.
             const view = ref.current;
             if (view == null || pageCount === 0) return;
             const started = performance.now();
             // When the first screenful of a list (images 1–10) is there.
             let firstTenMs = 0;
             let firstTenLeft = 10;
-            const arrived: number[] = [];
-            setLastEvent(`burst ${BURST_IMAGES}: rendering`);
-            Promise.all(
-              Array.from({ length: BURST_IMAGES }, (_, index) =>
-                view.renderPage(index % pageCount, { width: 300 }).then(() => {
-                  arrived.push(index);
-                  if (index < 10 && --firstTenLeft === 0) {
-                    firstTenMs = Math.round(performance.now() - started);
-                  }
-                }),
+            const arrived: string[] = [];
+            const image = (index: number) =>
+              view.renderPage(index % pageCount, { width: 300 }).then(() => {
+                arrived.push(`image ${index}`);
+                if (index < 10 && --firstTenLeft === 0) {
+                  firstTenMs = Math.round(performance.now() - started);
+                }
+              });
+            const calls = [
+              'image 0',
+              'sizes',
+              ...Array.from(
+                { length: BURST_IMAGES - 1 },
+                (_, i) => `image ${i + 1}`,
               ),
-            )
+            ];
+            setLastEvent(`burst ${BURST_IMAGES}: rendering`);
+            Promise.all([
+              image(0),
+              view.getPageSizes().then(() => arrived.push('sizes')),
+              ...Array.from({ length: BURST_IMAGES - 1 }, (_, i) =>
+                image(i + 1),
+              ),
+            ])
               .then(() => {
                 const ms = Math.round(performance.now() - started);
-                const inOrder = arrived.every((call, index) => call === index);
+                const inOrder = arrived.every(
+                  (call, index) => call === calls[index],
+                );
+                const sizesAt = arrived.indexOf('sizes') + 1;
                 setLastEvent(
-                  `burst ${arrived.length}: ${inOrder ? 'in call order' : 'out of order'} (first 10 ${firstTenMs} ms, all ${ms} ms)`,
+                  `burst ${BURST_IMAGES}: ${inOrder ? 'in call order' : 'out of order'} (sizes ${sizesAt}/${arrived.length}, first 10 ${firstTenMs} ms, all ${ms} ms)`,
                 );
               })
               .catch((error: unknown) =>

@@ -13,7 +13,9 @@ while true; do
     total=$(echo "$names" | grep -c .)
     unnamed=$(echo "$names" | grep -c '^Thread-')
     read=$(echo "$names" | grep -c '^BetterPdf-read')
-    echo "$(($(date +%s) * 1000)),$total,$unnamed,$read"
+    # macOS `date` has no milliseconds.
+    now_ms=$(perl -MTime::HiRes=time -e 'printf "%d", time * 1000')
+    echo "$now_ms,$total,$unnamed,$read"
   fi
   sleep 0.2
 done
