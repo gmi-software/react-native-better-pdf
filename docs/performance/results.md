@@ -771,7 +771,8 @@ The same files opened in 21–64, 25–66 and 22–50 ms on iOS and in 38–170,
   hold the text.
 - The JS copy (`TextEncoder.encodeInto`, Hermes) runs once per text; its
   spread at 5 MB (up to 21 ms, more than at 20 MB) came with the host load.
-- Android's decoding is now about as fast as iOS's: C++ at about 1 ms per
-  MB of base64, and with no Java string or byte array of the document's size
-  for the garbage collector (the string design paused once for 177 ms on the
-  UI thread).
+- Android now decodes in C++ at about 1 ms per MB of base64, opening the
+  file included (release build), with no Java string or byte array of the
+  document's size for the garbage collector (the string design paused once
+  for 177 ms on the UI thread). The two decode rows do not compare the
+  platforms: iOS's is a debug build and does not include opening.

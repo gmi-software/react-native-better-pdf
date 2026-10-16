@@ -112,8 +112,8 @@ export function ViewerScreen() {
   const [loadCount, setLoadCount] = useState(0);
   /** Showing the entry's `alternate` source ("Swap"). */
   const isAlternate = useRef(false);
-  /** The latest "Swap": only its source, or its failure, is applied. */
-  const swapRequest = useRef(0);
+  /** The latest open or "Swap": only its source, or its failure, is applied. */
+  const sourceRequest = useRef(0);
   /** Counts onTextSelectionChange events: one per settled selection. */
   const selectionEvents = useRef(0);
   /** Counts onScaleChange events: one per settled zoom, never per frame. */
@@ -142,15 +142,20 @@ export function ViewerScreen() {
       setShowSearch(false);
       setLoadCount(0);
       isAlternate.current = false;
-      swapRequest.current += 1;
+      sourceRequest.current += 1;
+      const request = sourceRequest.current;
       scaleEvents.current = 0;
       selectionEvents.current = 0;
       setState({ kind: 'resolving' });
       try {
         const source = await next.resolve();
-        setState({ kind: 'loading', source });
+        if (request === sourceRequest.current) {
+          setState({ kind: 'loading', source });
+        }
       } catch (error) {
-        setState({ kind: 'failed', source: null, error: String(error) });
+        if (request === sourceRequest.current) {
+          setState({ kind: 'failed', source: null, error: String(error) });
+        }
       }
     },
     [],
@@ -158,17 +163,17 @@ export function ViewerScreen() {
 
   const swap = async (target: DocumentEntry) => {
     isAlternate.current = !isAlternate.current;
-    swapRequest.current += 1;
-    const request = swapRequest.current;
+    sourceRequest.current += 1;
+    const request = sourceRequest.current;
     const resolve = isAlternate.current ? target.alternate : target.resolve;
     if (resolve == null) return;
     try {
       const source = await resolve();
-      if (request === swapRequest.current) {
+      if (request === sourceRequest.current) {
         setState({ kind: 'loading', source });
       }
     } catch (error) {
-      if (request === swapRequest.current) {
+      if (request === sourceRequest.current) {
         setState({ kind: 'failed', source: null, error: String(error) });
       }
     }

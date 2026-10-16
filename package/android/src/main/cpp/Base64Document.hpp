@@ -45,16 +45,20 @@ bool decodeBase64Document(const uint8_t* text, size_t length, uint8_t* chunk, si
     if (symbol < 0) continue;
     bits = (bits << 6) | static_cast<uint32_t>(symbol);
     if (++pending == 4) {
+      if (chunkSize - filled < 3) {
+        if (!write(chunk, filled)) return false;
+        filled = 0;
+      }
       chunk[filled++] = static_cast<uint8_t>(bits >> 16);
       chunk[filled++] = static_cast<uint8_t>(bits >> 8);
       chunk[filled++] = static_cast<uint8_t>(bits);
       bits = 0;
       pending = 0;
-      if (filled + 3 > chunkSize) {
-        if (!write(chunk, filled)) return false;
-        filled = 0;
-      }
     }
+  }
+  if (pending > 1 && chunkSize - filled < static_cast<size_t>(pending - 1)) {
+    if (!write(chunk, filled)) return false;
+    filled = 0;
   }
   if (pending == 2) {
     chunk[filled++] = static_cast<uint8_t>(bits >> 4);
