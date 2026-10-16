@@ -17,15 +17,11 @@ final class HybridBetterPdfCache: HybridBetterPdfCacheSpec {
   ) throws -> Promise<PdfDownloadResult> {
     let promise = Promise<PdfDownloadResult>()
     let throttle = ProgressThrottle()
-    let throttleLock = NSLock()
     let subscription = DocumentCache.shared.fetch(source: source, allowStale: false, listener: .init(
       onProgress: { loadedBytes, totalBytes, isComplete in
         guard let onProgress else { return }
         let nowMs = DispatchTime.now().uptimeNanoseconds / 1_000_000
-        let emit = throttleLock.withLock {
-          throttle.shouldEmit(nowMs: nowMs, loadedBytes: loadedBytes, isComplete: isComplete)
-        }
-        if emit {
+        if throttle.shouldEmit(nowMs: nowMs, loadedBytes: loadedBytes, isComplete: isComplete) {
           onProgress(PdfLoadProgressEvent(loadedBytes: Double(loadedBytes), totalBytes: totalBytes.map(Double.init)))
         }
       },
