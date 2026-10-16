@@ -2,13 +2,23 @@ import { NitroModules } from 'react-native-nitro-modules';
 import type { NormalizedSource } from './source';
 import type { NativePdfSource } from './types/NativePdfSource';
 
+interface Encoder {
+  encodeInto(
+    source: string,
+    destination: Uint8Array,
+  ): { read?: number; written?: number };
+}
+
+// The library builds without DOM or Bun types, which declare the real one.
+declare const TextEncoder: (new () => Encoder) | undefined;
+
 const defaultEncoder =
   typeof TextEncoder === 'function' ? new TextEncoder() : undefined;
 
 /** `text` in a native-owned buffer, one byte per character; non-ASCII becomes `0x80`. */
 export function base64Bytes(
   text: string,
-  encoder: Pick<TextEncoder, 'encodeInto'> | undefined = defaultEncoder,
+  encoder: Encoder | undefined = defaultEncoder,
 ): ArrayBuffer {
   const buffer = NitroModules.createNativeArrayBuffer(text.length);
   const bytes = new Uint8Array(buffer);
