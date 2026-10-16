@@ -23,10 +23,14 @@ class PdfDocumentReader internal constructor(
   val trailer: PdfObject.Dictionary = crossReferences.trailer
   private val xref: Map<Int, XrefEntry> = crossReferences.entries
   private val cache = HashMap<Int, PdfObject>()
-  /** Object streams read; null for one that is not valid. */
-  private val objectStreams = HashMap<Int, ObjectStreamIndex?>()
+  /** Object streams read, the most recently used last, with [keptStreamBytes] of data: [keep]. */
+  private val objectStreams = LinkedHashMap<Int, ObjectStreamIndex>(16, 0.75f, true)
+  private var keptStreamBytes = 0L
+  private val invalidObjectStreams = HashSet<Int>()
   /** The objects being read, each needed to read the one before (an indirect `/Length`, an object stream). */
   private val resolving = HashSet<Int>()
+  /** Reads cut short by the nesting limit, or by a reference back to an object being read. */
+  private var truncatedReads = 0
 
   init {
     if (trailer["Encrypt"] != null && trailer["Encrypt"] != PdfObject.Null) {
@@ -44,10 +48,15 @@ class PdfDocumentReader internal constructor(
     return null
   }
 
-  /** Decoded data of [stream]. */
+  /**
+   * Decoded data of [stream].
+   *
+   * @throws PdfFormatException when it cannot be decoded, or this read's
+   *   budget for streams is spent.
+   */
   fun streamData(stream: PdfObject.Stream): ByteArray {
     val raw = source.read(stream.dataOffset, stream.dataLength)
-    return StreamDecoder.decode(stream.dictionary, raw, ::resolve)
+    return StreamDecoder.decode(stream.dictionary, raw, budget, ::resolve)
   }
 
   private fun objectAt(number: Int): PdfObject? {
@@ -55,9 +64,15 @@ class PdfDocumentReader internal constructor(
     val entry = xref[number] ?: return null
     // Each object of a chain recurses: a crafted chain of thousands would
     // overflow the stack. The read that needed this one fails instead.
-    if (resolving.size >= MAX_NESTED_READS) throw PdfFormatException("Objects nested too deeply at object $number")
+    if (resolving.size >= MAX_NESTED_READS) {
+      truncatedReads++
+      throw PdfFormatException("Objects nested too deeply at object $number")
+    }
     // A /Length that refers back to the object being read would recurse.
-    if (!resolving.add(number)) return null
+    if (!resolving.add(number)) {
+      truncatedReads++
+      return null
+    }
     try {
       val value = when (entry) {
         is XrefEntry.InFile -> readInFile(entry.offset)
@@ -90,13 +105,44 @@ class PdfDocumentReader internal constructor(
   }
 
   private fun objectStream(number: Int): ObjectStreamIndex? {
-    if (number in objectStreams) return objectStreams[number]
-    // Unread (nested too deeply, or a decoding error): tried again next time.
-    val stream = resolve(PdfObject.Reference(number, 0)) as? PdfObject.Stream ?: return null
-    return indexObjectStream(stream).also { objectStreams[number] = it }
+    objectStreams[number]?.let { return it }
+    if (number in invalidObjectStreams) return null
+    val truncated = truncatedReads
+    val index = try {
+      (resolve(PdfObject.Reference(number, 0)) as? PdfObject.Stream)?.let(::indexObjectStream)
+    } catch (error: ScanBudget.Exceeded) {
+      throw error
+    } catch (error: PdfFormatException) {
+      // Not decodable: an unsupported filter, data expanding beyond the limit.
+      null
+    }
+    // A read cut short by the nesting limit can make this one differ from a
+    // shallower one: read it again next time.
+    if (truncatedReads == truncated) {
+      if (index == null) invalidObjectStreams += number else keep(number, index)
+    }
+    return index
   }
 
-  /** null when [stream] is not a valid object stream. */
+  /**
+   * Keeps [index] for the next object needed from it, and as many of the
+   * most recently used object streams as fit [MAX_KEPT_STREAM_BYTES]: a
+   * file can have many that expand to 32 MB. The others are decoded again
+   * when needed.
+   */
+  private fun keep(number: Int, index: ObjectStreamIndex) {
+    objectStreams[number] = index
+    keptStreamBytes += index.data.size
+    val eldest = objectStreams.entries.iterator()
+    while (keptStreamBytes > MAX_KEPT_STREAM_BYTES) {
+      val (kept, stream) = eldest.next()
+      if (kept == number) break
+      keptStreamBytes -= stream.data.size
+      eldest.remove()
+    }
+  }
+
+  /** null when [stream] is not a valid object stream; throws when it cannot be decoded. */
   private fun indexObjectStream(stream: PdfObject.Stream): ObjectStreamIndex? {
     val count = (stream.dictionary["N"] as? PdfObject.Number)?.intValue ?: return null
     val first = (stream.dictionary["First"] as? PdfObject.Number)?.intValue ?: return null
@@ -122,5 +168,6 @@ class PdfDocumentReader internal constructor(
     const val MAX_REFERENCE_HOPS = 16
     const val MAX_NESTED_READS = 32
     const val MAX_CACHED_OBJECTS = 50_000
+    const val MAX_KEPT_STREAM_BYTES = 32L shl 20
   }
 }

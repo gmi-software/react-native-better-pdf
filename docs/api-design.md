@@ -663,13 +663,21 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
   file — a stream without `endstream`, an unterminated string — were parsed
   once per object or per reference, in time growing with the square of the
   file's size (`PdfReadTimeTest`: 4–14 s for crafted files of a few hundred
-  KB, now under 0.3 s); the fixtures and files from PDFKit, Quartz and pypdf
-  use at most 1.4 per byte, rebuilds included. Deterministic fuzz tests
-  (500 mutated files, 300 reads of generated chains of up to 2,000 objects
-  on a 256 KB stack, and 200 reads of generated files of such runaway
-  objects) must end in a result or `PdfFormatException` within 2 s each. A
-  stack overflow the limits miss reads as `PdfFormatException` too, never
-  a crash. Encrypted documents reject.
+  KB, now under 0.3 s). Decoding is bounded too: one read reads and
+  decodes at most 16 bytes of streams for each byte of the file, plus
+  64 MB; it keeps the most recently used object streams up to 32 MB of
+  decoded data (others are decoded again when needed), and an object
+  stream it cannot decode (an unsupported filter, data expanding beyond
+  the 32 MB limit) is not decoded again for every object needed from it
+  (`PdfDecodeTimeTest`: 100 object streams expanding to 31 MB each, 3 GB
+  before; 5,000 links into an undecodable 4 MB stream, 20 GB read). The
+  fixtures and files from PDFKit, Quartz and pypdf use at most 1.4 parse
+  units and 0.9 stream bytes per byte, rebuilds included. Deterministic
+  fuzz tests (500 mutated files, 300 reads of generated chains of up to
+  2,000 objects on a 256 KB stack, and 200 reads of generated files of
+  such runaway objects) must end in a result or `PdfFormatException`
+  within 2 s each. A stack overflow the limits miss reads as
+  `PdfFormatException` too, never a crash. Encrypted documents reject.
 - **Tested against three producers** (the generator in classic and
   object-stream form, PDFKit, pypdf), with PDFKit as the reference.
 - **iOS** walks `PDFOutline` with the same limits and title normalization.

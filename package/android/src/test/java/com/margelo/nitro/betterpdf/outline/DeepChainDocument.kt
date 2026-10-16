@@ -1,6 +1,7 @@
 package com.margelo.nitro.betterpdf.outline
 
 import java.io.ByteArrayOutputStream
+import java.util.zip.Deflater
 
 /** How one object of a chain needs the next one to be read. */
 internal enum class ChainStep {
@@ -100,17 +101,32 @@ internal fun <T> onSmallStack(block: () -> T): T {
   return result!!.getOrThrow()
 }
 
+/** [bytes] compressed for `/FlateDecode`. */
+internal fun deflate(bytes: ByteArray): ByteArray {
+  val deflater = Deflater(Deflater.BEST_COMPRESSION)
+  try {
+    deflater.setInput(bytes)
+    deflater.finish()
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(64 * 1024)
+    while (!deflater.finished()) out.write(buffer, 0, deflater.deflate(buffer))
+    return out.toByteArray()
+  } finally {
+    deflater.end()
+  }
+}
+
 /**
- * Writes small PDFs: objects in the file and in uncompressed object
- * streams, listed by a cross-reference stream when there are object
- * streams and by a classic table otherwise.
+ * Writes small PDFs: objects in the file and in object streams, listed by
+ * a cross-reference stream when there are object streams and by a classic
+ * table otherwise.
  */
 internal class TestPdfWriter {
   private var nextNumber = 1
   private val inFile = sortedMapOf<Int, String>()
   private val objectStreams = sortedMapOf<Int, ObjectStream>()
 
-  private class ObjectStream(val entries: String) {
+  private class ObjectStream(val entries: String, val padding: Int, val deflate: Boolean) {
     val members = ArrayList<Pair<Int, String>>()
   }
 
@@ -121,9 +137,13 @@ internal class TestPdfWriter {
     inFile[number] = body
   }
 
-  /** An object stream; [entries] join its dictionary (a direct `/Length` is added unless they have one). */
-  fun objectStream(number: Int, entries: String) {
-    objectStreams[number] = ObjectStream(entries)
+  /**
+   * An object stream; [entries] join its dictionary (a direct `/Length` is
+   * added unless they have one). [padding] spaces follow its objects;
+   * [deflate] compresses it with `/FlateDecode`.
+   */
+  fun objectStream(number: Int, entries: String, padding: Int = 0, deflate: Boolean = false) {
+    objectStreams[number] = ObjectStream(entries, padding, deflate)
   }
 
   /** An object in object stream [stream]. */
@@ -150,13 +170,14 @@ internal class TestPdfWriter {
         objects.append(body).append('\n')
         compressed[member] = number to index
       }
-      val data = "$header$objects"
-      val length = if ("/Length" in stream.entries) "" else "/Length ${data.length}"
+      var data = "$header$objects".toByteArray(Charsets.ISO_8859_1) + ByteArray(stream.padding) { ' '.code.toByte() }
+      if (stream.deflate) data = deflate(data)
+      val filter = if (stream.deflate) "/Filter /FlateDecode" else ""
+      val length = if ("/Length" in stream.entries) "" else "/Length ${data.size}"
       offsets[number] = out.size()
-      write(
-        "$number 0 obj\n<< /Type /ObjStm /N ${stream.members.size} /First ${header.length} $length ${stream.entries} >>\n" +
-          "stream\n$data\nendstream\nendobj\n",
-      )
+      write("$number 0 obj\n<< /Type /ObjStm /N ${stream.members.size} /First ${header.length} $length $filter ${stream.entries} >>\nstream\n")
+      out.write(data)
+      write("\nendstream\nendobj\n")
     }
     val size = nextNumber
     val start = out.size()

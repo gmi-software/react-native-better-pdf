@@ -100,7 +100,7 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
     val size = (dictionary["Size"] as? PdfObject.Number)?.intValue ?: 0
     val index = (dictionary["Index"] as? PdfObject.Array)?.items?.map { (it as? PdfObject.Number)?.intValue ?: 0 }
       ?: listOf(0, size)
-    val data = StreamDecoder.decode(dictionary, source.read(stream.dataOffset, stream.dataLength)) { it }
+    val data = StreamDecoder.decode(dictionary, source.read(stream.dataOffset, stream.dataLength), budget) { it }
     val rowLength = widths.sum()
     if (rowLength == 0) return
     var row = 0
@@ -323,7 +323,7 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
     val data = try {
       // The length cannot be resolved before the cross-references exist.
       val stream = parser.readStream(dictionary) { (it as? PdfObject.Number)?.intValue } ?: return
-      StreamDecoder.decode(dictionary, source.read(stream.dataOffset, stream.dataLength)) { it }
+      StreamDecoder.decode(dictionary, source.read(stream.dataOffset, stream.dataLength), budget) { it }
     } catch (error: ScanBudget.Exceeded) {
       throw error
     } catch (error: PdfFormatException) {
