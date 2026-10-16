@@ -42,8 +42,9 @@ const adb = async (...command) =>
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function main() {
-  const [width, height] = (await adb('shell', 'wm', 'size'))
-    .match(/(\d+)x(\d+)/)
+  // `wm size` is always the natural (portrait) size; swipes need the rotated one.
+  const [width, height] = (await adb('shell', 'dumpsys', 'window', 'displays'))
+    .match(/cur=(\d+)x(\d+)/)
     .slice(1)
     .map(Number);
   const device = {
