@@ -12,8 +12,9 @@ For an overview of what each platform supports, see the
   signature fields cannot be signed (their places are reported); XFA forms
   are not supported. iOS writes exports of a changed form anew with PDFKit
   (field hierarchy flattened into dotted names, field order may change;
-  content PDFKit cannot read is not kept; seconds for long documents, in
-  the background) and keeps one selected option per list box.
+  content PDFKit cannot read is not kept; a protected document gets a new
+  owner password, see [Forms](guides/forms.md); seconds for long
+  documents, in the background) and keeps one selected option per list box.
   Android: filling in needs Android 15+, or 12–14 with SDK extension 13
   (elsewhere fields are read from the file, `setFormFieldValues` rejects
   and `exportDocument` copies the file); a choice's custom text cannot be

@@ -165,8 +165,11 @@ export interface PdfViewRef {
    * Writes the document as shown — its form filled in — to a new PDF file,
    * e.g. to share or upload it; the source file is never changed (a
    * `filePath` naming it, or a directory, is rejected). Keeps the
-   * document's password protection. Rejects before
-   * {@linkcode PdfViewProps.onLoad}.
+   * document's password protection: the password that opened it opens the
+   * export, with the same permissions. On iOS a filled-in export gets an
+   * owner password nobody knows, or, when the owner password opened the
+   * document, opens with that password alone (see the forms guide). Rejects
+   * before {@linkcode PdfViewProps.onLoad}.
    */
   exportDocument(options?: PdfExportOptions): Promise<PdfExportResult>;
   /**

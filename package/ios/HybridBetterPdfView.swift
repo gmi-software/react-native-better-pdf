@@ -404,7 +404,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // filled-in form is copied over to it.
       Self.readQueue.async {
         do {
-          guard let renderDocument = Self.openCopy(of: url, password: password, filledIn: filledForm) else {
+          guard let renderDocument = Self.openCopy(of: url, password: password, filledIn: filledForm)?.document else {
             throw RuntimeError.error(withMessage: "The document could not be opened for rendering")
           }
           promise.resolve(withResult: try request.render(from: renderDocument))
@@ -449,7 +449,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // like renderPage.
       let password = self.password
       Self.writeQueue.async { [weak self] in
-        let copy = Self.openCopy(of: url, password: password, filledIn: filledForm)
+        let copy = Self.openCopy(of: url, password: password, filledIn: filledForm)?.document
         let data = copy?.dataRepresentation()
         DispatchQueue.main.async { [weak self] in
           guard let self, let data else {
@@ -523,7 +523,6 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
         return
       }
       let password = self.password
-      let isEncrypted = document.isEncrypted
       let filledForm = self.filledFormSnapshot(of: document)
       // Off the main thread: PDFKit writes a long document in seconds.
       Self.writeQueue.async {
@@ -532,14 +531,8 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
             guard let copy = Self.openCopy(of: url, password: password, filledIn: filledForm) else {
               throw RuntimeError.error(withMessage: "The document could not be opened for writing")
             }
-            // Kept protected: an unlocked document is written without its
-            // encryption unless passwords are given (printing relies on it).
-            var options: [PDFDocumentWriteOption: Any] = [:]
-            if isEncrypted, let password, !password.isEmpty {
-              options[.userPasswordOption] = password
-              options[.ownerPasswordOption] = password
-            }
-            guard let data = copy.dataRepresentation(options: options) else {
+            let options = copy.document.protectedWriteOptions(unlockPassword: copy.unlockPassword)
+            guard let data = copy.document.dataRepresentation(options: options) else {
               throw RuntimeError.error(withMessage: "The document could not be written")
             }
             try data.write(to: destination, options: .atomic)
@@ -612,12 +605,17 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
 
   /// A separate instance of the displayed file, unlocked and filled in like
   /// the displayed document; for the calling (background) thread only.
-  private static func openCopy(of url: URL, password: String?, filledIn form: FormSnapshot?) -> PDFDocument? {
+  private static func openCopy(
+    of url: URL,
+    password: String?,
+    filledIn form: FormSnapshot?
+  ) -> (document: PDFDocument, unlockPassword: String?)? {
     guard let copy = PDFDocument(url: url) else { return nil }
-    if copy.isLocked { _ = copy.unlock(withPassword: password ?? "") }
+    let unlockPassword = copy.isLocked ? password ?? "" : nil
+    if let unlockPassword { _ = copy.unlock(withPassword: unlockPassword) }
     guard !copy.isLocked else { return nil }
     form?.apply(to: copy)
-    return copy
+    return (copy, unlockPassword)
   }
 
   private func reportFormChange(_ widget: FormWidgetAnnotation) {

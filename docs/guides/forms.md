@@ -41,6 +41,15 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
   not a directory), keeping its password protection, off the main thread;
   the source file is never changed.
   Printing and `renderPage` show the form as filled in too.
+- Password protection of an export: the password that opened the document
+  opens the export, with the same permissions (printing, copying, form
+  filling), and a document that opens without a password still does.
+  Android keeps the document's own encryption. On iOS a filled-in export
+  is encrypted anew (AES-128) with the passwords the app knows: its owner
+  password is one nobody knows, so its restrictions can no longer be
+  lifted, and when the owner password opened the document, only that
+  password opens the export (the user password is not known). An export
+  without changes is the file as it is on both platforms.
 - `getFormFields`, `setFormFieldValues`, `exportDocument`, `print` and
   `renderPage` first end text editing, so what the reader is typing counts.
 - Edits live only with the open document: reopening the source shows the
