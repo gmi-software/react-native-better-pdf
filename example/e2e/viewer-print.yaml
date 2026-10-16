@@ -47,3 +47,22 @@ appId: software.gmi.betterpdf.example
       - extendedWaitUntil: { visible: "print: submitted", timeout: 10000 }
 - takeScreenshot: viewer-print
 - tapOn: "‹ Back"
+
+# The same document encrypted with AES-128.
+- scrollUntilVisible: { element: "aes-encrypted.*" }
+- tapOn: "aes-encrypted.*"
+- extendedWaitUntil: { visible: "password-required", timeout: 15000 }
+- tapOn: "Try fixture"
+- extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
+- tapOn: "Print"
+- extendedWaitUntil: { visible: "Page 1 of 2", timeout: 10000 }
+- runFlow:
+    when: { platform: iOS }
+    commands:
+      - tapOn: "Close"
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - tapOn: "Cancel"
+- extendedWaitUntil: { visible: "print: cancelled", timeout: 5000 }
+- tapOn: "‹ Back"

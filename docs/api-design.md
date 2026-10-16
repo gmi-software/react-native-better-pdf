@@ -1505,11 +1505,16 @@ file path), and anchoring the dialog to the viewer on iPad.
   Printing without a viewer is not part of `PdfDocument` (see "Documents
   without a view").
 - **Protected documents print from an unlocked copy that never touches
-  disk.** iOS: `PDFDocument.dataRepresentation()` of an unlocked document
-  writes it without encryption (measured with the `encrypted` fixture:
-  the copy reports `isEncrypted == false`, two readable pages), serialized
-  off the main thread on a separate instance and handed to
-  `UIPrintInteractionController` as data. Android: `PdfRenderer.write(fd,
+  disk.** iOS: the unlocked document is written with an owner password
+  nobody knows, its permissions and no user password, so it opens without
+  one; serialized off the main thread on a separate instance and handed
+  to `UIPrintInteractionController` as data. Without options PDFKit's
+  `dataRepresentation()` depends on the cipher: it drops RC4-40's
+  encryption (the `encrypted` fixture) but keeps AES-128's
+  (`aes-encrypted`), so the print system would ask for the password
+  again. For such a document `present` returns false but still runs the
+  completion when the prompt closes, so the promise settles only once.
+  Android: `PdfRenderer.write(fd,
   removePasswordProtection = true)` (API 35, and `PdfRendererPreV` on 12–14
   with extension 13 — every renderer that can open a protected document)
   writes straight into the spooler's descriptor. Other documents print

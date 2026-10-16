@@ -10,7 +10,7 @@
 // has its own image object, so renderers cannot share decoded images).
 // Output is deterministic (seeded PRNG) so runs are comparable.
 
-import { createHash } from 'node:crypto';
+import { createCipheriv, createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -100,6 +100,53 @@ function standardSecurity(userPassword, ownerPassword, fileId) {
   };
 }
 
+// Revision 4, 128-bit AES (AESV2).
+function aesSecurity(userPassword, ownerPassword, fileId) {
+  const permissions = -4;
+  const rehash = (digest) => {
+    for (let i = 0; i < 50; i++) digest = md5(digest);
+    return digest;
+  };
+  const rc4Passes = (key, data) => {
+    let out = rc4(key, data);
+    for (let i = 1; i <= 19; i++) {
+      const passKey = key.map((byte) => byte ^ i);
+      out = rc4(passKey, out);
+    }
+    return out;
+  };
+  const O = rc4Passes(
+    rehash(md5(padPassword(ownerPassword))),
+    padPassword(userPassword),
+  );
+  const P = Buffer.alloc(4);
+  P.writeInt32LE(permissions);
+  const fileKey = rehash(md5(padPassword(userPassword), O, P, fileId));
+  const U = Buffer.concat([
+    rc4Passes(fileKey, md5(PASSWORD_PAD, fileId)),
+    Buffer.alloc(16),
+  ]);
+  return {
+    dictionary:
+      '<< /Filter /Standard /V 4 /R 4 /Length 128 ' +
+      '/CF << /StdCF << /CFM /AESV2 /AuthEvent /DocOpen /Length 16 >> >> /StmF /StdCF /StrF /StdCF ' +
+      `/O <${O.toString('hex')}> /U <${U.toString('hex')}> /P ${permissions} >>`,
+    encrypt(objectNumber, data) {
+      const suffix = Buffer.from([
+        objectNumber & 255,
+        (objectNumber >> 8) & 255,
+        (objectNumber >> 16) & 255,
+        0,
+        0,
+      ]);
+      const key = md5(fileKey, suffix, Buffer.from('sAlT', 'latin1'));
+      const iv = md5(key, data);
+      const cipher = createCipheriv('aes-128-cbc', key, iv);
+      return Buffer.concat([iv, cipher.update(data), cipher.final()]);
+    },
+  };
+}
+
 // ---------------------------------------------------------------- PDF writer
 
 class PdfWriter {
@@ -120,13 +167,14 @@ class PdfWriter {
     return number;
   }
 
-  build({ root, password, objectStreams = false, info }) {
+  build({ root, password, cipher = 'rc4', objectStreams = false, info }) {
     if (objectStreams) return this.buildWithObjectStreams({ root, info });
     const fileId = createHash('md5')
       .update(String(this.objects.length))
       .digest();
+    const handler = cipher === 'aes' ? aesSecurity : standardSecurity;
     const security = password
-      ? standardSecurity(password, `${password}-owner`, fileId)
+      ? handler(password, `${password}-owner`, fileId)
       : null;
     const encryptNumber = security ? this.add(security.dictionary) : null;
     // Strings outside streams are encrypted too, with the object's key.
@@ -324,6 +372,7 @@ function buildDocument({
   pageSize = () => A4,
   compress = true,
   password,
+  cipher,
   catalogEntries,
   objectStreams = false,
   // Replaces a page's `/MediaBox [...]`, e.g. to add /CropBox and /Rotate or
@@ -390,7 +439,7 @@ function buildDocument({
     );
   }
   writer.set(catalog, `<< /Type /Catalog /Pages ${pages} 0 R${extra} >>`);
-  return writer.build({ root: catalog, password, objectStreams, info });
+  return writer.build({ root: catalog, password, cipher, objectStreams, info });
 }
 
 /** Bézier approximation of an ellipse inscribed in [2, 2, w - 2, h - 2]. */
@@ -656,6 +705,14 @@ const FIXTURES = {
     buildDocument({
       pageCount: 2,
       password: 'secret',
+      pageContent: (i) => ({ content: textPage(i, { fontSize: 10 }) }),
+    }),
+  // `encrypted` with AES-128.
+  'aes-encrypted': () =>
+    buildDocument({
+      pageCount: 2,
+      password: 'secret',
+      cipher: 'aes',
       pageContent: (i) => ({ content: textPage(i, { fontSize: 10 }) }),
     }),
 
