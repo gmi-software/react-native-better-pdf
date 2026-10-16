@@ -979,9 +979,14 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     return min(max(scale, resolvedMinScale), resolvedMaxScale)
   }
 
+  private var resolvedPageSpacing: CGFloat {
+    let value = pageSpacing ?? 8
+    return CGFloat(value.isFinite && value >= 0 ? value : 8)
+  }
+
   private func applyPageSpacing() {
     guard let pdfView else { return }
-    let spacing = CGFloat(max(pageSpacing ?? 8, 0))
+    let spacing = resolvedPageSpacing
     pdfView.pageBreakMargins = UIEdgeInsets(top: spacing / 2, left: 0, bottom: spacing / 2, right: 0)
     pdfView.pageShadowsEnabled = spacing > 0
   }
@@ -1266,8 +1271,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     container.isUserInteractionEnabled = !isSinglePage
     pdfView.displayDirection = isHorizontalLayout ? .horizontal : .vertical
     pdfView.displaysRTL = isRightToLeftLayout
-    let spacing = CGFloat(max(pageSpacing ?? 8, 0))
-    pdfView.usePageViewController(paged, withViewOptions: paged ? [UIPageViewController.OptionsKey.interPageSpacing: spacing] : nil)
+    pdfView.usePageViewController(paged, withViewOptions: paged ? [UIPageViewController.OptionsKey.interPageSpacing: resolvedPageSpacing] : nil)
     container.applyDoubleTapZoom()
     container.applyTextSelection()
     if let pageChangeObserver { NotificationCenter.default.removeObserver(pageChangeObserver) }

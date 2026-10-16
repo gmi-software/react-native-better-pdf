@@ -20,7 +20,7 @@ Every component, object and type is exported from the package root. The
 | `initialScale` | `number` | `1` | zoom applied once per loaded document, relative to the fitted page |
 | `initialViewport` | `PdfViewport` | | position applied once per loaded document, e.g. where the reader left off; takes precedence over `initialPage` / `initialScale`; see [Reading position](guides/navigation.md#reading-position) |
 | `minScale` / `maxScale` | `number` | `1` / `4` | relative to the fitted page (see `fitPolicy`) |
-| `pageSpacing` | `number` | `8` | dp / pt |
+| `pageSpacing` | `number` | `8` | dp / pt; negative, `NaN` and infinite values are the default |
 | `enableDoubleTapZoom` | `boolean` | `true` | double tap toggles zoom; `false` also delivers `onPageTap` without the ~300 ms double-tap wait |
 | `scrollEnabled` | `boolean` | `true` | `false`: drags go to parent views (a surrounding `ScrollView` scrolls); zoom, taps and `goToPage` still work |
 | `pageAccessibilityLabel` | `string` | `'Page {page} of {pageCount}'` | how screen readers name a page; localise it |

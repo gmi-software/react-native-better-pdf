@@ -209,7 +209,10 @@ export interface PdfViewProps extends ViewProps {
   minScale?: number;
   /** Relative to the fitted page (see {@linkcode PdfViewProps.fitPolicy}). Default `4`. */
   maxScale?: number;
-  /** Gap between pages in dp / pt. Default `8`. */
+  /**
+   * Gap between pages in dp / pt; negative, `NaN` and infinite values are the
+   * default. Default `8`.
+   */
   pageSpacing?: number;
   /**
    * Lay pages out left to right and scroll horizontally. Default `false`.
