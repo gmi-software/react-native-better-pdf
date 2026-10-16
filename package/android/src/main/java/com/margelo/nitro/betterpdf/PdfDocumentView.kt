@@ -266,7 +266,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
 
   // region Memory
 
-  val bitmapPool = BitmapPool(maxBytes = MIN_POOL_BYTES)
+  val bitmapPool = BitmapPool(maxBytes = MemoryBudgets.MIN_POOL_BYTES)
   private val cache = LruByteCache<Int, Bitmap>(
     budgetBytes = defaultCacheBudget(),
     sizeOf = { it.allocationByteCount.toLong() },
@@ -278,6 +278,10 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private val tiles = HashMap<Int, Tile>()
   /** After memory pressure, render only visible pages until this uptime. */
   private var constrainedUntilMs = 0L
+  /** The largest base bitmap of the last render plan, in bytes. */
+  private var plannedBaseBytes = 0L
+  /** Whether the last plan's base layer is below screen resolution, so tiles are drawn at zoom 1. */
+  private var plannedTilesAtFit = false
   private var tileGeneration = 0
 
   // endregion
@@ -1423,9 +1427,10 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     val planned = if (isSinglePage) visible.toList() else PrefetchPlanner.plan(visible, center, layout.pageCount, direction)
 
     val bases = planned.filter { it !in failedPages }.map { baseRequest(layout, it) }
+    val pageBytes = bases.map { it.bitmapWidth.toLong() * it.bitmapHeight * 4 }
     val constrained = SystemClock.uptimeMillis() < constrainedUntilMs
     val fit = PrefetchPlanner.fitToBudget(
-      pageBytes = bases.map { it.bitmapWidth.toLong() * it.bitmapHeight * 4 },
+      pageBytes = pageBytes,
       minKeep = bases.count { it.page in visible },
       baseBudget = if (constrained) 0L else defaultCacheBudget(),
       maxBudget = if (constrained) 0L else MAX_CACHE_BYTES,
@@ -1434,6 +1439,8 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       cache.updateBudget(fit.budgetBytes, visible.toSet())
       updateCacheStats()
     }
+    plannedBaseBytes = pageBytes.maxOrNull() ?: 0L
+    plannedTilesAtFit = bases.any { it.bitmapWidth * TILE_THRESHOLD < layout.pageWidth(it.page) }
     val poolBudget = if (constrained) 0L else poolBudget()
     if (poolBudget != bitmapPool.budgetBytes) bitmapPool.setMaxBytes(poolBudget)
 
@@ -1560,8 +1567,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     }
   }
 
-  /** Room for two viewport-sized bitmaps (tiles, or a couple of pages). */
-  private fun poolBudget(): Long = max(MIN_POOL_BYTES, width.toLong() * height * 4)
+  private fun poolBudget(): Long = MemoryBudgets.pool(width, height, plannedBaseBytes, plannedTilesAtFit)
 
   private fun updateCacheStats() {
     statResidentPages = cache.count
@@ -1625,7 +1631,6 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     /** Upper bound for a page's base bitmap, in viewports worth of pixels. */
     const val MAX_BASE_VIEWPORTS = 2f
     const val MIN_CACHE_BYTES = 24L * 1024 * 1024
-    const val MIN_POOL_BYTES = 8L * 1024 * 1024
     const val MAX_CACHE_BYTES = 128L * 1024 * 1024
   }
 }

@@ -73,6 +73,7 @@ package/
     PrefetchPlanner.kt             pure: render priority order
     LruByteCache.kt                pure: byte-budgeted LRU
     BitmapPool.kt                  bitmap reuse + eager recycling
+    MemoryBudgets.kt               pure: bitmap pool budget
     PdfSourceResolver.kt           source → seekable ParcelFileDescriptor
     DocumentCache.kt               fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.kt          copies on disk: session/persistent dirs, metadata
@@ -229,12 +230,19 @@ position first and is re-anchored after that page is measured.
 | ------------ | ------------------------------------------------ | ------------------------------------------------------- |
 | Base cache   | one fit-width bitmap per page (`LruByteCache`)   | `clamp(maxHeap / 6, 24 MB, 128 MB)`, ≥ 4 viewports      |
 | Zoom tiles   | one viewport-sized full-res crop per visible page| visible pages × 1 viewport                              |
-| Bitmap pool  | free bitmaps for reuse                           | `max(8 MB, 1 viewport)`; 0 while detached               |
+| Bitmap pool  | free bitmaps for reuse                           | `max(8 MB, 1 viewport, 1 base page)`, or base page + 1 viewport when tiles are drawn at zoom 1; 0 while detached |
 
 - Visible pages are *protected*: they are never evicted to make room, so the
   budget can be exceeded only by what is on screen.
 - Very tall pages have their base bitmap capped at 2 viewports of pixels;
   tiles supply detail when zoomed.
+- The pool fits the largest base page of the current render plan. In portrait
+  a fit-width page is smaller than the viewport; in landscape, on tablets and
+  on unfolded foldables it is larger, and the pool recycles any bitmap larger
+  than its budget, so a viewport-sized pool would never reuse a page. When
+  the page is also capped below screen resolution (landscape phones), tiles
+  are drawn even at zoom 1, and the pool fits a page and a tile together so
+  the two do not push each other out.
 - Cache key is the page; entries rendered at a different width (rotation,
   resize) are re-requested and replaced.
 - Memory pressure: `onTrimMemory(RUNNING_LOW, RUNNING_CRITICAL)`/`onLowMemory`
