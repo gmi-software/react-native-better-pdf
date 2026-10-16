@@ -37,7 +37,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     didSet { needsScaleUpdate = true }
   }
   var pageSpacing: Double? {
-    didSet { applyPageSpacing() }
+    didSet {
+      applyPageSpacing()
+      // The page view controller takes its spacing only when it is set up.
+      if isPagedLayout && Self.resolvedSpacing(oldValue) != resolvedPageSpacing { needsLayoutModeUpdate = true }
+    }
   }
   var horizontal: Bool? {
     didSet { if horizontal != oldValue { needsLayoutModeUpdate = true } }
@@ -977,8 +981,10 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     return min(max(scale, resolvedMinScale), resolvedMaxScale)
   }
 
-  private var resolvedPageSpacing: CGFloat {
-    let value = pageSpacing ?? 8
+  private var resolvedPageSpacing: CGFloat { Self.resolvedSpacing(pageSpacing) }
+
+  private static func resolvedSpacing(_ spacing: Double?) -> CGFloat {
+    let value = spacing ?? 8
     return CGFloat(value.isFinite && value >= 0 ? value : 8)
   }
 
