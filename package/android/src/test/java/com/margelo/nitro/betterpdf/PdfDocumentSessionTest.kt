@@ -12,11 +12,13 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * The render thread of [PdfDocumentSession] with a fake renderer. The test
@@ -97,6 +99,80 @@ class PdfDocumentSessionTest {
     session.readFormFields { fields = it }
     runUntil("the form read to settle") { fields != null }
     assertTrue(fields!!.isFailure)
+  }
+
+  @Test
+  fun `reads run one at a time on one thread, in call order`() {
+    val session = start()
+    runUntil("the document to open") { listener.opened }
+
+    val running = AtomicInteger()
+    val mostAtOnce = AtomicInteger()
+    val threads = ConcurrentHashMap.newKeySet<Thread>()
+    val results = LinkedBlockingQueue<Result<Int>>()
+    repeat(READS) { index ->
+      session.read({
+        mostAtOnce.accumulateAndGet(running.incrementAndGet()) { most, now -> maxOf(most, now) }
+        threads += Thread.currentThread()
+        Thread.sleep(2)
+        running.decrementAndGet()
+        index
+      }) { results.add(it) }
+    }
+
+    val settled = List(READS) { results.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS) ?: throw AssertionError("Timed out waiting for read $it") }
+    assertEquals(List(READS) { Result.success(it) }, settled)
+    assertEquals(1, mostAtOnce.get())
+    assertEquals(listOf("BetterPdf-read"), threads.map { it.name })
+    session.close()
+  }
+
+  @Test
+  fun `reads queued when the document closes fail without running`() {
+    val session = start()
+    runUntil("the document to open") { listener.opened }
+
+    val reading = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    val ran = ConcurrentLinkedQueue<Int>()
+    val results = LinkedBlockingQueue<Pair<Int, Result<Int>>>()
+    session.read({
+      reading.countDown()
+      release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+      ran += 0
+      0
+    }) { results.add(0 to it) }
+    assertTrue(reading.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+    for (index in 1..3) session.read({ ran += index; index }) { results.add(index to it) }
+    session.close()
+    session.read({ ran += 4; 4 }) { results.add(4 to it) }
+    release.countDown()
+
+    val settled = List(5) { results.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS) ?: throw AssertionError("Timed out waiting for a read") }.toMap()
+    // The read in progress finishes.
+    assertEquals(Result.success(0), settled[0])
+    for (index in 1..4) assertTrue(settled.getValue(index).exceptionOrNull() is IllegalStateException)
+    assertEquals(listOf(0), ran.toList())
+  }
+
+  @Test
+  fun `a write does not wait for reads`() {
+    val session = start()
+    runUntil("the document to open") { listener.opened }
+
+    val reading = CountDownLatch(1)
+    val release = CountDownLatch(1)
+    session.read({
+      reading.countDown()
+      release.await(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    }) {}
+    assertTrue(reading.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+    val written = LinkedBlockingQueue<Result<String>>()
+    session.write({ Thread.currentThread().name }) { written.add(it) }
+
+    assertEquals(Result.success("BetterPdf-write"), written.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+    release.countDown()
+    session.close()
   }
 
   private fun start(
@@ -229,5 +305,6 @@ class PdfDocumentSessionTest {
 
   private companion object {
     const val TIMEOUT_SECONDS = 5L
+    const val READS = 20
   }
 }

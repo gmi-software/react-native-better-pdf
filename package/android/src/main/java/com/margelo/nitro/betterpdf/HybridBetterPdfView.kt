@@ -352,7 +352,7 @@ class HybridBetterPdfView(
     if (target != null && document.file != null && target.canonicalFile == document.file.canonicalFile) {
       return Promise.rejected(IllegalArgumentException("The export cannot replace the displayed document's file"))
     }
-    return afterFormSettles(session) {
+    return afterFormSettles(session, session::write, commitTyping = true) {
       val file = target ?: newExportFile(document.name)
       // Written beside the target and renamed over it: a failed write
       // leaves an existing file as it was. The copy's name does not repeat
@@ -379,19 +379,22 @@ class HybridBetterPdfView(
   }
 
   /**
-   * Runs [block] off the main thread once text being typed is applied and
-   * earlier form work is done, so it sees the form as the reader left it.
+   * Runs [work] with [schedule] (the session's reads or writes) once earlier
+   * form work is done, so it sees the form as it is and comes after the
+   * work asked for before it. [commitTyping]: text being typed is applied
+   * first, for work that shows the form (page images, exports).
    */
-  private fun <T> afterFormSettles(session: PdfDocumentSession, block: () -> T): Promise<T> {
+  private fun <T> afterFormSettles(
+    session: PdfDocumentSession,
+    schedule: (work: () -> T, done: (Result<T>) -> Unit) -> Unit,
+    commitTyping: Boolean,
+    work: () -> T,
+  ): Promise<T> {
     val promise = Promise<T>()
     mainHandler.post {
-      formFiller.commit()
+      if (commitTyping) formFiller.commit()
       session.afterFormWork { error ->
-        if (error != null) {
-          promise.reject(error)
-        } else {
-          Promise.parallel(block).then(promise::resolve).catch(promise::reject)
-        }
+        if (error != null) promise.reject(error) else schedule(work, promise::settle)
       }
     }
     return promise
@@ -399,12 +402,13 @@ class HybridBetterPdfView(
 
   override fun getOutline(): Promise<Array<PdfOutlineEntry>> {
     val session = loaded?.session ?: return Promise.rejected(IllegalStateException("No document is loaded"))
-    return Promise.parallel { session.reads.readOutlineEntries() }
+    return afterFormSettles(session, session::read, commitTyping = false) { session.reads.readOutlineEntries() }
   }
 
   override fun getPageSizes(): Promise<Array<PdfPageSize>> {
     val document = loaded ?: return Promise.rejected(IllegalStateException("No document is loaded"))
-    return Promise.parallel { document.session.reads.readPdfPageSizes(document.pageCount) }
+    val session = document.session
+    return afterFormSettles(session, session::read, commitTyping = false) { session.reads.readPdfPageSizes(document.pageCount) }
   }
 
   override fun renderPage(page: Double, options: PdfRenderPageOptions): Promise<PdfPageImage> {
@@ -415,7 +419,7 @@ class HybridBetterPdfView(
     } catch (error: IllegalArgumentException) {
       return Promise.rejected(error)
     }
-    return afterFormSettles(session) { request.render(session.reads, context, session.formEdits) }
+    return afterFormSettles(session, session::read, commitTyping = true) { request.render(session.reads, context, session.formEdits) }
   }
 
   override fun print(jobName: String): Promise<PdfPrintResult> {
@@ -635,3 +639,6 @@ class HybridBetterPdfView(
     const val PRINT_SETTLE_POLLS = 40
   }
 }
+
+/** Resolves with [result]'s value, or rejects with its error. */
+private fun <T> Promise<T>.settle(result: Result<T>) = result.fold({ resolve(it) }, { reject(it) })

@@ -171,7 +171,7 @@ type PdfSource =
     raw bytes, but that is an API of its own.
   - **Memory, not time, limits the size.** Measured, a 20 MB document opens
     within tens of milliseconds of the same file and holds neither thread
-    (see [results §16](performance/results.md#16-base64-sources-2026-10-15)).
+    (see [results §17](performance/results.md#17-base64-sources-2026-10-15)).
     While it is shown, its text is held twice: the app's string and the
     native buffer, each a third larger than the document. Large documents
     are better written to a file (see
@@ -1612,16 +1612,30 @@ file path), and anchoring the dialog to the viewer on iPad.
   Printing without a viewer is not part of `PdfDocument` (see "Documents
   without a view").
 - **Protected documents print from an unlocked copy that never touches
-  disk.** iOS: `PDFDocument.dataRepresentation()` of an unlocked document
-  writes it without encryption (measured with the `encrypted` fixture:
-  the copy reports `isEncrypted == false`, two readable pages), serialized
-  off the main thread on a separate instance and handed to
-  `UIPrintInteractionController` as data. Android: `PdfRenderer.write(fd,
+  disk.** iOS: the unlocked document is written with an owner password
+  nobody knows, its permissions and no user password, so it opens without
+  one; serialized off the main thread on a separate instance and handed
+  to `UIPrintInteractionController` as data. Without options PDFKit's
+  `dataRepresentation()` depends on the cipher: it drops RC4-40's
+  encryption (the `encrypted` fixture) but keeps AES-128's
+  (`aes-encrypted`), so the print system would ask for the password
+  again. For such a document `present` returns false but still runs the
+  completion when the prompt closes, so the promise settles only once.
+  Android: `PdfRenderer.write(fd,
   removePasswordProtection = true)` (API 35, and `PdfRendererPreV` on 12–14
   with extension 13 — every renderer that can open a protected document)
   writes straight into the spooler's descriptor. Other documents print
   from the file itself (iOS) or a positional copy of the open descriptor
   (Android), so the spooler gets the original, vector bytes.
+- **A dialog opens only for the document still shown.** Preparing takes
+  seconds for long documents (iOS: 6–10 s to write the unlocked copy of
+  500 scanned pages on a simulator; Android waits for form work). A view
+  closed or given another `source` meanwhile rejects with "The document
+  was closed" rather than open the dialog over another screen, or for
+  the previous document. The shared controller's `printingItem` is
+  already nil when the completion runs after the dialog was closed
+  (iOS 26.5 simulator, for a file and for data; not checked after
+  submitting), so the view does not clear it.
 - **`isSubmitted` is measured, not assumed.** iOS reports it in the
   completion handler. On Android the adapter's `onFinish` cannot tell: a
   cancelled job is still "created" when the dialog closes and turns
@@ -1639,8 +1653,11 @@ file path), and anchoring the dialog to the viewer on iPad.
   bundled sample and the unlocked protected fixture, closing resolves
   `false`); on Android the protected document saved through "Save as PDF"
   resolves `true`, and the saved file is unencrypted with both pages
-  (checked with PDFKit). Not tested: submitting on iOS (a simulator has no
-  printer; Printer Simulator is not installed) and real printers.
+  (checked with PDFKit). On iOS, leaving `scanned-encrypted` right after
+  Print opens no dialog over the list. Not tested: submitting on iOS (a
+  simulator has no printer; Printer Simulator is not installed), a
+  `source` change during preparation (the example has no control for it;
+  the same check covers it) and real printers.
 
 ## Documents without a view
 

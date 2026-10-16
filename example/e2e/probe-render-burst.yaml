@@ -1,0 +1,21 @@
+# Probe (not part of the regression set): 200 ref.renderPage calls at once
+# on `large` (500 pages), as an <Image> list makes them (#24), with
+# ref.getPageSizes right after the first. They run one at a time, so they
+# resolve in call order, the page sizes second. On Android, run it with
+# benchmarks/sample-android-threads.sh (one read thread, not one per call)
+# and the memory sampler. The time goes to the Maestro log ("timing …").
+appId: software.gmi.betterpdf.example
+---
+- launchApp: { stopApp: true }
+- runFlow: _dismiss-dev-menu.yaml
+- tapOn: "Viewer"
+- scrollUntilVisible: { element: "large.*", centerElement: true }
+- tapOn: "large.*"
+- extendedWaitUntil: { visible: "1 / 500", timeout: 120000 }
+- longPressOn: "Image"
+- extendedWaitUntil: { visible: "burst 200: rendering", timeout: 5000 }
+- extendedWaitUntil: { visible: "burst 200: (in call|out of) order .*", timeout: 300000 }
+- copyTextFrom: { text: "burst 200: .*" }
+- evalScript: ${console.log('timing ' + maestro.copiedText)}
+- assertVisible: "burst 200: in call order .*"
+- tapOn: "‹ Back"

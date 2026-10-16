@@ -455,10 +455,17 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       let password = self.password
       Self.writeQueue.async { [weak self] in
         let copy = Self.openCopy(of: url, password: password, filledIn: filledForm)?.document
-        let data = copy?.dataRepresentation()
+        // Without options PDFKit keeps some ciphers' encryption (AES-128).
+        let data = copy.flatMap { $0.dataRepresentation(options: $0.protectedWriteOptions(unlockPassword: nil)) }
         DispatchQueue.main.async { [weak self] in
-          guard let self, let data else {
+          // Closed or replaced meanwhile: no dialog over another screen.
+          guard let self, self.pdfView?.document === document else {
             self?.isPrinting = false
+            promise.reject(withError: RuntimeError.error(withMessage: "The document was closed"))
+            return
+          }
+          guard let data else {
+            self.isPrinting = false
             promise.reject(withError: RuntimeError.error(withMessage: "The document could not be prepared for printing"))
             return
           }
@@ -657,7 +664,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     info.outputType = .general
     controller.printInfo = info
     controller.printingItem = item
+    // For a locked document `present` returns false and the completion still runs later.
+    var isSettled = false
     let completion: UIPrintInteractionController.CompletionHandler = { [weak self] _, completed, error in
+      guard !isSettled else { return }
+      isSettled = true
       self?.isPrinting = false
       if let error {
         promise.reject(withError: error)
@@ -669,7 +680,8 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     let presented = UIDevice.current.userInterfaceIdiom == .pad
       ? controller.present(from: container.bounds, in: container, animated: true, completionHandler: completion)
       : controller.present(animated: true, completionHandler: completion)
-    if !presented {
+    if !presented, !isSettled {
+      isSettled = true
       isPrinting = false
       promise.reject(withError: RuntimeError.error(withMessage: "The print dialog could not be opened (another one may be open)"))
     }

@@ -77,12 +77,14 @@ example/e2e/run.sh <device> stress-open-close stress-rapid        # stress flows
 | `viewer-mixed-sizes` | estimated page sizes corrected on render (portrait, landscape, receipt, square) |
 | `viewer-text-selection` | long press selects a word, one event per handle drag, tap clears, `enableTextSelection={false}` in continuous and paged layouts |
 | `probe-memory-growth` | diagnostic: ~100 distinct pages rendered via jumps; run with the memory sampler |
+| `probe-render-burst` | diagnostic: 200 `renderPage` calls at once on 500 pages, with `getPageSizes` after the first, resolve in call order; on Android run with the thread and memory samplers |
 
 On iOS, `Pressable` rows expose one combined accessibility label, so flows
 match list rows as `"title.*"`.
 
 While a stress flow runs, `benchmarks/sample-android-memory.sh` records
-memory once per second.
+memory once per second, and `benchmarks/sample-android-threads.sh` the
+app's thread count about five times per second.
 
 ## Benchmarks
 

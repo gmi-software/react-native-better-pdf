@@ -17,6 +17,9 @@ const image = await pdf.current!.renderPage(page, {
   width).
 - Rendered off the main thread on a separate renderer, so the view keeps
   scrolling and its caches are untouched.
+- Calls run one after another, in call order, together with `getOutline`
+  and `getPageSizes`: requesting a whole list of images at once renders
+  them one at a time, and the first ones arrive first.
 - The file is written to the app's cache directory (`BetterPdf/renders`)
   and is yours: move it to keep it, delete it when done. The OS may clear
   cache files when storage is low.

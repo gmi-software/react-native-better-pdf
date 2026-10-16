@@ -56,7 +56,7 @@ setSource({ base64: await pdf.saveAsBase64() });
 
 Decoding costs little: a 20 MB document opens within tens of milliseconds of
 the same file, and neither the JS nor the main thread is held for long (see
-[Performance](../performance/results.md#16-base64-sources-2026-10-15)).
+[Performance](../performance/results.md#17-base64-sources-2026-10-15)).
 Memory is the cost. While the document is shown, its text is held twice, as
 your string and as the native copy made from it, each a third larger than
 the document. For large documents, or many at once, write them to a file.

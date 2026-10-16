@@ -24,6 +24,8 @@ export const FIXTURES = [
   'metadata',
   'metadata-encrypted',
   'encrypted',
+  'aes-encrypted',
+  'scanned-encrypted',
   'malformed-not-a-pdf',
   'malformed-empty',
   'malformed-truncated',
