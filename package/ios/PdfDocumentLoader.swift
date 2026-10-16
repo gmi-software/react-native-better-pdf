@@ -81,7 +81,7 @@ final class PdfDocumentLoader {
     if uri.hasPrefix("/") {
       return completion(existingFile(URL(fileURLWithPath: uri)))
     }
-    guard let url = URL(string: uri), let scheme = url.scheme?.lowercased() else {
+    guard let url = URL(sourceUri: uri), let scheme = url.scheme?.lowercased() else {
       return completion(.failure(.invalidSource(uri)))
     }
     switch scheme {

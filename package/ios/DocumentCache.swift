@@ -69,7 +69,7 @@ final class DocumentCache {
 
   private func start(_ subscriber: Subscriber) {
     let source = subscriber.source
-    guard let url = URL(string: source.uri), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+    guard let url = URL(sourceUri: source.uri), let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
       return deliverFailure(subscriber, .invalidSource(source.uri))
     }
     if let failure = source.invalidHeaderFailure() {
