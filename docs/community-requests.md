@@ -23,7 +23,7 @@ Source: `gh api` on wonday/react-native-pdf (1,814 stars; 821 issues, 383 open; 
 13. Password detection / prompt — 7 issues: #26, #895, #860, #992, #223. partly (stable codes exist; Android 15+).
 14. Accessibility (screen readers) — #503 (6r), #483, #937, #939. COVERED.
 15. Dark mode / inversion — #325, #715, #996, #1038. COVERED (`colorScheme`; on iOS annotations keep their colours, see api-design "Dark pages").
-Also: base64 (#739, #705, #835, #199; omitted by design), custom certs/pinning (#409, #433, #932), forms fill/save (#748, #763, #342, #362; covered: forms, see api-design "Forms"), thumbnail image export (#998, #43, #457, #811; covered: `renderPage`), TOC (#542, #247; covered), decrypt-on-read (#1016), print/share (#378, #303, #371; print covered: `print`), rotation (#556), reload (#717), tvOS (#916), Windows (#683, #642). Covered already: zoom control (#528, #236), goToPage on Android (#985, #917), progress not stuck (#413, #622, #995).
+Also: base64 (#739, #705, #835, #199; covered: `{ base64 }` in 1.1, see api-design "Source"), custom certs/pinning (#409, #433, #932), forms fill/save (#748, #763, #342, #362; covered: forms, see api-design "Forms"), thumbnail image export (#998, #43, #457, #811; covered: `renderPage`), TOC (#542, #247; covered), decrypt-on-read (#1016), print/share (#378, #303, #371; print covered: `print`), rotation (#556), reload (#717), tvOS (#916), Windows (#683, #642). Covered already: zoom control (#528, #236), goToPage on Android (#985, #917), progress not stuck (#413, #622, #995).
 
 ## Recurring bugs / maintenance (selling points)
 - 16 KB page size — 7 issues, 119 r / 109 c, 2025: #960 (51r, open), #965, #970, #947, #948, #934, #962. better-pdf .so verified 16 KB aligned (0x4000).

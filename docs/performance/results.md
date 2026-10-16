@@ -599,3 +599,91 @@ the viewport settles, whether any visible page did.
   on `outline-large` still running before clearing it (each view hierarchy
   snapshot of that document takes ~4 s), so that check was removed; the
   clear still comes ~1 s into the ~4 s search.
+
+## 16. Base64 sources (2026-10-15)
+
+**Question**: how large may a `{ base64 }` document be before it costs
+visibly more than a file? The string crosses into native code with the
+`source` prop, on the main thread, and is decoded on the loading thread.
+
+**Method**: the example app with temporary probes (not committed): the
+time from setting the source state in JS to `onLoad`, the native `source`
+prop setter including Nitro's conversion of the string (iOS: the generated
+component's `setSource`, on the main thread; Android: the generated state
+updater's `setSource`, on the UI thread, which builds the Java string), and
+the decoding on the loading thread (iOS: decode + write the pin; Android:
+decode + write + open the descriptor + delete). Documents of 1, 5 and
+20 MB (5, 25 and 100 pages of the `medium` fixture's kind), each opened
+3 times as a file (`{ uri }`) and as base64, in a new viewer each time;
+Android 6 times for base64 (two rounds). Reading the file into a string
+(`File.base64()`) is the app's cost and not timed. iOS simulator "iPhone 17
+Pro" (iOS 26.5), **debug** build (the library's Swift unoptimized); Android
+emulator `sdk_gphone64_arm64` (API 37), **release** build; the host was
+under other load (load average about 3), so single runs vary a lot.
+
+| | 1 MB | 5 MB | 20 MB |
+| --- | ---: | ---: | ---: |
+| iOS: file → `onLoad` (ms) | 20–63 | 22–51 | 23–43 |
+| iOS: base64 → `onLoad` (ms) | 24–46 | 31–77 | 100–116 |
+| iOS: `source` prop setter, main thread (ms) | 0.5–0.7 | 2.7–6.7 | 12–39 |
+| iOS: decode + write (ms) | 1–2 | 3–5 | 12–14 |
+| Android: file → `onLoad` (ms) | 22–65 | 24–177 | 23–188 |
+| Android: base64 → `onLoad` (ms) | 25–113 | 82–420 | 297–1157 |
+| Android: `source` prop setter, UI thread (ms) | 2–8 | 8–31 | 31–39, once 177 |
+| Android: decode + write + open (ms) | 16–66 | 62–277 | 232–866 |
+
+- Up to a few MB base64 costs little: on iOS a few milliseconds more than
+  the file; on Android tens of milliseconds, and the UI thread is held for
+  under 10 ms at 1 MB.
+- At 20 MB the Android UI thread is held for over 30 ms (two frames or
+  more) while the prop is set, and opening takes about 0.3 s more than the
+  file; one run paused 177 ms on the UI thread and 866 ms in decoding, as a
+  garbage collection would. That design would have needed "up to a few MB"
+  in the documents; the next section removed the cost.
+- Android's cost is the string, not the file: the Java string is built on
+  the UI thread, and the decoder is a Kotlin loop (10–20× iOS's time, where
+  padded base64 goes through Foundation's decoder; see api-design
+  "Source"). In the debug build the same 20 MB took 0.4–1.3 s to decode and
+  43–177 ms on the UI thread. Passing the text without a Java string removes
+  both; see the next section.
+- Once loaded, a base64 document is read like a file: page sizes, search,
+  page images and export work from the pin (iOS) or the descriptor
+  (Android), see `viewer-base64`.
+
+### The text in a native buffer (2026-10-16)
+
+**Change**: `NativePdfSource.base64` is no longer a string but the text in a
+native-owned `ArrayBuffer`, filled in JS once per distinct text. Android
+decodes it in C++ straight into the file; iOS reads the same buffer (see
+api-design "Source").
+
+**Method**: as above (the same probes, plus the JS copy into the buffer),
+same simulator and emulator, same builds (iOS debug, Android release), host
+load average 4–15. The tables above are the string design; "→" gives the
+new range.
+
+| | 1 MB | 5 MB | 20 MB |
+| --- | ---: | ---: | ---: |
+| iOS: base64 → `onLoad` (ms) | 24–46 → 24–40 | 31–77 → 25–49 | 100–116 → 36–63 |
+| iOS: `source` prop setter, main thread (ms) | 0.5–0.7 → ≤ 0.02 | 2.7–6.7 → ≤ 0.02 | 12–39 → ≤ 0.02 |
+| iOS: decode + write (ms) | 1–2 → 1–2 | 3–5 → 3–5 | 12–14 → 9–13 |
+| iOS: JS copy into the buffer (ms) | – → 0.1–0.6 | – → 0.7–21 | – → 6–11 |
+| Android: base64 → `onLoad` (ms) | 25–113 → 39–107 | 82–420 → 57–185 | 297–1157 → 46–73 |
+| Android: `source` prop setter, UI thread (ms) | 2–8 → 0.06–0.22 | 8–31 → 0.05–0.24 | 31–177 → 0.01–0.04 |
+| Android: decode + write + open (ms) | 16–66 → 9–18 | 62–277 → 21–32 | 232–866 → 26–35 |
+| Android: JS copy into the buffer (ms) | – → 0.2–2.6 | – → 9–17 | – → 5–6 |
+
+The same files opened in 21–64, 25–66 and 22–50 ms on iOS and in 38–170,
+71–183 and 24–205 ms on Android.
+
+- Neither thread is held any more: the setter only passes a pointer. At
+  20 MB a base64 document now opens within tens of milliseconds of the same
+  file on both platforms, so the size advice is about memory, not time:
+  while the document is shown, the app's string and the native buffer each
+  hold the text.
+- The JS copy (`TextEncoder.encodeInto`, Hermes) runs once per text; its
+  spread at 5 MB (up to 21 ms, more than at 20 MB) came with the host load.
+- Android's decoding is now about as fast as iOS's: C++ at about 1 ms per
+  MB of base64, and with no Java string or byte array of the document's size
+  for the garbage collector (the string design paused once for 177 ms on the
+  UI thread).

@@ -42,14 +42,17 @@ package/
     PdfView.tsx                    public component (wrapper over the host component)
     PdfCache.ts                    public cache API: AbortSignal, PdfDownloadError
     PdfDocument.ts                 public document API: open (AbortSignal, PdfOpenError), close
-    source.ts                      PdfSource union → native { uri, headers, cache options }
+    source.ts                      PdfSource union → native { uri, base64, headers, cache options }
+    nativeSource.ts                base64 text → native-owned ArrayBuffer (once per distinct text)
+  test/base64/                     the C++ and Swift base64 decoders against shared cases, and each other
   nitrogen/generated/              Nitrogen output (committed; regenerate with `bun run specs`)
   ios/
     HybridBetterPdfView.swift      PDFView host, scale mapping, events, lifecycle
     PdfContainerView.swift         taps, links, text selection settle / disable
     PdfSearchController.swift      PDFKit async find, highlights, next/previous
     SettleDebouncer.swift          "viewport stopped moving" for scale and viewport events
-    PdfDocumentLoader.swift        source resolution, cache fetch + pin, PDFDocument open
+    PdfDocumentLoader.swift        source resolution, cache fetch + pin, base64 → pin, PDFDocument open
+    Base64Document.swift           base64 decoding by the library's rules (same as Android's C++)
     PdfLoadFailure.swift           Swift error → PdfError
     DocumentCache.swift            fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.swift       copies on disk: session/persistent dirs, metadata, pins
@@ -74,7 +77,8 @@ package/
     LruByteCache.kt                pure: byte-budgeted LRU
     BitmapPool.kt                  bitmap reuse + eager recycling
     MemoryBudgets.kt               pure: bitmap pool budget
-    PdfSourceResolver.kt           source → seekable ParcelFileDescriptor
+    PdfSourceResolver.kt           source → seekable ParcelFileDescriptor (base64: write, open, delete)
+    NativeBase64Document.kt        JNI entry: base64 text in a native buffer → decoded into a file
     DocumentCache.kt               fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.kt          copies on disk: session/persistent dirs, metadata
     SharedDownload.kt              one HttpURLConnection request per copy, conditional with a copy
@@ -84,11 +88,18 @@ package/
                                    (view session and document)
     PageImageRequest.kt            renderPage validation and file write (view and document)
     outline/                       bounded PDF parser: outline, page tree, /Info (PdfDate)
+  android/src/main/cpp/
+    cpp-adapter.cpp                JNI_OnLoad: Nitro's natives, then NativeBase64Document's
+    Base64Document.{hpp,cpp}       pure: base64 decoding by the library's rules (same as iOS)
+    NativeBase64Document.cpp       decodes from the buffer straight into the file descriptor
 ```
 
-No hand-written C++: the only consumer of shared logic would be Android
-(PDFKit already virtualizes on iOS), so a C++ core would add a JNI hop to the
-per-frame path without a second caller. See the research notes.
+No C++ core: the only consumer of shared logic would be Android (PDFKit
+already virtualizes on iOS), so a C++ core would add a JNI hop to the
+per-frame path without a second caller. See the research notes. The one
+piece of hand-written C++ decodes a `{ base64 }` source on Android, from the
+native buffer JS hands over straight into the file, so neither a Java string
+nor a byte array of the document's size is made (see api-design "Source").
 
 ## Threading
 
