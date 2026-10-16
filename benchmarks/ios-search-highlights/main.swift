@@ -98,11 +98,11 @@ guard let scrollView = pdfView.firstDescendantScrollView() else {
 var last: PdfSearchChangeEvent?
 let controller = PdfSearchController(pdfView: pdfView) { last = $0 }
 #if VIEWPORT_HOOK
-// As HybridBetterPdfView: the offset observation on every scroll frame...
+// HybridBetterPdfView's offset observation, on every scroll frame.
 let offsetObservation = scrollView.observe(\.contentOffset, options: []) { _, _ in controller.viewportDidChange() }
 #endif
 
-/// ...and the settle once the viewport stops moving.
+/// HybridBetterPdfView's settle, once the viewport stops moving.
 func settle() {
   runLoop(for: 0.3)
   #if VIEWPORT_HOOK
@@ -245,5 +245,4 @@ check("next from far away")
 print(String(format: "| %@ | %d | %@ | %@ | %.1f | %d | %.1f | %.1f / %.1f | %.1f | %@ |",
              query, matches, range(colourTimes), range(stepTimes), stalls.max() ?? 0, stalls.filter { $0 > 16 }.count,
              searchTime / 1000, dragMean, dragTimes.max() ?? 0, jumpTime, failures.isEmpty ? "OK" : "FAILED"))
-_ = window
 exit(failures.isEmpty ? 0 : 1)

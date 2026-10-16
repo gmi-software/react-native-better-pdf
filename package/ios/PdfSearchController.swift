@@ -240,7 +240,6 @@ final class PdfSearchController {
     refreshHighlights(isRecolored: true)
   }
 
-  /// The first and last visible page; nil while none is.
   private func visiblePageRange() -> ClosedRange<Int>? {
     guard let pdfView, let document else { return nil }
     let indices = pdfView.visiblePages.map { document.index(for: $0) }.filter { $0 != NSNotFound }
@@ -248,7 +247,6 @@ final class PdfSearchController {
     return first...last
   }
 
-  /// Binary search of `matchPages`.
   private func firstMatch(onOrAfter page: Int) -> Int {
     var low = 0
     var high = matchPages.count
