@@ -153,6 +153,21 @@ class PdfDocumentSession internal constructor(
   /** Outline, metadata, page sizes and page images, each on its own duplicate of the descriptor. */
   internal val reads = DocumentReads(password, ::duplicateDescriptor)
 
+  private val readWorker = SerialWorker("BetterPdf-read")
+  private val writeWorker = SerialWorker("BetterPdf-write")
+
+  /**
+   * Runs [work], a read of [reads], on the document's read thread: one at
+   * a time, in call order, like `PdfDocument`'s reads, so a burst of page
+   * images holds one renderer and one bitmap at a time, and the first ones
+   * arrive first. [done] gets the result on that thread; once the document
+   * is closed, an error instead.
+   */
+  fun <T> read(work: () -> T, done: (Result<T>) -> Unit) = readWorker.run(work, done)
+
+  /** Like [read], on a thread for writes (exports), which take seconds for long documents. */
+  fun <T> write(work: () -> T, done: (Result<T>) -> Unit) = writeWorker.run(work, done)
+
   /**
    * Writes the document to [destination] for printing: the file as it is,
    * or, when it was opened with a password, a copy without the protection
@@ -232,6 +247,9 @@ class PdfDocumentSession internal constructor(
   fun close() {
     if (closed) return
     val dropped = queue.close()
+    // Reads and writes in progress finish on their own duplicate of the descriptor.
+    readWorker.close()
+    writeWorker.close()
     resolver.cancel()
     // Posts already queued stay: `post` drops listener calls once closed and
     // releases their bitmaps, and form work's results still settle promises.

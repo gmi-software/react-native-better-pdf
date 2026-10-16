@@ -599,3 +599,39 @@ the viewport settles, whether any visible page did.
   on `outline-large` still running before clearing it (each view hierarchy
   snapshot of that document takes ~4 s), so that check was removed; the
   clear still comes ~1 s into the ~4 s search.
+
+## 16. Android view reads in a burst (2026-10-16)
+
+**Found by**: issue #24. The view's `renderPage`, `getOutline`,
+`getPageSizes` and `exportDocument` each ran on a thread of its own
+(Nitro's `Promise.parallel`), and each page image opened its own renderer
+and bitmap: nothing bounded how many ran at once.
+
+**Method**: `example/e2e/probe-render-burst.yaml` (a long press on "Image"
+in the viewer: 200 `renderPage(i % pageCount, { width: 300 })` calls at
+once, PNG) on `large` (500 pages), debug builds (arm64), the API 37
+emulator (4 cores) on a host shared with other emulators, so times swing
+up to 4× between runs. Builds alternated, seven runs each; the first
+pair with `benchmarks/sample-android-threads.sh` and
+`benchmarks/sample-android-memory.sh` running, the last two also timing
+images 1–10.
+
+**Change**: each open document has a `BetterPdf-read` thread (exits when
+idle) for the view's reads, one at a time in call order, as `PdfDocument`
+and iOS do, and a `BetterPdf-write` thread for exports, which take
+seconds for long documents (iOS: `com.betterpdf.write`). Work still
+queued when the document closes rejects.
+
+| | before | after |
+| --- | ---: | ---: |
+| Order of resolution | random | call order |
+| Threads at peak, first pair (all / `Thread-N` / `BetterPdf-read`) | 251 / 199 / 0 | 54 / 0 / 1 |
+| PSS at peak, first pair (≈ 230 MB at start) | 481 MB | 272 MB |
+| Images 1–10 all there (last two pairs) | 6.7–10.9 s | 0.3–0.7 s |
+| All 200 | 3.0–14.0 s | 5.9–26.9 s |
+| All 200, after ÷ before in the same pair | | 1.3–2.1× |
+
+- The whole burst takes longer: PDFium renders one page at a time in the
+  process, but opening renderers, PNG encoding and file writes ran in
+  parallel before. A list's first screenful arrives 9–35× sooner instead,
+  since those images no longer wait behind the rest.

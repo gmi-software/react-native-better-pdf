@@ -98,9 +98,10 @@ per-frame path without a second caller. See the research notes.
 | Prop setters, `afterUpdate`, `onDropView`   | main                                 | main                                             |
 | `goToPage` / `zoomTo` (via `hybridRef`)     | JS thread → `DispatchQueue.main`     | JS thread → main `Handler`                       |
 | `getStats`                                  | JS thread, lock-protected snapshot   | JS thread, `@Volatile` / atomic counters         |
-| `getOutline` (first call; then cached)      | main → `com.betterpdf.read` queue, separate `PDFDocument` | `Promise.parallel` thread, duplicated FD (`outline/` reader) |
-| `renderPage`                                | main → `com.betterpdf.read` queue: separate `PDFDocument`, `UIGraphicsImageRenderer`, file write | `Promise.parallel` thread: separate renderer on a duplicated FD (closed after the page), PNG/JPEG encode, file write |
-| `getPageSizes` (first call; then cached)    | main → `com.betterpdf.read` queue, separate `PDFDocument` | `Promise.parallel` thread, duplicated FD: page tree (`outline/` reader); encrypted: a separate renderer opening each page |
+| `getOutline` (first call; then cached)      | main → `com.betterpdf.read` queue, separate `PDFDocument` | the document's `BetterPdf-read` thread (in call order, exits when idle), duplicated FD (`outline/` reader) |
+| `renderPage`                                | main → `com.betterpdf.read` queue: separate `PDFDocument`, `UIGraphicsImageRenderer`, file write | main, after earlier form work → the document's `BetterPdf-read` thread (in call order): separate renderer on a duplicated FD (closed after the page), PNG/JPEG encode, file write |
+| `getPageSizes` (first call; then cached)    | main → `com.betterpdf.read` queue, separate `PDFDocument` | `BetterPdf-read` thread, duplicated FD: page tree (`outline/` reader); encrypted: a separate renderer opening each page |
+| `exportDocument`                            | main → `com.betterpdf.write` queue: separate `PDFDocument` (nothing filled in: a file copy), file write | main, after earlier form work → the document's `BetterPdf-write` thread: separate renderer on a duplicated FD (no form support: a file copy), file write |
 | Remote download (`DocumentCache`)           | lookup on `com.betterpdf.cache`; transfer and store on the `URLSession` delegate queue | lookup and transfer on `BetterPdf-download` threads (`HttpURLConnection`); the document worker waits |
 | Download progress (throttle ≤ 10/s)         | throttled on the delegate queue → main | throttled on the download thread → main         |
 | `PdfCache` (`getEntry`, `remove`, `clear`, `getByteSize`) | `com.betterpdf.cache.api` queue, disk only | `Promise.parallel` thread, disk only |

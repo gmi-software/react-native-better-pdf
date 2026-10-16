@@ -14,15 +14,18 @@ export const colors = {
 export function Button({
   title,
   onPress,
+  onLongPress,
   selected = false,
 }: {
   title: string;
   onPress: () => void;
+  onLongPress?: () => void;
   selected?: boolean;
 }) {
   return (
     <Pressable
       onPress={onPress}
+      onLongPress={onLongPress}
       style={({ pressed }) => [
         styles.button,
         selected && styles.selected,
