@@ -1544,6 +1544,15 @@ file path), and anchoring the dialog to the viewer on iPad.
   writes straight into the spooler's descriptor. Other documents print
   from the file itself (iOS) or a positional copy of the open descriptor
   (Android), so the spooler gets the original, vector bytes.
+- **A dialog opens only for the document still shown.** Preparing takes
+  seconds for long documents (iOS: 6–10 s to write the unlocked copy of
+  500 scanned pages on a simulator; Android waits for form work). A view
+  closed or given another `source` meanwhile rejects with "The document
+  was closed" rather than open the dialog over another screen, or for
+  the previous document. The shared controller's `printingItem` is
+  already nil when the completion runs after the dialog was closed
+  (iOS 26.5 simulator, for a file and for data; not checked after
+  submitting), so the view does not clear it.
 - **`isSubmitted` is measured, not assumed.** iOS reports it in the
   completion handler. On Android the adapter's `onFinish` cannot tell: a
   cancelled job is still "created" when the dialog closes and turns
@@ -1561,8 +1570,11 @@ file path), and anchoring the dialog to the viewer on iPad.
   bundled sample and the unlocked protected fixture, closing resolves
   `false`); on Android the protected document saved through "Save as PDF"
   resolves `true`, and the saved file is unencrypted with both pages
-  (checked with PDFKit). Not tested: submitting on iOS (a simulator has no
-  printer; Printer Simulator is not installed) and real printers.
+  (checked with PDFKit). On iOS, leaving `scanned-encrypted` right after
+  Print opens no dialog over the list. Not tested: submitting on iOS (a
+  simulator has no printer; Printer Simulator is not installed), a
+  `source` change during preparation (the example has no control for it;
+  the same check covers it) and real printers.
 
 ## Documents without a view
 

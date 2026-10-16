@@ -457,8 +457,14 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
         // Without options PDFKit keeps some ciphers' encryption (AES-128).
         let data = copy.flatMap { $0.dataRepresentation(options: $0.protectedWriteOptions(unlockPassword: nil)) }
         DispatchQueue.main.async { [weak self] in
-          guard let self, let data else {
+          // Closed or replaced meanwhile: no dialog over another screen.
+          guard let self, self.pdfView?.document === document else {
             self?.isPrinting = false
+            promise.reject(withError: RuntimeError.error(withMessage: "The document was closed"))
+            return
+          }
+          guard let data else {
+            self.isPrinting = false
             promise.reject(withError: RuntimeError.error(withMessage: "The document could not be prepared for printing"))
             return
           }

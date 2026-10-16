@@ -66,3 +66,22 @@ appId: software.gmi.betterpdf.example
       - tapOn: "Cancel"
 - extendedWaitUntil: { visible: "print: cancelled", timeout: 5000 }
 - tapOn: "‹ Back"
+
+# Back while iOS prepares the copy (6–10 s): no dialog opens over the list.
+- runFlow:
+    when: { platform: iOS }
+    commands:
+      - scrollUntilVisible: { element: "scanned-encrypted.*", centerElement: true }
+      - tapOn: "scanned-encrypted.*"
+      - extendedWaitUntil: { visible: "password-required", timeout: 60000 }
+      - tapOn: "Try fixture"
+      - extendedWaitUntil: { visible: "1 / 500", timeout: 60000 }
+      - tapOn: "Print"
+      - tapOn: "‹ Back"
+      - extendedWaitUntil: { visible: "Bundled sample.*", timeout: 10000 }
+      - runFlow:
+          optional: true
+          commands:
+            - extendedWaitUntil: { visible: "Page 1 of 500", timeout: 20000 }
+      - assertNotVisible: "Page 1 of 500"
+      - assertVisible: "Bundled sample.*"

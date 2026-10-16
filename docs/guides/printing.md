@@ -15,10 +15,13 @@ if (result?.isSubmitted) showToast('Sent to the printer');
 - `jobName` names the job in the print queue and the file when saving as
   PDF; by default the source's file name, or `'Document'`.
 - Rejects before `onLoad`, while the view's print dialog is open, when the
-  app is not in the foreground, and on iOS when the device cannot print or
-  the document's permissions forbid printing (Android has no API to read
-  them and prints anyway). On iPad the dialog opens as a popover from the
-  view.
+  view closes or its `source` changes before the dialog opens (a filled-in
+  form, and on iOS a protected document, is prepared first: seconds when
+  the document is long),
+  when the app is not in the foreground, and on iOS when the device cannot
+  print or the document's permissions forbid printing (Android has no API
+  to read them and prints anyway). On iPad the dialog opens as a popover
+  from the view.
 - Printing a file the app already has needs no viewer: `onLoad`'s
   `filePath` works with `expo-print` or `react-native-print`. This method
   adds what they cannot: protected documents, `content://` sources, and the

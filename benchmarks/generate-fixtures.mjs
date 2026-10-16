@@ -715,6 +715,13 @@ const FIXTURES = {
       cipher: 'aes',
       pageContent: (i) => ({ content: textPage(i, { fontSize: 10 }) }),
     }),
+  // `large` with AES-128.
+  'scanned-encrypted': () =>
+    scanned(
+      500,
+      { width: 1240, height: 1754, gray: true, quality: 60 },
+      { password: 'secret', cipher: 'aes' },
+    ),
 
   // One annotation of each common kind, each with an appearance stream and
   // the Print flag, as producers write them; the last row is a filled form
@@ -1146,10 +1153,12 @@ function metadataDocument(options = {}) {
   });
 }
 
-function scanned(pageCount, image) {
+function scanned(pageCount, image, { password, cipher } = {}) {
   const scans = imagePool(12, image);
   return buildDocument({
     pageCount,
+    password,
+    cipher,
     pageContent: (i) => ({
       content: `q ${A4.width} 0 0 ${A4.height} 0 0 cm /Scan Do Q`,
       images: [
