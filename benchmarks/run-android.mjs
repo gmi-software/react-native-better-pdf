@@ -38,7 +38,13 @@ const SCROLL_SECONDS = args['scroll-seconds']
 // `--reverse-every 0` scrolls in one direction only (isolates direction changes).
 const REVERSE_EVERY = Number(args['reverse-every'] ?? 5);
 // The scroll window's zoom; below 1 the viewers' minScale is lowered to it.
-const ZOOM = args.zoom ? Number(args.zoom) : null;
+// Up to the viewers' maxScale (4): beyond it they would clamp it, and the
+// recorded zoom would not be the one measured.
+const ZOOM = args.zoom == null ? null : Number(args.zoom);
+if (ZOOM != null && !(ZOOM > 0 && ZOOM <= 4)) {
+  console.error(`--zoom must be greater than 0 and at most 4: ${args.zoom}`);
+  process.exit(1);
+}
 
 const adb = async (...command) =>
   (await run('adb', command, { maxBuffer: 64 * 1024 * 1024 })).stdout;

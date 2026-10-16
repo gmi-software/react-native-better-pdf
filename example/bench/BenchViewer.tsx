@@ -9,6 +9,9 @@ import {
 
 export type Library = 'better' | 'react-native-pdf';
 
+/** Both viewers' `maxScale`. */
+export const MAX_SCALE = 4;
+
 export interface BenchViewerHandle {
   goToPage(page: number): void;
   zoomTo(scale: number): void;
@@ -70,7 +73,7 @@ export function BenchViewer({
         style={styles.fill}
         source={{ uri }}
         minScale={minScale}
-        maxScale={4}
+        maxScale={MAX_SCALE}
         pageSpacing={8}
         onLoad={(event) => onLoad(event.pageCount)}
         onPageChange={(event) => onPageChange(event.page)}
@@ -88,7 +91,7 @@ export function BenchViewer({
       // remote load fails. Better PDF always validates certificates.
       trustAllCerts={false}
       minScale={minScale}
-      maxScale={4}
+      maxScale={MAX_SCALE}
       scale={legacyScale}
       spacing={8}
       fitPolicy={0}
