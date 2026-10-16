@@ -597,14 +597,15 @@ function formatProgress({
 }
 
 function formatStats(stats: PdfViewStats): string {
+  const count = (value: number) => (value < 0 ? 'n/a' : `${value}`);
   const mb = (bytes: number) =>
     bytes < 0 ? 'n/a' : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
   return [
-    `pages ${stats.pageCount}  resident ${stats.residentPages}`,
+    `pages ${stats.pageCount}  resident ${count(stats.residentPages)}`,
     `cache ${mb(stats.cacheBytes)} / ${mb(stats.cacheBudgetBytes)}`,
-    `hits ${stats.cacheHits}  misses ${stats.cacheMisses}`,
-    `rendered ${stats.pagesRendered}  cancelled ${stats.rendersCancelled}`,
-    `bitmap allocs ${stats.bitmapAllocations}  mean ${stats.meanRenderMs < 0 ? 'n/a' : `${stats.meanRenderMs.toFixed(1)} ms`}`,
+    `hits ${count(stats.cacheHits)}  misses ${count(stats.cacheMisses)}`,
+    `rendered ${count(stats.pagesRendered)}  cancelled ${count(stats.rendersCancelled)}`,
+    `bitmap allocs ${count(stats.bitmapAllocations)}  mean ${stats.meanRenderMs < 0 ? 'n/a' : `${stats.meanRenderMs.toFixed(1)} ms`}`,
   ].join('\n');
 }
 

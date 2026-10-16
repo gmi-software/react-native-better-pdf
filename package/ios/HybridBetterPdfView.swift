@@ -691,11 +691,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       residentPages: -1,
       cacheBytes: -1,
       cacheBudgetBytes: -1,
-      cacheHits: 0,
-      cacheMisses: 0,
-      bitmapAllocations: 0,
-      pagesRendered: 0,
-      rendersCancelled: 0,
+      cacheHits: -1,
+      cacheMisses: -1,
+      bitmapAllocations: -1,
+      pagesRendered: -1,
+      rendersCancelled: -1,
       meanRenderMs: -1
     )
   }

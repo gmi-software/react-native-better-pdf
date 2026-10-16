@@ -12,15 +12,27 @@ export interface PdfViewStats {
   cacheBytes: number;
   /** Current cache budget in bytes (Android); -1 on iOS. */
   cacheBudgetBytes: number;
-  /** Pages that were already rendered when they scrolled into view. */
+  /**
+   * Pages that were already rendered when they scrolled into view
+   * (Android); -1 on iOS.
+   */
   cacheHits: number;
-  /** Pages that were not rendered yet when they scrolled into view. */
+  /**
+   * Pages that were not rendered yet when they scrolled into view
+   * (Android); -1 on iOS.
+   */
   cacheMisses: number;
-  /** Bitmaps allocated (not reused) since the document was loaded. */
+  /**
+   * Bitmaps allocated (not reused) since the document was loaded
+   * (Android); -1 on iOS.
+   */
   bitmapAllocations: number;
-  /** Page renders completed since the document was loaded. */
+  /** Page renders completed since the document was loaded (Android); -1 on iOS. */
   pagesRendered: number;
-  /** Render requests dropped before execution because the page scrolled away. */
+  /**
+   * Render requests dropped before execution because the page scrolled away
+   * (Android); -1 on iOS.
+   */
   rendersCancelled: number;
   /** Mean wall time of a native page render in milliseconds, -1 if not tracked. */
   meanRenderMs: number;
