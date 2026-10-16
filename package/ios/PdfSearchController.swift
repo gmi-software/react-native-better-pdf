@@ -2,8 +2,7 @@ import PDFKit
 import UIKit
 
 /// Runs `search()` for a view with PDFKit's asynchronous find: matches
-/// arrive in document order, those on and next to the visible pages are
-/// highlighted as they come and as the viewport moves, and the first one
+/// arrive in document order, are highlighted as they come, and the first one
 /// at or after the page being read becomes current. `onSearchChange` is
 /// emitted at most every 100 ms while searching, immediately for the first
 /// match, navigation, completion and clearing. Main thread.
@@ -13,19 +12,15 @@ final class PdfSearchController {
   private var document: PDFDocument?
   private var observers: [NSObjectProtocol] = []
   private var matches: [PDFSelection] = []
-  /// The page of each match; ascending, as matches arrive in page order.
+  /// Ascending: matches arrive in page order.
   private var matchPages: [Int] = []
   private var currentIndex: Int?
   private var query = ""
   private var startPage = 0
   private var isComplete = true
   private var lastEmit = Date.distantPast
-  /// Pages whose matches `highlightedSelections` holds; nil before the first refresh.
   private var highlightedPages: ClosedRange<Int>?
-  /// The highlight of each page in `highlightedPages` that has one: its
-  /// matches but the current one, as one selection.
   private var pageHighlights: [Int: PDFSelection] = [:]
-  /// A match arrived on `highlightedPages` since the last refresh.
   private var needsHighlightRefresh = false
 
   /// Highlight of every match; set by `searchHighlightColor`.
@@ -37,10 +32,7 @@ final class PdfSearchController {
     didSet { recolorVisibleMatches() }
   }
   private static let emitInterval: TimeInterval = 0.1
-  /// Pages either side of the visible ones whose matches are highlighted
-  /// too. The list is refreshed only once a visible page is outside that
-  /// range (every second page while scrolling), so a page coming into view
-  /// is highlighted in advance or as it appears (see `viewportDidChange`).
+  /// Pages highlighted either side of the visible ones.
   private static let pageMargin = 1
   /// Height kept clear at the top and bottom of the view (`contentInset`).
   var clearance: () -> (top: CGFloat, bottom: CGFloat) = { (0, 0) }
@@ -109,10 +101,7 @@ final class PdfSearchController {
     if hadSearch { emitNow() }
   }
 
-  /// Highlights the matches on pages that came into view. Runs on every
-  /// scroll frame, so it first looks only at the pages at the view's
-  /// corners: ~2 µs, where `visiblePages` takes ~0.1 ms (measured on the
-  /// iOS 26 simulator).
+  /// Every scroll frame: the pages at the corners take ~2 µs, `visiblePages` ~0.1 ms.
   func viewportDidChange() {
     guard !query.isEmpty, let pdfView, let document else { return }
     if let highlightedPages {
@@ -126,9 +115,7 @@ final class PdfSearchController {
     viewportDidSettle()
   }
 
-  /// `viewportDidChange` for every visible page. The corners can miss a page
-  /// at an edge (measured: a horizontal layout's `visiblePages` also held the
-  /// previous page), so call once the viewport stops moving.
+  /// The corners can miss a page at the edge of a horizontal layout.
   func viewportDidSettle() {
     guard !query.isEmpty, let visible = visiblePageRange() else { return }
     if let highlightedPages, highlightedPages.contains(visible.lowerBound), highlightedPages.contains(visible.upperBound) {
@@ -138,7 +125,6 @@ final class PdfSearchController {
   }
 
   private func found(_ selection: PDFSelection) {
-    // A found selection always has a page; the previous one keeps the order.
     let page = pageIndex(of: selection) ?? matchPages.last ?? 0
     matches.append(selection)
     matchPages.append(page)
@@ -167,7 +153,6 @@ final class PdfSearchController {
   }
 
   private func select(_ index: Int) {
-    // The previous current match rejoins its page's highlight, this one leaves its page's.
     if let currentIndex { pageHighlights[matchPages[currentIndex]] = nil }
     pageHighlights[matchPages[index]] = nil
     currentIndex = index
@@ -177,7 +162,7 @@ final class PdfSearchController {
       pdfView.go(to: rect, on: page)
       keepClear(pdfView.convert(rect, from: page), in: pdfView)
     }
-    // After scrolling, for the pages around the match.
+    // After `go(to:)`: the visible pages changed.
     refreshHighlights(isRecolored: true)
     emitNow()
   }
@@ -195,14 +180,9 @@ final class PdfSearchController {
     scrollView.contentOffset.y = min(max(scrollView.contentOffset.y + delta, -inset.top), maxY)
   }
 
-  /// PDFKit draws `highlightedSelections` in each selection's colour, at a
-  /// cost per selection on the visible pages: measured on the iOS 26
-  /// simulator, 1,602 matches on three pages took 900 ms as separate
-  /// selections and 5 ms as one selection per page, drawn the same. So the
-  /// list holds one selection per page, for the visible pages and
-  /// `pageMargin` either side, and the current match. PDFKit keeps drawn
-  /// pages when only a colour changes (measured on iOS 26), so recolouring
-  /// resets the list first.
+  /// PDFKit's setter costs time per selection on the visible pages (1,602
+  /// matches: 900 ms as separate selections, 5 ms as one per page). It keeps
+  /// drawn pages when only a colour changes, so recolouring resets the list.
   private func refreshHighlights(isRecolored: Bool = false) {
     needsHighlightRefresh = false
     guard let pdfView, let document else { return }
@@ -226,7 +206,7 @@ final class PdfSearchController {
     pdfView.highlightedSelections = selections
   }
 
-  /// The matches on `page` but the current one, as one selection; nil without any.
+  /// The page's matches but the current one, as one selection.
   private func pageHighlight(on page: Int, in document: PDFDocument) -> PDFSelection? {
     let others = (firstMatch(onOrAfter: page)..<firstMatch(onOrAfter: page + 1))
       .filter { $0 != currentIndex }

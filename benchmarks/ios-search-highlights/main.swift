@@ -1,8 +1,4 @@
-// Search highlight cost of the iOS viewer: the real PdfSearchController and
-// PDFKit in a simulator process, no app. See README.md in this folder.
-//   bench <pdf> <query>
-// Prints the phases, then one Markdown table row; exits 1 when a highlight
-// check fails.
+// bench <pdf> <query>; see README.md in this folder.
 import PDFKit
 import UIKit
 
@@ -25,7 +21,6 @@ guard arguments.count == 3, let document = PDFDocument(url: URL(fileURLWithPath:
 }
 let query = arguments[2]
 
-/// Milliseconds `body` takes.
 func time(_ body: () -> Void) -> Double {
   let start = CACurrentMediaTime()
   body()
@@ -40,8 +35,7 @@ func runLoop(for seconds: TimeInterval) {
   RunLoop.main.run(until: Date(timeIntervalSinceNow: seconds))
 }
 
-/// Main-thread stalls: another thread pings the main queue every
-/// millisecond and records how long each ping waited (ms).
+/// How long each main-queue ping from another thread waited (ms).
 final class StallProbe {
   private let lock = NSLock()
   private var waits: [Double] = []
@@ -79,8 +73,6 @@ final class StallProbe {
   }
 }
 
-// An iPhone-sized continuous view in an off-screen window: PDFKit lays out
-// pages and adds its highlight layers as in the app.
 let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 402, height: 874))
 let pdfView = PDFView(frame: window.bounds)
 pdfView.displayMode = .singlePageContinuous
@@ -97,12 +89,11 @@ guard let scrollView = pdfView.firstDescendantScrollView() else {
 
 var last: PdfSearchChangeEvent?
 let controller = PdfSearchController(pdfView: pdfView) { last = $0 }
+// As HybridBetterPdfView: viewportDidChange per scroll frame, viewportDidSettle once still.
 #if VIEWPORT_HOOK
-// HybridBetterPdfView's offset observation, on every scroll frame.
 let offsetObservation = scrollView.observe(\.contentOffset, options: []) { _, _ in controller.viewportDidChange() }
 #endif
 
-/// HybridBetterPdfView's settle, once the viewport stops moving.
 func settle() {
   runLoop(for: 0.3)
   #if VIEWPORT_HOOK
@@ -110,13 +101,10 @@ func settle() {
   #endif
 }
 
-// MARK: Highlight checks
-
 var failures: [String] = []
 
 func visiblePages() -> [Int] { pdfView.visiblePages.map { document.index(for: $0) } }
 
-/// Characters of every occurrence of the query on the page.
 func expectedCharacters(on page: PDFPage) -> Set<Int> {
   let text = (page.string ?? "") as NSString
   var result = Set<Int>()
@@ -144,9 +132,6 @@ func selectionLayers(_ layer: CALayer) -> [CALayer] {
   return own + (layer.sublayers ?? []).flatMap(selectionLayers)
 }
 
-/// On every visible page, each occurrence of the query is highlighted once
-/// and nothing else is; the current match, in its own colour, is the only
-/// selection in that colour, and PDFKit drew it if its page is visible.
 func check(_ phase: String) {
   runLoop(for: 0.3)
   let assigned = pdfView.highlightedSelections ?? []
@@ -173,8 +158,7 @@ func check(_ phase: String) {
       covered.formUnion(selected)
     }
     let expected = expectedCharacters(on: page)
-    // PDFKit joins two matches either side of a line break into one range,
-    // drawn as the two boxes: the newline between them has no glyph.
+    // PDFKit joins matches either side of a line break into one range.
     let extra = covered.subtracting(expected).filter { text.character(at: $0) != 10 }
     let missing = expected.subtracting(covered)
     if !missing.isEmpty || !extra.isEmpty {
@@ -189,8 +173,6 @@ func check(_ phase: String) {
         problems.isEmpty ? "OK" : "FAILED \(problems)")
   failures += problems.map { "\(phase): \($0)" }
 }
-
-// MARK: Phases
 
 let probe = StallProbe()
 probe.start()
@@ -214,7 +196,6 @@ let stepTimes = (0..<5).map { _ in time { controller.next() } } + (0..<3).map { 
 print("next / previous: \(range(stepTimes)) ms")
 check("next / previous")
 
-// A drag: 200 pt per frame, about six pages.
 var dragTimes: [Double] = []
 for _ in 0..<60 {
   dragTimes.append(time { scrollView.contentOffset.y += 200 })
@@ -234,9 +215,8 @@ print(String(format: "jump to page %d: %.1f ms", jumpPage + 1, jumpTime))
 check("jump")
 
 #if VIEWPORT_HOOK
-let hookTime = time { for _ in 0..<1000 { controller.viewportDidChange() } }
-// 1,000 calls in `hookTime` ms: µs per call.
-print(String(format: "viewportDidChange with nothing new on screen: %.1f µs per call", hookTime))
+let microsecondsPerCall = time { for _ in 0..<1000 { controller.viewportDidChange() } }
+print(String(format: "viewportDidChange with nothing new on screen: %.1f µs per call", microsecondsPerCall))
 #endif
 
 controller.next()

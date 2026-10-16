@@ -2,7 +2,6 @@
 # Search highlight cost of the iOS viewer on the simulator; see README.md.
 #   benchmarks/ios-search-highlights/run.sh <simulator-udid> [query ...]
 #   REV=<commit> benchmarks/ios-search-highlights/run.sh …   # PdfSearchController.swift as of <commit>
-# Default queries: `or` (102,528 matches in outline-large) and `e` (528,449).
 set -uo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
@@ -15,8 +14,7 @@ if [ ! -f "$fixture" ]; then
   echo "Missing $fixture; generate it with: node benchmarks/generate-fixtures.mjs outline-large" >&2
   exit 1
 fi
-# A simctl-spawned process hangs opening files under ~/Desktop (privacy
-# protection), so the binary and the fixture go to a temporary directory.
+# simctl-spawned processes hang opening files under ~/Desktop.
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 cp "$fixture" "$work/"
@@ -26,7 +24,7 @@ if [ -n "${REV:-}" ]; then
   controller="$work/PdfSearchController.swift"
   git -C "$root" show "$REV:package/ios/PdfSearchController.swift" > "$controller" || exit 1
 fi
-# Controllers before the visible-page highlights have no viewport hook.
+# Controllers before #29 have no viewport hook.
 hook=""
 grep -q "func viewportDidChange" "$controller" && hook="-D VIEWPORT_HOOK"
 if ! xcrun --sdk iphonesimulator swiftc -O $hook -target "$(uname -m)-apple-ios15.1-simulator" \
@@ -47,7 +45,7 @@ for query in "${queries[@]}"; do
   echo "== $query" >> "$out"
   xcrun simctl spawn "$sim" "$work/bench" "$work/outline-large.pdf" "$query" > "$work/run.txt" 2>&1 &
   pid=$!
-  # Unfixed controllers take minutes per query; a stuck spawn never ends.
+  # A stuck spawn never ends.
   for _ in $(seq 1 900); do
     kill -0 "$pid" 2>/dev/null || break
     sleep 1

@@ -900,8 +900,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     }
     reportScale()
     reportViewport()
-    // Also after page turns of paged layouts and resizes, which show other
-    // pages without moving the observed scroll view.
+    // Page turns and resizes don't move the observed scroll view.
     searchController.viewportDidSettle()
   }
 
