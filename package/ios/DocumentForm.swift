@@ -1,15 +1,21 @@
 import PDFKit
 
-/// The form (AcroForm) of a displayed document: its fields' names in the
-/// document's order and the pages with widgets, read from the file's
+/// The form (AcroForm) of a document: its fields' names in the document's
+/// order and the pages of each field's widgets, read from the file's
 /// dictionaries without loading a page. Field values live in PDFKit's
 /// widget annotations (`FormWidgetAnnotation`), which hold the reader's
-/// changes. Main thread, like the document.
+/// changes; loading a page's annotations takes time (measured: 170–220 ms
+/// for 1,000 pages on the simulator), so only the pages asked for are loaded.
+/// On the thread of its document: main for the displayed one.
 final class DocumentForm {
   private let document: PDFDocument
   /// Fully qualified names, in the order of the AcroForm's field tree.
   private let fieldOrder: [String: Int]
   private let widgetPages: [Int]
+  /// The pages of each field's widgets, by fully qualified name.
+  private let fieldPages: [String: [Int]]
+  /// Widgets whose values changed since loading, by the reader or by code.
+  private var changed: [ObjectIdentifier: FormWidgetAnnotation] = [:]
 
   init(document: PDFDocument) {
     self.document = document
@@ -18,11 +24,12 @@ final class DocumentForm {
       order[name] = order.count
     }
     fieldOrder = order
-    widgetPages = Self.pagesWithWidgets(of: document)
+    (widgetPages, fieldPages) = Self.widgetPages(of: document)
   }
 
   /// Every field with its widgets, in the field tree's order (fields only
-  /// PDFKit knows of after the others, in page order).
+  /// PDFKit knows of after the others, in page order). Loads every page
+  /// with widgets.
   func fields() -> [(name: String, widgets: [FormWidgetAnnotation])] {
     var byName: [String: [FormWidgetAnnotation]] = [:]
     var pageOrder: [String] = []
@@ -40,37 +47,83 @@ final class DocumentForm {
     return names.map { ($0, byName[$0] ?? []) }
   }
 
-  /// The pages with widgets, by index.
-  var pagesWithWidgets: [(index: Int, page: PDFPage)] {
-    widgetPages.compactMap { index in document.page(at: index).map { (index, $0) } }
+  /// The widgets of the field named `name`. Loads the pages they are on.
+  func widgets(named name: String) -> [FormWidgetAnnotation] {
+    let found = widgets(named: name, on: fieldPages[name] ?? [])
+    // A name PDFKit spells otherwise than the file's `/T` entries do.
+    return found.isEmpty ? widgets(named: name, on: widgetPages) : found
   }
 
-  /// The widgets of the field named `name`.
-  func widgets(named name: String) -> [FormWidgetAnnotation] {
-    widgetPages.flatMap { index -> [FormWidgetAnnotation] in
+  private func widgets(named name: String, on pages: [Int]) -> [FormWidgetAnnotation] {
+    pages.flatMap { index -> [FormWidgetAnnotation] in
       guard let page = document.page(at: index) else { return [] }
       return page.annotations.compactMap { $0 as? FormWidgetAnnotation }.filter { $0.fieldName == name }
     }
   }
 
-  /// Pages whose `/Annots` hold a widget, from the page dictionaries.
-  private static func pagesWithWidgets(of document: PDFDocument) -> [Int] {
-    guard let file = document.documentRef else { return [] }
-    return (0..<file.numberOfPages).filter { index in
-      guard let dictionary = file.page(at: index + 1)?.dictionary else { return false }
+  /// Whether a value changed since loading.
+  var isChanged: Bool { !changed.isEmpty }
+
+  func noteChange(of widget: FormWidgetAnnotation) {
+    changed[ObjectIdentifier(widget)] = widget
+  }
+
+  /// Every widget of the fields whose values changed since loading (a
+  /// changed widget without a name on its own).
+  func changedWidgets() -> [FormWidgetAnnotation] {
+    var names = Set<String>()
+    var unnamed: [FormWidgetAnnotation] = []
+    for widget in changed.values {
+      if let name = widget.fieldName, !name.isEmpty {
+        names.insert(name)
+      } else {
+        unnamed.append(widget)
+      }
+    }
+    return names.flatMap(widgets(named:)) + unnamed
+  }
+
+  /// Pages whose `/Annots` hold a widget, and the pages of each field's
+  /// widgets, from the page dictionaries.
+  private static func widgetPages(of document: PDFDocument) -> (all: [Int], byField: [String: [Int]]) {
+    guard let file = document.documentRef else { return ([], [:]) }
+    var all: [Int] = []
+    var byField: [String: [Int]] = [:]
+    for index in 0..<file.numberOfPages {
+      guard let dictionary = file.page(at: index + 1)?.dictionary else { continue }
       var annots: CGPDFArrayRef?
-      guard CGPDFDictionaryGetArray(dictionary, "Annots", &annots), let annots else { return false }
+      guard CGPDFDictionaryGetArray(dictionary, "Annots", &annots), let annots else { continue }
       for position in 0..<CGPDFArrayGetCount(annots) {
         var annotation: CGPDFDictionaryRef?
         var subtype: UnsafePointer<CChar>?
-        if CGPDFArrayGetDictionary(annots, position, &annotation), let annotation,
-           CGPDFDictionaryGetName(annotation, "Subtype", &subtype), let subtype,
-           String(cString: subtype) == "Widget" {
-          return true
+        guard CGPDFArrayGetDictionary(annots, position, &annotation), let annotation,
+              CGPDFDictionaryGetName(annotation, "Subtype", &subtype), let subtype,
+              strcmp(subtype, "Widget") == 0 else { continue }
+        if all.last != index { all.append(index) }
+        if let name = fieldName(of: annotation), byField[name]?.last != index {
+          byField[name, default: []].append(index)
         }
       }
-      return false
     }
+    return (all, byField)
+  }
+
+  /// A widget's fully qualified field name: the `/T` entries of it and its
+  /// `/Parent`s, outermost first.
+  private static func fieldName(of widget: CGPDFDictionaryRef) -> String? {
+    var parts: [String] = []
+    var node: CGPDFDictionaryRef? = widget
+    for _ in 0..<32 {
+      guard let current = node else { break }
+      var partial: CGPDFStringRef?
+      if CGPDFDictionaryGetString(current, "T", &partial), let partial,
+         let part = CGPDFStringCopyTextString(partial) as String? {
+        parts.append(part)
+      }
+      var parent: CGPDFDictionaryRef?
+      node = CGPDFDictionaryGetDictionary(current, "Parent", &parent) ? parent : nil
+    }
+    return parts.isEmpty ? nil : parts.reversed().joined(separator: ".")
   }
 
   /// Fully qualified field names, walking the AcroForm's `/Fields` tree.

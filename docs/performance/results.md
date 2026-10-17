@@ -776,3 +776,72 @@ The same files opened in 21–64, 25–66 and 22–50 ms on iOS and in 38–170,
   document's size for the garbage collector (the string design paused once
   for 177 ms on the UI thread). The two decode rows do not compare the
   platforms: iOS's is a debug build and does not include opening.
+
+## 19. iOS forms on long documents (2026-10-16)
+
+**Found by**: issue #28. `DocumentForm` found a field's widgets by
+loading the annotations of every page with widgets, on the main thread:
+for `getFormFields`, for every reader's edit while `onFormChange` was set,
+for `setFormFieldValues`, and to copy every widget's value before
+`exportDocument`, `print` and `renderPage` of a changed form.
+
+**Method**: `benchmarks/ios-forms/run.sh` (see its README; "before" is
+`REV` at the commit before the change), on the iOS 26.5 simulator (Apple
+Silicon Mac, quiet host): the form sources and real PDFKit in a simulator
+process, a freshly loaded document in a continuous `PDFView` (402×874 pt)
+in an off-screen `UIWindow` for every row, no app; the view's main-thread
+calls are replayed, not run. `forms-long`: the `forms` fixture's two
+pages, then a parent field with four text fields on each further page
+(1,000 pages, 4,005 fields; 5,000 pages, 20,005 fields, generated with a
+larger `pageCount`). 1,000 pages: two runs of each version, alternating
+(ranges below); 5,000 pages: one run each. Then Time Profiler with the
+Hangs instrument on the example app (release build, same simulator):
+`forms-long` open, Fields, a tap into the first field and typing, Fields,
+Export, with taps sent to the simulator (Maestro's view hierarchy reads
+would add their own main-thread work). Not measured: a device.
+
+**Change**: the form reads, from the page dictionaries, which pages each
+field's widgets are on (with the pages that have widgets, which it read
+before), and loads only those. It keeps the widgets changed by the reader
+or by code: the snapshot for exports, printing and page images holds
+those fields only, and is nil while nothing changed (formerly a change
+counter, which a rejected `setFormFieldValues` also raised).
+`getFormFields` reads a separate instance of the file on the read queue,
+filled in with that snapshot, as page images are.
+
+| Main thread | 1,000 pages: before | after | 5,000 pages: before | after |
+| --- | ---: | ---: | ---: | ---: |
+| The form, on first use | 10.5–10.7 ms | 12.8–13.0 ms | 51 ms | 65 ms |
+| First edit, page 1 (form created, `onFormChange` field) | 167–189 ms | 13.4–14.0 ms | 1.05 s | 70 ms |
+| First edit, last page | 176–217 ms | 13.7–14.0 ms | 1.38 s | 64 ms |
+| `getFormFields` after an edit | 256–370 ms | 0.1 ms | 3.24 s | 0.0 ms |
+| Snapshot for `exportDocument`, `print`, `renderPage` (two fields changed) | 256–285 ms | 0.1 ms | 3.09 s | 0.1 ms |
+| `setFormFieldValues`, one field on the last page (form created) | 179–205 ms | 12.8–14.6 ms | 1.42 s | 69 ms |
+
+| Example app, main thread in the view's form code (Time Profiler) | before | after |
+| --- | ---: | ---: |
+| Fields, as loaded | 226 ms | 1 ms |
+| Tap into the first field, typing (form created, `onFormChange`) | 5 ms (pages loaded by Fields) | 8 ms |
+| Fields after the edit | 89 ms | 15 ms |
+| Export | 88 ms | 8 ms |
+| Hangs reported | one, 295 ms | one, 275 ms |
+
+- The one hang in each trace is PDFKit creating its text field and the
+  keyboard taking it (`-[PDFKitTextView initWithAnnotation:…]`,
+  `becomeFirstResponder`) on the tap into the field, not the library's
+  code. The view's form work before the change stayed under the
+  instrument's 250 ms threshold in the app, but held the main thread for
+  up to 226 ms.
+- What is left on the main thread is the form's first use: walking the
+  page dictionaries, 13 µs per page.
+- `getFormFields` resolves after 261–272 ms at 1,000 pages (3.6 s at
+  5,000), on the read queue; the returned fields are the same in both
+  versions (hash in the run's output) and equal the displayed document's
+  own.
+- Exports, page images and printing of a changed form fill in only the
+  changed fields of the copy; the others are as the file has them. The
+  export's fields equal the displayed document's (checked for the five
+  form fixtures); the write itself (2.3–2.9 s at 1,000 pages) was already
+  off the main thread.
+- `viewer-forms`, `viewer-base64`, `viewer-print` and `viewer-page-image`
+  pass on iOS.

@@ -19,6 +19,7 @@ export const FIXTURES = [
   'annotations',
   'forms',
   'forms-encrypted',
+  'forms-long',
   'page-boxes',
   'page-boxes-encrypted',
   'metadata',

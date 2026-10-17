@@ -1387,13 +1387,22 @@ on iOS; Android showed them read-only.
   seconds (30 ms for the fixture, 354 ms for the 100-page `medium`, 5.7 s
   for the 500-page scan `large`; macOS PDFKit, M5 Pro), and its objects
   are not thread-safe, so the displayed document cannot be written in the
-  background. Instead the main thread reads the widgets' values (a
-  `FormSnapshot`) and a separate instance of the file, filled in with
+  background. Instead the main thread reads the changed fields' widgets
+  (a `FormSnapshot`) and a separate instance of the file, filled in with
   them, is written on a queue of its own — for exports, and for printing
-  and page images once the form changed. Measured on a 502-page form (the
-  fixture's pages and `large`'s scans): the main thread 1.3 ms, the write
-  3.9 s in the background while the document kept scrolling (it took the
-  main thread for the whole write before).
+  and page images once the form changed; `getFormFields` reads such an
+  instance on the read queue. Measured on a 502-page form (the fixture's
+  pages and `large`'s scans): the main thread 1.3 ms, the write 3.9 s in
+  the background while the document kept scrolling (it took the main
+  thread for the whole write before).
+- **iOS loads only the pages a field is on.** Loading a page's widgets
+  takes time, so the view finds a field's pages in the page dictionaries
+  (a field → pages index, built on first use) and loads those. Reading
+  every widget on the main thread, as before #28, took 170–370 ms per
+  call on a 1,000-page form and 1–3 s on 5,000 pages (simulator); now an
+  edit, `setFormFieldValues` and the snapshot take 0.1–15 ms there, and
+  65–70 ms at 5,000 pages (see `docs/performance/results.md`, section
+  19).
 - **Cost (Android):** `applyEdit` 0.1–2 ms and writing the 2-page fixture
   3 ms (emulator).
 - **Not included:** form JavaScript (calculations, validation,
