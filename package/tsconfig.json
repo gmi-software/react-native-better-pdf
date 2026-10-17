@@ -1,6 +1,6 @@
 {
   "extends": "../tsconfig.base.json",
-  "include": ["src", "nitrogen/generated/shared/json/*.json"],
+  "include": ["src", "test", "nitrogen/generated/shared/json/*.json"],
   "compilerOptions": {
     "noEmit": true,
     "types": ["bun"],

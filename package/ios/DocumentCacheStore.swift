@@ -141,6 +141,22 @@ final class DocumentCacheStore {
     }
   }
 
+  /// A pin holding a decoded `{ base64 }` source: its only copy.
+  func pin(data: Data) throws -> URL {
+    let pin = try lock.withLock { () throws -> URL in
+      prepare()
+      try fileManager.createDirectory(at: pinDirectory, withIntermediateDirectories: true)
+      return pinDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("pdf")
+    }
+    do {
+      try data.write(to: pin)
+    } catch {
+      unpin(pin)
+      throw error
+    }
+    return pin
+  }
+
   func unpin(_ pin: URL) {
     try? fileManager.removeItem(at: pin)
   }

@@ -65,8 +65,10 @@ For an overview of what each platform supports, see the
     process for untrusted input, which this library does not provide.
 - **iOS**: PDFKit does not expose cache statistics; `getStats()` reports
   `-1` for them.
-- `data:`/base64 sources are intentionally unsupported: the viewer reads
-  files (see [Base64 documents](guides/sources-and-loading.md#base64-documents)).
+- A base64 source's text is held twice while the document is shown (your
+  string and its native copy, each a third larger than the document), so
+  large documents are better opened as files. `data:` URIs are not accepted
+  (see [Base64 documents](guides/sources-and-loading.md#base64-documents)).
 - Downloads use `GET` only, run only while the app runs, and are not
   limited in total size (see
   [Offline reading and caching](guides/offline-and-caching.md)).

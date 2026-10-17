@@ -16,6 +16,8 @@ import type { PdfCacheMode } from './PdfCacheMode';
 export interface NativePdfSource {
   /** Location of the document; see the supported schemes above. */
   uri: string;
+  /** A `{ base64 }` source's text in a native-owned buffer; `uri` is `''` then. */
+  base64?: ArrayBuffer;
   /** Request headers for remote sources. Ignored for local sources. */
   headers?: Record<string, string>;
   /** Remote sources: how long the downloaded copy is kept. Default `'session'`. */

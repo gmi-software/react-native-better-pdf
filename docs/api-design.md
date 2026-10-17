@@ -54,11 +54,13 @@ ref.current?.zoomTo(1);               // "reset zoom"
 type PdfSource =
   | PdfUriSource      // { uri, headers?, cache?, maxAgeMs?, cacheKey? }: http(s)://, file://, content://
   | { filePath: string } // absolute path
+  | PdfBase64Source      // { base64 }: the document's bytes
   | number;              // require('./doc.pdf')
 ```
 
-- Normalized in JS into one native shape `{ uri, headers?, cache?,
-  maxAgeMs?, cacheKey? }` so native code handles a single representation.
+- Normalized in JS into one native shape `{ uri, base64?, headers?, cache?,
+  maxAgeMs?, cacheKey? }` so native code handles a single representation
+  (`uri` is `''` for base64).
 - Remote files are downloaded **natively** (URLSession / HttpURLConnection)
   into a shared cache, keyed by a hash of `cacheKey` or of the URL and
   headers. No blob-util, no JS base64. See "Caching and offline".
@@ -86,16 +88,97 @@ type PdfSource =
 - The normalized source is memoized **by value** so re-rendering the parent
   with an inline object literal does not reload the document (Nitro diffs
   props by identity — see research notes).
-- Base64 / `data:` URIs are intentionally not supported. Android's
-  `PdfRenderer` reads a file descriptor, so the library would write the data
-  to a file anyway and then own that file's name, reuse and cleanup; the
-  caller does it in a few lines (see
-  [Base64 documents](guides/sources-and-loading.md#base64-documents)). A
-  document-sized string in `source` would also be normalized and compared on
-  the JS thread on every render (the memoization above) and copied again
-  into native memory. An API that returns a PDF as base64 in JSON is better
-  served by returning the PDF and passing `uri` + `headers`: native
-  download, progress, caching, offline.
+- **Base64 sources** (`{ base64 }`, 1.1; issue #6). 1.0 left them out: the
+  library would own a temporary file (Android's `PdfRenderer` reads a file
+  descriptor), and a document-sized string would be normalized and compared
+  on every render. Both turned out cheap to answer, and writing the file was
+  the one step a bare React Native app (pdfmake, no file system library)
+  could not do in a few lines:
+  - **The text crosses as bytes, not as a string.** Nitro converts a struct
+    completely each time it crosses, on the thread that receives it, and has
+    no native-only fields. A `string` field became a Java `String` on
+    Android's UI thread (31–39 ms for 20 MB, once 177 ms) and a Swift
+    `String` on iOS's main thread (12–39 ms). An `ArrayBuffer` crosses as a
+    pointer. So `NativePdfSource.base64` is an `ArrayBuffer`: JS copies the
+    string into it once per distinct text (`nativeSource.ts`,
+    `TextEncoder.encodeInto`, one byte per character; Hermes has
+    `encodeInto` since React Native 0.74, other engines take a loop). The
+    buffer comes from `NitroModules.createNativeArrayBuffer` (Nitro 0.35.9+,
+    inside the 0.37.0 floor) because a JS-created one may only be read on
+    the JS thread, and the view reads its prop on the main thread, the loader
+    on its own. Both platforms check that the buffer is native-owned before
+    they read it.
+  - **Android** decodes in C++ (`Base64Document.cpp`), from the buffer
+    straight into `cacheDir/BetterPdf/open/<uuid>.pdf` through JNI, 256 KB at
+    a time: no Java string and no byte array of the document's size. It then
+    opens the descriptor and deletes the file at once: the session reads only
+    the descriptor (`dup` for renderers, positional reads for the parser,
+    printing and export), as for `content://`, so nothing stays on disk even
+    when the app is killed. The directory is emptied once per process, before
+    the first write, for a crash between writing and deleting.
+  - **iOS** decodes the buffer on the load queue (`Base64Document.swift`)
+    into a pin (`DocumentCacheStore.pin(data:)`), the temporary file
+    downloaded documents are already opened through. Pins are released on a
+    source change, on dispose and on `PdfDocument.close`, and the pin
+    directory is emptied at the next start; for base64 the pin is the only
+    copy.
+  - **JS** keeps the string out of `sourceKey`'s JSON and compares it with
+    `Object.is` before it builds a buffer: free for the same string, linear
+    for an equal string of another identity, and a new buffer only for a new
+    text. Natively, `isSameSource` compares the buffers first and by
+    identity (every base64 source has `uri: ''`); the bytes are never
+    compared.
+  - **One set of decoding rules, two decoders.** Standard alphabet, ASCII
+    whitespace ignored (MIME base64 from Java and .NET backends), padding
+    optional; anything else, `data:` URIs, URL-safe base64 and `''` are
+    `invalid-source` with a message saying which, word for word the same on
+    both platforms. Characters outside ASCII reach the decoders as `0x80`
+    bytes (from the first one on), so the reported index is the string's.
+    The platforms' own decoders disagree: Foundation's `Data(base64Encoded:)`
+    takes `=` inside the last group, extra `=` and `''`, and Android's would
+    need a Java array. `package/test/base64` builds the C++ and the Swift
+    decoder with the host's compilers, runs both on the same cases
+    (`vectors.json`, turned into bytes by `nativeSource.ts`), and checks that
+    they agree on all 8.1 M texts of up to 6 bytes from 14 symbols that
+    exercise every rule. It is part of `bun run test`; the Swift half needs
+    `swiftc`, so CI's iOS job runs the file too. iOS hands padded input
+    without whitespace to Foundation first, where it agrees with the rules
+    (checked against them for every string of up to 8 characters over a
+    12-character alphabet): for 20 MB Foundation takes 6 ms, the Swift loop
+    65 ms optimized and 2.6 s in a debug build. One C++ decoder for both
+    platforms would need a Swift–C++ bridge into this pod, and Foundation is
+    still faster for the common input.
+  - **Android's `-fvisibility-ms-compat`** instead of `-fvisibility=hidden`
+    (`CMakeLists.txt`). Nitro's `ArrayBuffer` and `MutableBufferNativeState`
+    have no key function, so every library emits its own copy of their RTTI.
+    Hidden, this library's copy never equals NitroModules' (Android's libc++
+    compares `type_info` by address), and the header-inlined converter took
+    the native buffer for a JS one: "`size()` can only be accessed
+    synchronously on the JS Thread!". `-fvisibility-ms-compat` keeps
+    functions and variables hidden but gives types default visibility. It
+    costs 126 KiB per ABI (1,724 → 1,850 KiB) against redeclaring just the
+    two types with default visibility in a force-included header, which a
+    new Nitro type on the same path would silently break. Allocating the
+    buffer in this library would not help: `NativeArrayBuffer`'s vtable, and
+    with it its RTTI, lives in NitroModules, and the converter still casts to
+    `ArrayBuffer` with this library's copy. iOS links statically and builds
+    with default visibility, so it is not affected.
+  - **No `data:` URIs.** A `uri` that is sometimes the document itself would
+    need its own rules everywhere `uri` is read (cache keys, schemes,
+    `PdfCache`); the prefix gets a hint in the error instead.
+  - **Not in `PdfCache`** (nothing to download), and no public
+    `{ data: ArrayBuffer }`: the same field type and write path would carry
+    raw bytes, but that is an API of its own.
+  - **Memory, not time, limits the size.** Measured, a 20 MB document opens
+    within tens of milliseconds of the same file and holds neither thread
+    (see [results §18](performance/results.md#18-base64-sources-2026-10-15)).
+    While it is shown, its text is held twice: the app's string and the
+    native buffer, each a third larger than the document. Large documents
+    are better written to a file (see
+    [Base64 documents](guides/sources-and-loading.md#base64-documents)), and
+    an API that returns a PDF as base64 in JSON is better served by returning
+    the PDF and passing `uri` + `headers`: native download, progress,
+    caching, offline.
 
 ### Props
 
@@ -205,7 +288,7 @@ type PdfErrorCode =
 | `source.cache`, `cacheFileName`, `expiration` | → `cache`, `cacheKey`, `maxAgeMs` | See "Caching and offline": `'persistent'` instead of `true`, a key instead of a file name, revalidation instead of deletion. |
 | `source.method`, `source.body`           | Omitted                 | `GET` only for now. (`body`, a request body, is read by react-native-pdf's JS but missing from its types.) |
 | `renderActivityIndicator`, `progressContainerStyle` | Omitted      | App-owned UI; see "Loading state".                                        |
-| base64 `data:` sources                   | Omitted                 | Write the data to a file and pass its path; see "Source".                  |
+| base64 `data:` sources                   | → `{ base64 }`          | The base64 without the `data:…;base64,` prefix; see "Source".             |
 
 ## Nitro spec mapping
 

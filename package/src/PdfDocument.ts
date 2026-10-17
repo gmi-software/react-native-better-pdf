@@ -2,6 +2,7 @@ import { Image } from 'react-native';
 import { NitroModules } from 'react-native-nitro-modules';
 import { abortable, abortReason, untilAborted } from './abort';
 import { buildOutlineTree } from './outline';
+import { toNativeSource } from './nativeSource';
 import { PdfOpenError } from './PdfOpenError';
 import { normalizeSource, type PdfSource } from './source';
 import type { BetterPdfDocument } from './specs/BetterPdfDocument.nitro';
@@ -39,8 +40,8 @@ export class PdfDocument {
   readonly pageCount: number;
   /**
    * Absolute path of the opened file, as in `PdfView`'s `onLoad`: the
-   * downloaded copy for remote sources; `undefined` without a file on disk
-   * (Android `content://`).
+   * downloaded copy for remote sources; `undefined` for `{ base64 }` and
+   * Android `content://` sources.
    */
   readonly filePath?: string;
   /**
@@ -76,7 +77,7 @@ export class PdfDocument {
     // Async, so that a synchronous throw becomes a rejection too.
     const result = (async () =>
       native.open(
-        normalizeSource(source, Image.resolveAssetSource),
+        toNativeSource(normalizeSource(source, Image.resolveAssetSource)),
         password,
         untilAborted(onProgress, signal),
       ))();

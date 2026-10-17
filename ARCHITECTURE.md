@@ -42,14 +42,17 @@ package/
     PdfView.tsx                    public component (wrapper over the host component)
     PdfCache.ts                    public cache API: AbortSignal, PdfDownloadError
     PdfDocument.ts                 public document API: open (AbortSignal, PdfOpenError), close
-    source.ts                      PdfSource union → native { uri, headers, cache options }
+    source.ts                      PdfSource union → native { uri, base64, headers, cache options }
+    nativeSource.ts                base64 text → native-owned ArrayBuffer (once per distinct text)
+  test/base64/                     the C++ and Swift base64 decoders against shared cases, and each other
   nitrogen/generated/              Nitrogen output (committed; regenerate with `bun run specs`)
   ios/
     HybridBetterPdfView.swift      PDFView host, scale mapping, events, lifecycle
     PdfContainerView.swift         taps, links, text selection settle / disable
     PdfSearchController.swift      PDFKit async find, highlights, next/previous
     SettleDebouncer.swift          "viewport stopped moving" for scale and viewport events
-    PdfDocumentLoader.swift        source resolution, cache fetch + pin, PDFDocument open
+    PdfDocumentLoader.swift        source resolution, cache fetch + pin, base64 → pin, PDFDocument open
+    Base64Document.swift           base64 decoding by the library's rules (same as Android's C++)
     PdfLoadFailure.swift           Swift error → PdfError
     DocumentCache.swift            fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.swift       copies on disk: session/persistent dirs, metadata, pins
@@ -74,7 +77,8 @@ package/
     LruByteCache.kt                pure: byte-budgeted LRU
     BitmapPool.kt                  bitmap reuse + eager recycling
     MemoryBudgets.kt               pure: bitmap pool budget
-    PdfSourceResolver.kt           source → seekable ParcelFileDescriptor
+    PdfSourceResolver.kt           source → seekable ParcelFileDescriptor (base64: write, open, delete)
+    NativeBase64Document.kt        JNI entry: base64 text in a native buffer → decoded into a file
     DocumentCache.kt               fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.kt          copies on disk: session/persistent dirs, metadata
     SharedDownload.kt              one HttpURLConnection request per copy, conditional with a copy
@@ -84,11 +88,18 @@ package/
                                    (view session and document)
     PageImageRequest.kt            renderPage validation and file write (view and document)
     outline/                       bounded PDF parser: outline, page tree, /Info (PdfDate)
+  android/src/main/cpp/
+    cpp-adapter.cpp                JNI_OnLoad: Nitro's natives, then NativeBase64Document's
+    Base64Document.{hpp,cpp}       pure: base64 decoding by the library's rules (same as iOS)
+    NativeBase64Document.cpp       decodes from the buffer straight into the file descriptor
 ```
 
-No hand-written C++: the only consumer of shared logic would be Android
-(PDFKit already virtualizes on iOS), so a C++ core would add a JNI hop to the
-per-frame path without a second caller. See the research notes.
+No C++ core: the only consumer of shared logic would be Android (PDFKit
+already virtualizes on iOS), so a C++ core would add a JNI hop to the
+per-frame path without a second caller. See the research notes. The one
+piece of hand-written C++ decodes a `{ base64 }` source on Android, from the
+native buffer JS hands over straight into the file, so neither a Java string
+nor a byte array of the document's size is made (see api-design "Source").
 
 ## Threading
 
@@ -229,7 +240,7 @@ position first and is re-anchored after that page is measured.
 
 | Layer        | What                                             | Bound                                                   |
 | ------------ | ------------------------------------------------ | ------------------------------------------------------- |
-| Base cache   | one fit-width bitmap per page (`LruByteCache`)   | `clamp(maxHeap / 6, 24 MB, 128 MB)`, ≥ 4 viewports      |
+| Base cache   | one bitmap per page, ≤ fit width (`LruByteCache`)| `clamp(maxHeap / 6, 24 MB, 128 MB)`, ≥ 4 viewports      |
 | Zoom tiles   | one viewport-sized full-res crop per visible page| visible pages × 1 viewport                              |
 | Bitmap pool  | free bitmaps for reuse                           | `max(8 MB, 1 viewport, 1 base page)`, or base page + 1 viewport when tiles are drawn at zoom 1; 0 while detached |
 
@@ -237,6 +248,13 @@ position first and is re-anchored after that page is measured.
   budget can be exceeded only by what is on screen.
 - Very tall pages have their base bitmap capped at 2 viewports of pixels;
   tiles supply detail when zoomed.
+- Zoomed out (`minScale < 1`), pages render at half their fit-width size
+  at zoom ½ and below, and at a quarter at ¼ and below
+  (`BaseResolution`): never fewer pixels than are on screen, and the
+  visible pages' memory stays a few viewports instead of growing with
+  1 / zoom² as more of them come into view: they fit the 128 MB cap down
+  to zoom 0.01 on phones and tablets. Pages stay at a quarter below ¼, so
+  zooming back in starts from a usable picture.
 - The pool fits the largest base page of the current render plan. In portrait
   a fit-width page is smaller than the viewport; in landscape, on tablets and
   on unfolded foldables it is larger, and the pool recycles any bitmap larger
@@ -245,7 +263,7 @@ position first and is re-anchored after that page is measured.
   are drawn even at zoom 1, and the pool fits a page and a tile together so
   the two do not push each other out.
 - Cache key is the page; entries rendered at a different width (rotation,
-  resize) are re-requested and replaced.
+  resize, crossing zoom ½ or ¼) are re-requested and replaced.
 - Memory pressure: `onTrimMemory(RUNNING_LOW, RUNNING_CRITICAL)`/`onLowMemory`
   trims the cache to the visible pages and empties the pool, then keeps only
   visible pages for 30 s; the pool comes back on the first render request
@@ -305,11 +323,13 @@ unless it is already fully visible).
 Pinch zooms around the focal point; double-tap toggles between `minScale`
 and `max(2, 2 × minScale)`; horizontal pan is enabled when content is wider
 than the view. During a gesture the base bitmaps are simply scaled (cheap,
-slightly soft). When the viewport settles for 80 ms and the screen shows
-≥ 15% more pixels than the base layer has, one full-resolution tile per
-visible page is rendered using `PdfRenderer`'s clip + matrix. Tiles carry
-their own content-space rect and scale, so a tile that finishes after the
-user zoomed again still lands in the right place.
+slightly soft); zooming out past ½ or ¼ also renders the visible pages
+again at half or a quarter of their size. When the viewport settles for
+80 ms and the screen shows ≥ 15% more pixels than the base layer has, one
+full-resolution tile per visible page is rendered using `PdfRenderer`'s
+clip + matrix. Tiles carry their own content-space rect and scale, so a
+tile that finishes after the user zoomed again still lands in the right
+place.
 
 ### Lifecycle
 

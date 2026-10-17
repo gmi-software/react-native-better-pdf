@@ -191,7 +191,7 @@ class PdfDocumentSessionTest {
     }
     return PdfDocumentSession(
       context,
-      NativePdfSource("/document.pdf", headers = null, cache = null, maxAgeMs = null, cacheKey = null),
+      NativePdfSource("/document.pdf", base64 = null, headers = null, cache = null, maxAgeMs = null, cacheKey = null),
       password = null,
       bitmapPool = BitmapPool(maxBytes = 0),
       listener = listener,

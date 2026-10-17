@@ -7,7 +7,7 @@ import org.junit.Test
 
 class NativePdfSourceInvalidHeaderFailureTest {
   private fun failure(headers: Map<String, String>?) =
-    NativePdfSource("https://x.test/a.pdf", headers, cache = null, maxAgeMs = null, cacheKey = null).invalidHeaderFailure()
+    NativePdfSource("https://x.test/a.pdf", base64 = null, headers, cache = null, maxAgeMs = null, cacheKey = null).invalidHeaderFailure()
 
   @Test
   fun `token names and values without control characters are valid`() {

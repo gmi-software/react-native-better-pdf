@@ -13,7 +13,7 @@ class NativePdfSourceStoreKeyTest {
     cache: PdfCacheMode? = null,
     maxAgeMs: Double? = null,
     cacheKey: String? = null,
-  ) = NativePdfSource(uri, headers, cache, maxAgeMs, cacheKey)
+  ) = NativePdfSource(uri, base64 = null, headers, cache, maxAgeMs, cacheKey)
 
   @Test
   fun `the key ignores header order and cache options`() {

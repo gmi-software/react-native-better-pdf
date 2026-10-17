@@ -57,6 +57,8 @@ namespace margelo::nitro::betterpdf { enum class PdfImageFormat; }
 #include "JPdfPageImage.hpp"
 #include "NativePdfSource.hpp"
 #include "JNativePdfSource.hpp"
+#include <NitroModules/ArrayBuffer.hpp>
+#include <NitroModules/JArrayBuffer.hpp>
 #include <unordered_map>
 #include "PdfCacheMode.hpp"
 #include "JPdfCacheMode.hpp"

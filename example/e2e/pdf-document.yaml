@@ -40,6 +40,13 @@ appId: software.gmi.betterpdf.example
 - assertVisible: "title: Raport kwartalny — żółć"
 - assertVisible: "cover: 300x425"
 
+- tapOn: "metadata \\(base64\\)"
+- extendedWaitUntil: { visible: "opened in .* ms", timeout: 15000 }
+- assertVisible: "pages 2, stale no, file no"
+- assertVisible: "title: Raport kwartalny — żółć"
+- assertVisible: "sizes: 595x842 595x842"
+- assertVisible: "cover: 300x425"
+
 - tapOn: "metadata-encrypted"
 - extendedWaitUntil: { visible: "error: password-required", timeout: 15000 }
 - tapOn: "Wrong password"

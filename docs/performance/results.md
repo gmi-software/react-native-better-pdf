@@ -635,3 +635,144 @@ queued when the document closes rejects.
   process, but opening renderers, PNG encoding and file writes ran in
   parallel before. A list's first screenful arrives 9–35× sooner instead,
   since those images no longer wait behind the rest.
+
+## 17. Android zoomed out below the fitted width (2026-10-16)
+
+**Found by**: issue #30. With `minScale` below 1, every visible page was
+still rendered and kept at fit width whatever the zoom, and the cache
+keeps visible pages beyond its cap, so their memory grew with 1 / zoom².
+
+**Method**: `run-android.mjs --zoom 0.05 --fixtures extreme --libraries
+better` (new: `minScale` 0.05, `zoomTo(0.05)` before the scroll window,
+stats read 3 s after it), release builds (arm64) with the same JS, the
+API 37 emulator (1080×2400; the bench viewer is ~1080×1800). Three runs
+of each build, then three interleaved pairs. Other emulators loaded the
+host for all but the first "before" set (95–100% janky frames in both
+builds, also at zoom 1; 21% in that set), so only counts and PSS are
+compared, and render times only within pairs. Zoom 1:
+`--fixtures medium,extreme`, three runs of each build. Raw JSON:
+`android-2026-10-16T17-24-28-711Z.json` (before) and
+`android-2026-10-16T17-36-10-405Z.json` (after), the pairs from
+`android-2026-10-16T17-42-16-509Z.json` on.
+
+**Change**: `BaseResolution` renders the base layer at half the fitted
+size at zoom ½ and below, and at a quarter at ¼ and below, never with
+fewer pixels than the screen shows. A cached page of another width renders
+again, as after a rotation. Above ½ nothing changes.
+
+| Zoom 0.05, `extreme` | before | after |
+| --- | ---: | ---: |
+| Pages cached 3 s after scrolling | 23–24 at fit width | 81 at a quarter |
+| `cacheBytes` (cap 128 MB) | 145–151 MB | 32 MB |
+| Peak PSS | 238–246 MB | 144–155 MB |
+| Pages rendered in the window (pairs) | 98–136 | 156–200 |
+| Mean render (pairs) | 117–181 ms | 87–101 ms |
+| Bitmap allocations | 34–104 | 98–102 |
+| Page changes while scrolling (pairs) | 38 / 88 / 87 | 46 / 92 / 86 |
+
+| Zoom 1 | `medium` before | after | `extreme` before | after |
+| --- | ---: | ---: | ---: | ---: |
+| Peak PSS | 131–132 MB | 128–133 MB | 145–150 MB | 139–148 MB |
+| Pages rendered | 59–63 | 56–60 | 56–59 | 54–67 |
+| Bitmap allocations | 20–23 | 19–20 | 17–20 | 15–19 |
+| `cacheBytes` | 38–44 MB | 38 MB | 38 MB | 38 MB |
+
+- More allocations, each 1/16 the size: 38–39 MB allocated per run in the
+  pairs instead of 214–252 MB. The cache's budget (at least 4 viewports)
+  now holds ~100 pages, and the allocations are it filling up.
+- More pages render with the same render-thread CPU (62–75% of a core in
+  both builds).
+- On screen: at 0.05 every visible page was drawn; a double tap back to
+  zoom 2 was sharp within 3 s.
+- Below ¼ the visible pages' memory grows with 1 / zoom again. It stays
+  under 128 MB down to zoom 0.01 on phones and tablets
+  (`BaseResolutionTest`); at 0.005 a tablet shows 225 pages (194 MB).
+
+## 18. Base64 sources (2026-10-15)
+
+**Question**: how large may a `{ base64 }` document be before it costs
+visibly more than a file? The string crosses into native code with the
+`source` prop, on the main thread, and is decoded on the loading thread.
+
+**Method**: the example app with temporary probes (not committed): the
+time from setting the source state in JS to `onLoad`, the native `source`
+prop setter including Nitro's conversion of the string (iOS: the generated
+component's `setSource`, on the main thread; Android: the generated state
+updater's `setSource`, on the UI thread, which builds the Java string), and
+the decoding on the loading thread (iOS: decode + write the pin; Android:
+decode + write + open the descriptor + delete). Documents of 1, 5 and
+20 MB (5, 25 and 100 pages of the `medium` fixture's kind), each opened
+3 times as a file (`{ uri }`) and as base64, in a new viewer each time;
+Android 6 times for base64 (two rounds). Reading the file into a string
+(`File.base64()`) is the app's cost and not timed. iOS simulator "iPhone 17
+Pro" (iOS 26.5), **debug** build (the library's Swift unoptimized); Android
+emulator `sdk_gphone64_arm64` (API 37), **release** build; the host was
+under other load (load average about 3), so single runs vary a lot.
+
+| | 1 MB | 5 MB | 20 MB |
+| --- | ---: | ---: | ---: |
+| iOS: file → `onLoad` (ms) | 20–63 | 22–51 | 23–43 |
+| iOS: base64 → `onLoad` (ms) | 24–46 | 31–77 | 100–116 |
+| iOS: `source` prop setter, main thread (ms) | 0.5–0.7 | 2.7–6.7 | 12–39 |
+| iOS: decode + write (ms) | 1–2 | 3–5 | 12–14 |
+| Android: file → `onLoad` (ms) | 22–65 | 24–177 | 23–188 |
+| Android: base64 → `onLoad` (ms) | 25–113 | 82–420 | 297–1157 |
+| Android: `source` prop setter, UI thread (ms) | 2–8 | 8–31 | 31–39, once 177 |
+| Android: decode + write + open (ms) | 16–66 | 62–277 | 232–866 |
+
+- Up to a few MB base64 costs little: on iOS a few milliseconds more than
+  the file; on Android tens of milliseconds, and the UI thread is held for
+  under 10 ms at 1 MB.
+- At 20 MB the Android UI thread is held for over 30 ms (two frames or
+  more) while the prop is set, and opening takes about 0.3 s more than the
+  file; one run paused 177 ms on the UI thread and 866 ms in decoding, as a
+  garbage collection would. That design would have needed "up to a few MB"
+  in the documents; the next section removed the cost.
+- Android's cost is the string, not the file: the Java string is built on
+  the UI thread, and the decoder is a Kotlin loop (10–20× iOS's time, where
+  padded base64 goes through Foundation's decoder; see api-design
+  "Source"). In the debug build the same 20 MB took 0.4–1.3 s to decode and
+  43–177 ms on the UI thread. Passing the text without a Java string removes
+  both; see the next section.
+- Once loaded, a base64 document is read like a file: page sizes, search,
+  page images and export work from the pin (iOS) or the descriptor
+  (Android), see `viewer-base64`.
+
+### The text in a native buffer (2026-10-16)
+
+**Change**: `NativePdfSource.base64` is no longer a string but the text in a
+native-owned `ArrayBuffer`, filled in JS once per distinct text. Android
+decodes it in C++ straight into the file; iOS reads the same buffer (see
+api-design "Source").
+
+**Method**: as above (the same probes, plus the JS copy into the buffer),
+same simulator and emulator, same builds (iOS debug, Android release), host
+load average 4–15. The tables above are the string design; "→" gives the
+new range.
+
+| | 1 MB | 5 MB | 20 MB |
+| --- | ---: | ---: | ---: |
+| iOS: base64 → `onLoad` (ms) | 24–46 → 24–40 | 31–77 → 25–49 | 100–116 → 36–63 |
+| iOS: `source` prop setter, main thread (ms) | 0.5–0.7 → ≤ 0.02 | 2.7–6.7 → ≤ 0.02 | 12–39 → ≤ 0.02 |
+| iOS: decode + write (ms) | 1–2 → 1–2 | 3–5 → 3–5 | 12–14 → 9–13 |
+| iOS: JS copy into the buffer (ms) | – → 0.1–0.6 | – → 0.7–21 | – → 6–11 |
+| Android: base64 → `onLoad` (ms) | 25–113 → 39–107 | 82–420 → 57–185 | 297–1157 → 46–73 |
+| Android: `source` prop setter, UI thread (ms) | 2–8 → 0.06–0.22 | 8–31 → 0.05–0.24 | 31–177 → 0.01–0.04 |
+| Android: decode + write + open (ms) | 16–66 → 9–18 | 62–277 → 21–32 | 232–866 → 26–35 |
+| Android: JS copy into the buffer (ms) | – → 0.2–2.6 | – → 9–17 | – → 5–6 |
+
+The same files opened in 21–64, 25–66 and 22–50 ms on iOS and in 38–170,
+71–183 and 24–205 ms on Android.
+
+- Neither thread is held any more: the setter only passes a pointer. At
+  20 MB a base64 document now opens within tens of milliseconds of the same
+  file on both platforms, so the size advice is about memory, not time:
+  while the document is shown, the app's string and the native buffer each
+  hold the text.
+- The JS copy (`TextEncoder.encodeInto`, Hermes) runs once per text; its
+  spread at 5 MB (up to 21 ms, more than at 20 MB) came with the host load.
+- Android now decodes in C++ at about 1 ms per MB of base64, opening the
+  file included (release build), with no Java string or byte array of the
+  document's size for the garbage collector (the string design paused once
+  for 177 ms on the UI thread). The two decode rows do not compare the
+  platforms: iOS's is a debug build and does not include opening.

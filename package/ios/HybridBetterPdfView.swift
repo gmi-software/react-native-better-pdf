@@ -138,7 +138,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   /// The pin of the displayed downloaded copy, released with the document.
   private var displayedPin: URL?
   /// `onLoad`'s `filePath` of the displayed document: the downloaded copy
-  /// itself for a remote one, which displays its pin.
+  /// itself for a remote one, which displays its pin; nil for `{ base64 }`.
   private var displayedFile: URL?
   private var pendingInitialPage: Int?
   /// With `pendingInitialPage`: the page point to put at the top-left corner.
@@ -538,7 +538,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       self.container.endEditing(true)
       let destination: URL
       do {
-        destination = try filePath.isEmpty ? Self.newExportFile(named: url) : Self.exportFile(at: filePath)
+        destination = try filePath.isEmpty
+          ? Self.newExportFile(named: self.displayedFile != nil ? url : nil)
+          : Self.exportFile(at: filePath)
       } catch {
         promise.reject(withError: error)
         return
@@ -613,13 +615,13 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
 
   /// A new file in the caches directory with the document's file name.
-  private static func newExportFile(named source: URL) throws -> URL {
+  private static func newExportFile(named source: URL?) throws -> URL {
     let directory = try FileManager.default
       .url(for: .cachesDirectory, in: .userDomainMask, appropriateFor: nil, create: true)
       .appendingPathComponent("BetterPdfExports", isDirectory: true)
       .appendingPathComponent(UUID().uuidString, isDirectory: true)
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-    let name = source.deletingPathExtension().lastPathComponent
+    let name = source?.deletingPathExtension().lastPathComponent ?? ""
     return directory.appendingPathComponent(name.isEmpty ? "document" : name).appendingPathExtension("pdf")
   }
 
@@ -756,6 +758,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     documentForm = nil
     layoutOverlays()
     releaseDisplayedPin()
+    displayedFile = nil
     container.resetSelection()
     fitScale = 0
     lastReportedPage = -1
@@ -792,7 +795,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private func present(_ loaded: LoadedDocument) {
     let document = loaded.document
     displayedPin = loaded.pin
-    displayedFile = URL(fileURLWithPath: loaded.filePath)
+    displayedFile = loaded.filePath.map { URL(fileURLWithPath: $0) }
     searchController.clear()
     lastReportedScale = nil
     lastReportedViewport = nil

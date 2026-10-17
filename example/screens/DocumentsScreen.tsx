@@ -33,6 +33,12 @@ const TARGETS: Target[] = [
     title: 'metadata (remote)',
     resolve: async () => ({ uri: `${FIXTURE_SERVER}/metadata.pdf` }),
   },
+  {
+    title: 'metadata (base64)',
+    resolve: async () => ({
+      base64: await (await ensureFixture('metadata')).base64(),
+    }),
+  },
   fixture('metadata-encrypted'),
   fixture('page-boxes'),
   fixture('outline'),

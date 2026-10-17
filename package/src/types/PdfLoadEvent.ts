@@ -13,8 +13,9 @@ export interface PdfLoadEvent {
    * Absolute path of the local file being displayed: the file itself for
    * `file://` sources, the downloaded copy for remote ones (valid until the
    * copy is removed; see `PdfUriSource.cache`), or the extracted copy of a
-   * bundled asset. `undefined` when there is no file on disk, e.g. for
-   * Android `content://` sources. Useful for sharing or printing.
+   * bundled asset. `undefined` for `{ base64 }` sources (any temporary file
+   * is the library's) and for Android `content://` sources. Useful for
+   * sharing or printing.
    */
   filePath?: string;
   /**

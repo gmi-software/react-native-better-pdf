@@ -39,7 +39,7 @@ Every component, object and type is exported from the package root. The
 | `children` | `PdfPageOverlay` elements | | React views placed on pages, moving with them; see [Page overlays](guides/page-overlays.md) |
 | `searchHighlightColor` | `ColorValue` | `'rgba(255, 214, 0, 0.4)'` | background of search matches; use a translucent colour |
 | `searchCurrentHighlightColor` | `ColorValue` | `'rgba(255, 140, 0, 0.6)'` | background of the current match |
-| `onLoad` | `({ pageCount, firstPageWidth, firstPageHeight, filePath?, isStale }) => void` | | first page's size in PDF points, as displayed (crop box, rotation applied); `filePath`: the local file being displayed (downloaded copy, local file or extracted asset; not for `content://`); `isStale`: an outdated stored copy shown because the server could not be reached (see [Offline reading and caching](guides/offline-and-caching.md)) |
+| `onLoad` | `({ pageCount, firstPageWidth, firstPageHeight, filePath?, isStale }) => void` | | first page's size in PDF points, as displayed (crop box, rotation applied); `filePath`: the local file being displayed (downloaded copy, local file or extracted asset; not for `{ base64 }` or `content://`); `isStale`: an outdated stored copy shown because the server could not be reached (see [Offline reading and caching](guides/offline-and-caching.md)) |
 | `onLoadProgress` | `({ loadedBytes, totalBytes? }) => void` | | remote downloads only (not when a stored copy is used); at most every 100 ms plus once on completion |
 | `onPageChange` | `({ page, pageCount }) => void` | | zero-based |
 | `onError` | `(error: PdfError) => void` | | |
@@ -134,7 +134,7 @@ carries the platform error for logging.
 | --- | --- |
 | `PdfViewProps` | Props for `PdfView` |
 | `PdfPageOverlayProps` | Props for `PdfPageOverlay` |
-| `PdfSource` / `PdfUriSource` | Where a document comes from, with cache options for downloads |
+| `PdfSource` / `PdfUriSource` / `PdfBase64Source` | Where a document comes from: a URI (with cache options for downloads), a file path, a base64 string or a bundled asset |
 | `PdfError` / `PdfErrorCode` | Errors and their stable codes |
 | `PdfViewport` | A reading position: `{ page, x, y, scale }` |
 | `PdfFormField` | A form field, discriminated by `type` (`PdfTextFormField`, `PdfCheckboxFormField`, …) |

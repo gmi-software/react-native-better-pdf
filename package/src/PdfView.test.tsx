@@ -120,6 +120,7 @@ mock.module('react-native-nitro-modules', () => ({
     createHybridObject: () => {
       throw new Error('Not available in PdfView tests');
     },
+    createNativeArrayBuffer: (size: number) => new ArrayBuffer(size),
   },
 }));
 mock.module(
@@ -139,6 +140,13 @@ const lastBox = () => {
   if (props == null) throw new Error('box not rendered');
   return props;
 };
+
+/** The text of a native source's base64 buffer; checks the rest is `{ uri: '' }`. */
+function base64Text(source: unknown): string {
+  const { base64, ...rest } = source as { base64: ArrayBuffer };
+  expect(rest).toEqual({ uri: '' });
+  return new TextDecoder().decode(base64);
+}
 
 const lastHost = () => {
   const props = hostRenders[hostRenders.length - 1];
@@ -181,6 +189,33 @@ describe('PdfView', () => {
     act(() => renderer.update(<PdfView source={{ uri: 'file:///b.pdf' }} />));
     expect(lastHost().source).not.toBe(first);
     expect(lastHost().source).toEqual({ uri: 'file:///b.pdf' });
+  });
+
+  test('keeps the native source identity when the same base64 content is re-rendered', () => {
+    const content = 'JVBERi0xLjQK';
+    const renderer = render(<PdfView source={{ base64: content }} />);
+    const first = lastHost().source;
+    expect(base64Text(first)).toBe(content);
+    act(() => renderer.update(<PdfView source={{ base64: content }} />));
+    expect(lastHost().source).toBe(first);
+    // Equal content built anew, e.g. by a parent that re-encodes.
+    const rebuilt = ['JVBERi0', 'xLjQK'].join('');
+    act(() => renderer.update(<PdfView source={{ base64: rebuilt }} />));
+    expect(lastHost().source).toBe(first);
+  });
+
+  test('sends a new source object when the base64 content changes', () => {
+    const renderer = render(<PdfView source={{ base64: 'JVBERi0xLjQK' }} />);
+    const first = lastHost().source;
+    act(() => renderer.update(<PdfView source={{ base64: 'JVBERi0xLjcK' }} />));
+    expect(lastHost().source).not.toBe(first);
+    expect(base64Text(lastHost().source)).toBe('JVBERi0xLjcK');
+  });
+
+  test('sends a new source object when a base64 source becomes a uri source', () => {
+    const renderer = render(<PdfView source={{ base64: 'JVBERi0xLjQK' }} />);
+    act(() => renderer.update(<PdfView source={{ uri: '' }} />));
+    expect(lastHost().source).toEqual({ uri: '' });
   });
 
   test('resolves require() assets', () => {

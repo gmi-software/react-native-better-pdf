@@ -43,7 +43,7 @@
     "postpack": "rm ./README.md",
     "specs": "tsc --noEmit && nitrogen --logLevel=\"debug\"",
     "typecheck": "tsc --noEmit",
-    "test": "bun test src",
+    "test": "bun test ./src ./test",
     "clean": "rm -rf android/build node_modules/**/android/build lib *.tsbuildinfo",
     "release": "release-it"
   },

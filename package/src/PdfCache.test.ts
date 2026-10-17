@@ -50,6 +50,7 @@ mock.module('react-native-nitro-modules', () => ({
       created.push(name);
       return nativeCache;
     },
+    createNativeArrayBuffer: (size: number) => new ArrayBuffer(size),
   },
 }));
 

@@ -7,7 +7,7 @@ export { PdfDocument } from './PdfDocument';
 export { PdfDownloadError } from './PdfDownloadError';
 export { PdfOpenError } from './PdfOpenError';
 export type { PdfDownloadOptions } from './types/PdfDownloadOptions';
-export type { PdfSource, PdfUriSource } from './source';
+export type { PdfBase64Source, PdfSource, PdfUriSource } from './source';
 export type { PdfCacheEntry } from './types/PdfCacheEntry';
 export type { PdfCacheMode } from './types/PdfCacheMode';
 export type { PdfColorScheme } from './types/PdfColorScheme';

@@ -18,6 +18,8 @@ export interface BenchResult {
   library: Library;
   fixture: FixtureName;
   platform: string;
+  /** Zoom of the scroll window. */
+  zoom: number;
   pageCount: number;
   /** Mount → load event. */
   timeToLoadMs: number;
@@ -53,7 +55,8 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
  * 2. idle 1.5 s → JS activity with a static document
  * 3. five non-animated page jumps → latency until the page-change event
  * 4. zoom to 2.5x and back → JS activity during zoom
- * 5. window for host-driven swipes (10 s, or the soak duration) → JS activity while scrolling
+ * 5. window for host-driven swipes (10 s, or the soak duration) → JS activity while scrolling,
+ *    at `zoom` (1 unless a variant asks for another)
  */
 export async function runScenario(
   library: Library,
@@ -62,6 +65,7 @@ export async function runScenario(
   mountedAt: number,
   hooks: ScenarioHooks,
   scrollWindowMs: number = SCROLL_WINDOW_MS,
+  zoom: number = 1,
 ): Promise<BenchResult> {
   const monitor = new JsFrameMonitor();
   const pageCount = await hooks.loaded;
@@ -95,7 +99,12 @@ export async function runScenario(
   await sleep(1500);
   hooks.viewer()?.zoomTo(1);
   await sleep(1000);
-  const zoom = monitor.end();
+  const zoomFrames = monitor.end();
+
+  if (zoom !== 1) {
+    hooks.viewer()?.zoomTo(zoom);
+    await sleep(1000);
+  }
 
   hooks.log(`${LOG_PREFIX}_SCROLL_START ${scrollWindowMs}`);
   const callbacksBefore = hooks.callbackCount();
@@ -104,15 +113,19 @@ export async function runScenario(
   const scroll = monitor.end();
   const jsCallbacksDuringScroll = hooks.callbackCount() - callbacksBefore;
   hooks.log(`${LOG_PREFIX}_SCROLL_END`);
+  // Zoomed out, dozens of pages are still rendering when the swipes stop:
+  // read the stats once they are all on screen.
+  if (zoom !== 1) await sleep(3000);
 
   return {
     library,
     fixture,
     platform,
+    zoom,
     pageCount,
     timeToLoadMs,
     jumps,
-    js: { idle, jumps: jumpStats, zoom, scroll },
+    js: { idle, jumps: jumpStats, zoom: zoomFrames, scroll },
     jsCallbacksDuringScroll,
     nativeStats: hooks.viewer()?.getStats() ?? null,
     error: null,

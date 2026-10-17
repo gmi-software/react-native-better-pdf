@@ -47,8 +47,7 @@ PDFKit on iOS, the platform `PdfRenderer` on Android: no bundled PDFium, no WebV
 Developed and tested with React Native 0.86.3 / Expo SDK 57, Xcode 27,
 Kotlin 2.1, AGP 8.12 / Gradle 9.3, Node 24.
 
-`data:` / base64 sources are not supported by design: write the data to a file
-and open the file, see
+A document you have as a base64 string opens with `source={{ base64 }}`; see
 [Base64 documents](docs/guides/sources-and-loading.md#base64-documents). Known
 gaps are listed in [Limitations](docs/limitations.md).
 
@@ -154,7 +153,7 @@ libraries; method and full results in [docs/benchmarks.md](docs/benchmarks.md).
 
 | | react-native-better-pdf | react-native-pdf 7.0.5 |
 | --- | ---: | ---: |
-| Native code and dex | **≈ 1.9 MB** | ≈ 5.3 MB (bundled PDFium, AndroidPdfViewer, Gson, react-native-blob-util) |
+| Native code and dex | **≈ 2.1 MB** | ≈ 5.3 MB (bundled PDFium, AndroidPdfViewer, Gson, react-native-blob-util) |
 
 Plus `react-native-nitro-modules` (≈ 1 MB), shared by every Nitro module in
 an app.

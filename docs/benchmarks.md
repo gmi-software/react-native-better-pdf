@@ -85,7 +85,10 @@ before the viewer mounts and is not part of any measurement.
 Useful switches: `--libraries better`, `--fixtures extreme`,
 `--scroll-seconds 320` (memory soak with PSS at 1 and 5 minutes),
 `--reverse-every 0` (scroll in one direction only), `--source remote`
-(open from the fixture server; load includes the download).
+(open from the fixture server; load includes the download), `--zoom 0.05`
+(scroll window zoomed out: `minScale` lowered to it, `zoomTo` it before the
+swipes, and the stats read 3 s after them, once the dozens of visible pages
+have rendered).
 
 **iOS simulator** (Release build installed):
 
@@ -139,9 +142,9 @@ download; dex sizes are unminified, the example builds without R8):
 
 | | react-native-better-pdf | react-native-pdf 7.0.5 |
 | --- | ---: | ---: |
-| Native code, per ABI | `libNitroBetterPdf.so` 1,701 KB (gzip 409 KB) | `libpdfium.so` 4,660 KB + `libpdfiumandroid.so` 422 KB = 5,082 KB (gzip 2,546 KB) |
+| Native code, per ABI | `libNitroBetterPdf.so` 1,850 KB (gzip 438 KB) | `libpdfium.so` 4,660 KB + `libpdfiumandroid.so` 422 KB = 5,082 KB (gzip 2,546 KB) |
 | Dex | `com.margelo.nitro.betterpdf` 277 KB | `org.wonday.pdf` 8 KB + AndroidPdfViewer 44 KB + pdfium-android 75 KB + Gson 119 KB + blob-util 51 KB = 297 KB |
-| **Total, one ABI** | **≈ 1.93 MB** | **≈ 5.25 MB** |
+| **Total, one ABI** | **≈ 2.08 MB** | **≈ 5.25 MB** |
 | Shared prerequisite | react-native-nitro-modules: `libNitroModules.so` 958 KB + 14 KB dex | — |
 
 Native code is per ABI: an APK with all four ABIs carries PDFium four times
@@ -153,6 +156,10 @@ forms) and its generated bindings grew it to 2,763 KB, of which `.dynstr` +
 is now built with hidden visibility (`-fvisibility=hidden`: only
 `JNI_OnLoad` and 78 type-information and vtable symbols from the C++
 standard library and folly headers are exported; everything else is registered by address), which brought it to 1,701 KB.
+Since `{ base64 }` (1.1) types keep default visibility
+(`-fvisibility-ms-compat`), so that Nitro's native buffers are recognized
+across libraries (see api-design "Source"): 1,850 KB with the base64 decoder,
+of which the exported type information takes 126 KB.
 
 **iOS** (Release, simulator arm64 slice; linker map of the app binary; both
 libraries render with the system's PDFKit, which costs the app nothing):

@@ -133,6 +133,7 @@ namespace margelo::nitro::betterpdf { struct PdfViewport; }
 #include "PdfViewStats.hpp"
 #include "PdfViewport.hpp"
 #include "PdfViewportChangeEvent.hpp"
+#include <NitroModules/ArrayBuffer.hpp>
 #include <NitroModules/Promise.hpp>
 #include <NitroModules/Result.hpp>
 #include <exception>

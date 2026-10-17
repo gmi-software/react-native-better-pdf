@@ -108,6 +108,12 @@ export function ViewerScreen() {
   const [formFilling, setFormFilling] = useState(true);
   /** The displayed file, from onLoad. */
   const [loadedFilePath, setLoadedFilePath] = useState<string>();
+  /** onLoad events since the entry was opened: each one is a (re)load. */
+  const [loadCount, setLoadCount] = useState(0);
+  /** Showing the entry's `alternate` source ("Swap"). */
+  const isAlternate = useRef(false);
+  /** The latest open or "Swap": only its source, or its failure, is applied. */
+  const sourceRequest = useRef(0);
   const [isCollapsed, setCollapsed] = useState(false);
   /** Counts onTextSelectionChange events: one per settled selection. */
   const selectionEvents = useRef(0);
@@ -136,18 +142,44 @@ export function ViewerScreen() {
       setOutline(null);
       setSearch(null);
       setShowSearch(false);
+      setLoadCount(0);
+      isAlternate.current = false;
+      sourceRequest.current += 1;
+      const request = sourceRequest.current;
       scaleEvents.current = 0;
       selectionEvents.current = 0;
       setState({ kind: 'resolving' });
       try {
         const source = await next.resolve();
-        setState({ kind: 'loading', source });
+        if (request === sourceRequest.current) {
+          setState({ kind: 'loading', source });
+        }
       } catch (error) {
-        setState({ kind: 'failed', source: null, error: String(error) });
+        if (request === sourceRequest.current) {
+          setState({ kind: 'failed', source: null, error: String(error) });
+        }
       }
     },
     [],
   );
+
+  const swap = async (target: DocumentEntry) => {
+    isAlternate.current = !isAlternate.current;
+    sourceRequest.current += 1;
+    const request = sourceRequest.current;
+    const resolve = isAlternate.current ? target.alternate : target.resolve;
+    if (resolve == null) return;
+    try {
+      const source = await resolve();
+      if (request === sourceRequest.current) {
+        setState({ kind: 'loading', source });
+      }
+    } catch (error) {
+      if (request === sourceRequest.current) {
+        setState({ kind: 'failed', source: null, error: String(error) });
+      }
+    }
+  };
 
   if (entry == null) {
     return (
@@ -395,6 +427,26 @@ export function ViewerScreen() {
         />
       )}
 
+      {entry.alternate != null && (
+        <View style={styles.toolbar}>
+          <Button title="Swap" onPress={() => swap(entry)} />
+          <Button
+            title="Same"
+            // An equal source in a new object: PdfView must not reload.
+            onPress={() =>
+              setState((current) =>
+                current.kind === 'loaded' && typeof current.source === 'object'
+                  ? { ...current, source: { ...current.source } }
+                  : current,
+              )
+            }
+          />
+          <Text testID="load-count" style={styles.pageLabel}>
+            {`loads: ${loadCount}`}
+          </Text>
+        </View>
+      )}
+
       {showSearch && (
         <SearchBar
           pdf={ref.current}
@@ -455,6 +507,7 @@ export function ViewerScreen() {
             }}
             onLoad={(event) => {
               setState({ kind: 'loaded', source, pageCount: event.pageCount });
+              setLoadCount((count) => count + 1);
               setLoadedFilePath(event.filePath);
               // The local file behind the document, e.g. for sharing.
               setLastEvent(
