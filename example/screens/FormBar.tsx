@@ -1,5 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import { useState } from 'react';
+import { useState, type RefObject } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { PdfFormField, PdfViewRef } from 'react-native-better-pdf';
 import { Button } from '../ui';
@@ -21,7 +21,8 @@ export function FormBar({
   onEvent,
   onOpen,
 }: {
-  pdf: PdfViewRef | null;
+  /** Read on press: it is still unset while the viewer first renders. */
+  pdf: RefObject<PdfViewRef | null>;
   /** The displayed file (`onLoad`'s `filePath`). */
   sourcePath: string | undefined;
   /** The source is a URL: `sourcePath` is the cache's copy. */
@@ -40,7 +41,7 @@ export function FormBar({
       <Button
         title="Fill"
         onPress={() => {
-          pdf
+          pdf.current
             ?.setFormFieldValues({
               name: 'Ewa',
               notes: 'First line\nSecond line',
@@ -57,7 +58,7 @@ export function FormBar({
       <Button
         title="Fields"
         onPress={() => {
-          pdf
+          pdf.current
             ?.getFormFields()
             .then((fields) =>
               onEvent(
@@ -74,14 +75,14 @@ export function FormBar({
           const target = directoryWithFile();
           // First, while the form can still be as loaded (iOS then copies
           // the file instead of writing it anew).
-          const intoDirectory = pdf
+          const intoDirectory = pdf.current
             ?.exportDocument({ filePath: target.path })
             .then(() => 'exported into a directory', message);
           // Where another document's copy would be.
           const besideCopy =
             isDownloaded && sourcePath != null
               ? [
-                  pdf
+                  pdf.current
                     ?.exportDocument({
                       filePath: sourcePath.replace(/[^/]*$/, 'beside.pdf'),
                     })
@@ -89,10 +90,10 @@ export function FormBar({
                 ]
               : [];
           void Promise.all([
-            pdf
+            pdf.current
               ?.setFormFieldValues({ name: 'Never', id: 'B-1' })
               .then(() => 'accepted', message),
-            pdf
+            pdf.current
               ?.exportDocument({ filePath: sourcePath })
               .then(() => 'exported over the source', message),
             intoDirectory,
@@ -111,7 +112,7 @@ export function FormBar({
       <Button
         title="Export"
         onPress={() => {
-          pdf
+          pdf.current
             ?.exportDocument()
             .then((result) => {
               setExported(result.filePath);

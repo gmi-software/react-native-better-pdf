@@ -404,7 +404,7 @@ export function ViewerScreen() {
 
       {entry.form === true && (
         <FormBar
-          pdf={ref.current}
+          pdf={ref}
           sourcePath={loadedFilePath}
           isDownloaded={
             typeof source === 'object' &&
@@ -449,7 +449,7 @@ export function ViewerScreen() {
 
       {showSearch && (
         <SearchBar
-          pdf={ref.current}
+          pdf={ref}
           state={search}
           isCustomColor={customSearchColor}
           onToggleColor={() => setCustomSearchColor((value) => !value)}

@@ -167,7 +167,7 @@ async function runOnce({ library, fixture, runId, device, clockTicks }) {
     }
   })();
 
-  let app = null;
+  let app;
   let scroll = null;
   try {
     await waitFor('LOADED', 180_000);
