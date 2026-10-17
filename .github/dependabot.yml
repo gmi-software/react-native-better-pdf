@@ -63,6 +63,10 @@ updates:
       - dependency-name: react-native
       - dependency-name: react-native-nitro-modules
       - dependency-name: nitrogen
+      # The test renderer has to match the React it renders (19.3.0 asks for
+      # react ^19.3.0), so it and its types move with react.
+      - dependency-name: react-test-renderer
+      - dependency-name: '@types/react-test-renderer'
       # The benchmark baseline. docs/benchmarks.md compares against these exact
       # versions; moving them is a new benchmark run, not a bump.
       - dependency-name: react-native-pdf
@@ -79,6 +83,11 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@babel/core'
         update-types: ['version-update:semver-major']
+      # Not an Expo package, but the SDK still pins it (`~5.7.0` in SDK 57's
+      # bundledNativeModules.json): it moves with `npx expo install --fix`.
+      - dependency-name: react-native-safe-area-context
+        update-types:
+          ['version-update:semver-minor', 'version-update:semver-major']
       # typescript-eslint refuses to run on TypeScript 7.
       - dependency-name: typescript
         versions: ['>=7.0.0']
