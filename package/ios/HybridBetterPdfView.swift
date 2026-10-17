@@ -145,6 +145,8 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private var pendingInitialPoint: CGPoint?
   /// `initialScale`, applied with the document's first fit.
   private var pendingInitialScale: Double?
+  /// Zoom asked for before the first layout, applied after the initial one.
+  private var pendingZoom: Double?
   private var fitScale: CGFloat = 0
   /// Relative zoom last sent through `onScaleChange`; nil until the
   /// document's first fit, which is the baseline rather than a change.
@@ -282,6 +284,12 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     guard let index = page.pageIndex else { return }
     DispatchQueue.main.async { [weak self] in
       guard let self else { return }
+      // Not laid out yet: the first layout goes there, as on Android.
+      if self.fitScale == 0, let count = self.pdfView?.document?.pageCount, count > 0 {
+        self.pendingInitialPage = min(max(index, 0), count - 1)
+        self.pendingInitialPoint = nil
+        return
+      }
       self.keepReadingPage(index)
       self.scrollToPage(index, animated: animated)
     }
@@ -297,12 +305,17 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func goToViewport(viewport: PdfViewport) throws {
     guard let index = viewport.page.pageIndex,
           [viewport.x, viewport.y, viewport.scale].allSatisfy(\.isFinite), viewport.scale > 0 else { return }
+    let point = CGPoint(x: viewport.x, y: viewport.y)
     DispatchQueue.main.async { [weak self] in
-      self?.applyViewport(
-        page: index,
-        point: CGPoint(x: viewport.x, y: viewport.y),
-        scale: viewport.scale
-      )
+      guard let self else { return }
+      if self.fitScale == 0, let count = self.pdfView?.document?.pageCount, count > 0 {
+        let page = min(max(index, 0), count - 1)
+        self.pendingInitialPage = page
+        self.pendingInitialPoint = page == index ? point : nil
+        self.pendingZoom = viewport.scale
+        return
+      }
+      self.applyViewport(page: index, point: point, scale: viewport.scale)
     }
   }
 
@@ -699,7 +712,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
 
   func zoomTo(scale: Double, animated: Bool) throws {
     DispatchQueue.main.async { [weak self] in
-      guard let self, let pdfView = self.pdfView, self.fitScale > 0 else { return }
+      guard let self, let pdfView = self.pdfView, pdfView.document != nil else { return }
+      if self.fitScale == 0 {
+        self.pendingZoom = scale
+        return
+      }
       let target = self.fitScale * CGFloat(self.clampScale(scale))
       if animated {
         UIView.animate(withDuration: 0.25) { pdfView.scaleFactor = target }
@@ -789,6 +806,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     pendingInitialPage = min(max(requestedPage, 0), pageCount - 1)
     pendingInitialScale = position.flatMap { $0.scale.isFinite && $0.scale > 0 ? $0.scale : nil }
     pendingInitialPoint = nil
+    pendingZoom = nil
     if let x = position?.x, let y = position?.y, x.isFinite, y.isFinite, pendingInitialPage == requestedPage {
       pendingInitialPoint = CGPoint(x: x, y: y)
     }
@@ -912,6 +930,10 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     pdfView.minScaleFactor = newFit * CGFloat(resolvedMinScale)
     pdfView.maxScaleFactor = newFit * CGFloat(resolvedMaxScale)
     if lastReportedScale == nil { lastReportedScale = relativeScale(pdfView) }
+    if let pendingZoom {
+      self.pendingZoom = nil
+      pdfView.scaleFactor = newFit * CGFloat(clampScale(pendingZoom))
+    }
   }
 
   /// The viewport has settled when it did not move for `settleDelay` and no

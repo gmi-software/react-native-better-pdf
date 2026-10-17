@@ -64,9 +64,9 @@ each page. The viewer adds no safe-area insets on either platform, like
 
 | Method | Description |
 | --- | --- |
-| `goToPage(page, options?)` | Scroll to a zero-based page (clamped to the document), animated unless `{ animated: false }` |
-| `zoomTo(scale, options?)` | Zoom relative to the fitted page, clamped to `minScale` / `maxScale` |
-| `goToViewport(viewport)` | Jump to a position from `onViewportChange` |
+| `goToPage(page, options?)` | Scroll to a zero-based page (clamped to the document), animated unless `{ animated: false }`. Ignored before `onLoad`: the first page is `initialPage` |
+| `zoomTo(scale, options?)` | Zoom relative to the fitted page, clamped to `minScale` / `maxScale`. Ignored before `onLoad`: the first zoom is `initialScale` |
+| `goToViewport(viewport)` | Jump to a position from `onViewportChange`. Ignored before `onLoad`: the first position is `initialViewport` |
 | `getOutline()` | The table of contents |
 | `getPageSizes()` | Every page's size in PDF points |
 | `renderPage(page, options)` | A PNG or JPEG file of a page |

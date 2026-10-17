@@ -30,3 +30,27 @@ appId: software.gmi.betterpdf.example
 - tapOn: "Bundled sample.*"
 - extendedWaitUntil: { visible: "file: .*\\.pdf", timeout: 15000 }
 - tapOn: "‹ Back"
+
+# Navigation from onLoad while the viewer has zero width.
+- scrollUntilVisible: { element: "Zero width, goToPage.*", timeout: 60000 }
+- tapOn: "Zero width, goToPage.*"
+- extendedWaitUntil: { visible: "11 / 100", timeout: 60000 }
+- extendedWaitUntil:
+    visible: { id: "viewport-status", text: "p 11 · y (0|-[0-9]+) · 1\\.00x" }
+    timeout: 5000
+- tapOn: "‹ Back"
+- scrollUntilVisible: { element: "Zero width, goToViewport.*", timeout: 60000 }
+- tapOn: "Zero width, goToViewport.*"
+- extendedWaitUntil:
+    visible: { id: "viewport-status", text: "p 11 · y (9[89]|10[0-2]) · 2\\.00x" }
+    timeout: 60000
+- assertVisible: "11 / 100"
+- extendedWaitUntil: { visible: "scale: 2\\.00 \\(#1\\)", timeout: 5000 }
+- tapOn: "‹ Back"
+- scrollUntilVisible: { element: "Zero width, zoomTo.*", timeout: 60000 }
+- tapOn: "Zero width, zoomTo.*"
+- extendedWaitUntil:
+    visible: { id: "viewport-status", text: "p 1 · y (0|-[0-9]+) · 2\\.00x" }
+    timeout: 60000
+- extendedWaitUntil: { visible: "scale: 2\\.00 \\(#1\\)", timeout: 5000 }
+- tapOn: "‹ Back"

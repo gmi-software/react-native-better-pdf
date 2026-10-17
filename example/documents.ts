@@ -1,5 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import type { PdfSource } from 'react-native-better-pdf';
+import type { PdfSource, PdfViewRef } from 'react-native-better-pdf';
 
 /** Served by `node benchmarks/serve-fixtures.mjs` (Android: `adb reverse tcp:8090 tcp:8090`). */
 export const FIXTURE_SERVER = 'http://localhost:8090';
@@ -54,6 +54,8 @@ export interface DocumentEntry {
   form?: boolean;
   /** Translucent bars over the viewer, which pages scroll under (`contentInset`). */
   contentInset?: { top: number; bottom: number };
+  /** Mounts the viewer at zero width, calls this from `onLoad`, then widens it. */
+  onLoadAtZeroWidth?: (pdf: PdfViewRef) => void;
 }
 
 const fixtureDirectory = () => {
@@ -156,4 +158,26 @@ export const DOCUMENTS: DocumentEntry[] = [
     resolve: async () => ({ uri: (await ensureFixture(name)).uri }),
     form: name.startsWith('forms'),
   })),
+  {
+    id: 'medium-zero-width-page',
+    title: 'Zero width, goToPage',
+    subtitle: 'goToPage(10) from onLoad, then widened',
+    resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
+    onLoadAtZeroWidth: (pdf) => pdf.goToPage(10, { animated: false }),
+  },
+  {
+    id: 'medium-zero-width-viewport',
+    title: 'Zero width, goToViewport',
+    subtitle: 'Page 11 at y 100, 2×, from onLoad, then widened',
+    resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
+    onLoadAtZeroWidth: (pdf) =>
+      pdf.goToViewport({ page: 10, x: 0, y: 100, scale: 2 }),
+  },
+  {
+    id: 'medium-zero-width-zoom',
+    title: 'Zero width, zoomTo',
+    subtitle: 'zoomTo(2) from onLoad, then widened',
+    resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
+    onLoadAtZeroWidth: (pdf) => pdf.zoomTo(2, { animated: false }),
+  },
 ];

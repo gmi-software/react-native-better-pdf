@@ -86,12 +86,18 @@ export interface NavigationOptions {
 export interface PdfViewRef {
   /**
    * Scrolls so `page` (zero-based, rounded to the nearest page, clamped) is
-   * at the top of the viewport. `NaN` and `±Infinity` are ignored.
+   * at the top of the viewport. Ignored before
+   * {@linkcode PdfViewProps.onLoad}, also while a new `source` loads; pass
+   * {@linkcode PdfViewProps.initialPage} for the first page. `NaN` and
+   * `±Infinity` are ignored.
    */
   goToPage(page: number, options?: NavigationOptions): void;
   /**
    * Zooms around the viewport center. Relative to the fitted page, clamped
-   * to [minScale, maxScale]. `NaN` and `±Infinity` are ignored.
+   * to [minScale, maxScale]. Ignored before {@linkcode PdfViewProps.onLoad},
+   * also while a new `source` loads; pass
+   * {@linkcode PdfViewProps.initialScale} for the first zoom. `NaN` and
+   * `±Infinity` are ignored.
    */
   zoomTo(scale: number, options?: NavigationOptions): void;
   /**
@@ -100,8 +106,9 @@ export interface PdfViewRef {
    * top-left corner, at its zoom. The page is rounded to the nearest page
    * and clamped to the document, and the position to the scrollable area.
    * Paged layouts settle on the page unless zoomed in. Ignored before
-   * {@linkcode PdfViewProps.onLoad}, and when a field is `NaN` or
-   * `±Infinity` or `scale` is not positive.
+   * {@linkcode PdfViewProps.onLoad}, also while a new `source` loads (pass
+   * {@linkcode PdfViewProps.initialViewport} for the first position), and
+   * when a field is `NaN` or `±Infinity` or `scale` is not positive.
    */
   goToViewport(viewport: PdfViewport): void;
   /** Native diagnostics. `null` before the native view has mounted. */

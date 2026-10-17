@@ -138,8 +138,8 @@ Navigation after load is imperative (`goToPage`).
 
 | Method                                    | Notes                                                       |
 | ----------------------------------------- | ----------------------------------------------------------- |
-| `goToPage(page, { animated = true })`     | Zero-based; clamped to `[0, pageCount - 1]`.                |
-| `zoomTo(scale, { animated = true })`      | Clamped to `[minScale, maxScale]`. `zoomTo(1)` resets zoom. |
+| `goToPage(page, { animated = true })`     | Zero-based; clamped to `[0, pageCount - 1]`. Ignored before `onLoad`; the first page is `initialPage`. |
+| `zoomTo(scale, { animated = true })`      | Clamped to `[minScale, maxScale]`. `zoomTo(1)` resets zoom. Ignored before `onLoad`; the first zoom is `initialScale`. |
 | `getStats()`                              | Diagnostics (cache bytes, hits, renders). Synchronous, cheap. |
 | `getOutline()`                            | `Promise<PdfOutlineItem[]>`; see "Outline". |
 | `search(query)` / `searchNext()` / `searchPrevious()` / `clearSearch()` | See "Search". |
@@ -876,6 +876,17 @@ restore the position, scroll events, "read to the end"; see
   the initial position is one internal struct (`page`, `scale`, optional
   `x` / `y`) that `PdfView` builds from `initialPage` / `initialScale` or
   `initialViewport`, so there is one code path per platform.
+- **Before `onLoad`** `goToPage`, `goToViewport` and `zoomTo` are ignored
+  on both platforms, also while a new `source` loads. The initial props are
+  read when the document opens, so a saved position that arrives after
+  mount goes there. Called from `onLoad` while the view has no size yet (a
+  tab not shown, a container animated from zero width), they apply once
+  the view is laid out: the first layout goes to that position and zoom
+  instead of the initial ones, without animation. In continuous layouts
+  the initial zoom stays the baseline, so a different zoom is reported
+  through `onScaleChange` then, as after any `zoomTo`. In 1.0.1 iOS showed
+  the initial position and zoom there instead (e2e `viewer-initial`, "Zero
+  width" entries).
 - **A page outside the document** is clamped, and its point dropped: the
   nearest page is shown from its top, for `initialViewport` and
   `goToViewport` on both platforms. Clamping is native because only native
