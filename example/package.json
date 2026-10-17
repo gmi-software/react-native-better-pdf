@@ -22,7 +22,7 @@
     "react-native-blob-util": "^0.25.1",
     "react-native-nitro-modules": "0.37.1",
     "react-native-pdf": "7.0.5",
-    "react-native-safe-area-context": "~5.10.1"
+    "react-native-safe-area-context": "~5.7.0"
   },
   "devDependencies": {
     "@babel/core": "^7.26.0",
