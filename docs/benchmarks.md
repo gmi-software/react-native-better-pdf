@@ -21,7 +21,8 @@ Generated deterministically by `node benchmarks/generate-fixtures.mjs`
 
 Every page has its own image object, so neither renderer can reuse a decoded
 image across pages. Additional fixtures for correctness tests: `mixed-sizes`
-(portrait, landscape, a 226×3000 pt receipt, square), `encrypted` (RC4-40,
+(portrait, landscape, a 226×3000 pt receipt, square), `mixed-colour` (100
+pages alternating text and text with a colour photo), `encrypted` (RC4-40,
 password `secret`), and malformed files (empty, not a PDF, truncated,
 corrupt xref).
 

@@ -1048,10 +1048,30 @@ documents' budget not yet a quarter) gave `medium` 2 → 0 OOMs each time.
   normal budget, which filled the cache with grey pages on the 192 MB heap
   (`small` 7.9 → 15.7 MB, `large` 9.4 → 31.5 MB); the budgets now follow
   the document.
-- Not checked: documents that mix grey and colour pages below API 26. The
-  plan's estimates follow the last page rendered, so after a grey page the
-  colour pages behind may not fit what was budgeted and render again (the
-  §5 pattern). No fixture has such a mix.
+- **Documents that mix grey and colour pages** (found in review of this
+  change): the plan estimated every page by the format of the last page
+  rendered, so after a grey page the cached colour pages were counted at a
+  quarter of their bytes, did not fit the budget and rendered again (the §5
+  pattern). Now each page is estimated by the format it last rendered in,
+  and only pages not rendered yet follow the last page (`PageFormats`); the
+  pool and the heap caps use coverage sizes only when every planned page
+  is grey. Measured with a new fixture, `mixed-colour` (100 pages: text,
+  then text with a colour photo, alternating), one run per build, 2 pairs:
+
+  | `mixed-colour` | Renders in the scroll window, before → after | Misses, before → after |
+  | --- | --- | --- |
+  | API 24, 192 MB heap | 1,749, 1,734 → 77, 76 | 47, 52 → 14, 14 |
+  | API 24, 48 MB heap | 256, 240 → 67, 71 | 41, 41 → 49, 53 |
+  | API 37 | 109, 126 → 110, 107 | 14, 14 → 14, 14 |
+
+  On a typical heap the colour pages rendered again ~170 times a second
+  before. On the 48 MB heap fewer colour pages fit once they are counted
+  right, so a few more pages are blank when they scroll in, for a quarter
+  of the renders. On API 37 bitmap allocations fell from 96–100 to 85–87
+  (the pool can now hold a colour page) and peak PSS was 113.3 and 114.4 →
+  123.1 and 114.2 MB, within the ~10 MB a GC transient makes (§20).
+  `small`, `medium` and `large` on API 24 (48 MB) were unchanged (misses
+  11, 54–56, 14).
 
 ## 22. Both libraries after §20 and §21 (2026-10-18)
 

@@ -297,8 +297,9 @@ class PdfDocumentView(context: Context) :
   private var plannedBaseBytes = 0L
   /** Whether the last plan's base layer is below screen resolution, so tiles are drawn at zoom 1. */
   private var plannedTilesAtFit = false
-  /** Whether the last page rendered was grey coverage. */
-  private var pagesLookGrey = false
+  private val pageFormats = PageFormats()
+  /** Whether every page of the last plan is grey coverage, or expected to be ([pageFormats]). */
+  private var plannedGrey = false
   private var tileGeneration = 0
 
   // endregion
@@ -527,6 +528,8 @@ class PdfDocumentView(context: Context) :
     pendingInitialPoint = null
     lastReportedViewport = null
     renderFailures.clear()
+    pageFormats.clear()
+    plannedGrey = false
     pageLinks.clear()
     hasFileLinks = false
     pageWidgets.clear()
@@ -964,7 +967,7 @@ class PdfDocumentView(context: Context) :
           return
         }
         cache.put(request.page, bitmap, protectedKeys = visiblePages().toSet())
-        pagesLookGrey = bitmap.isCoverage
+        pageFormats.onRendered(request.page, bitmap.isCoverage)
         staleFormPages -= request.page
         updateCacheStats()
       }
@@ -1469,7 +1472,9 @@ class PdfDocumentView(context: Context) :
 
     val bases = planned.filter(renderFailures::allowsBase).map { baseRequest(layout, it) }
     val argbBytes = bases.map { it.bitmapWidth.toLong() * it.bitmapHeight * ARGB_BYTES_PER_PIXEL }
-    val pageBytes = if (BITMAPS_ON_JAVA_HEAP && pagesLookGrey) argbBytes.map { it / ARGB_BYTES_PER_PIXEL } else argbBytes
+    val plannedPages = bases.map { it.page }
+    plannedGrey = plannedPages.all(pageFormats::isGrey)
+    val pageBytes = if (BITMAPS_ON_JAVA_HEAP) pageFormats.cacheBytes(plannedPages, argbBytes) else argbBytes
     val constrained = SystemClock.uptimeMillis() < constrainedUntilMs
     val fit = PrefetchPlanner.fitToBudget(
       pageBytes = pageBytes,
@@ -1608,11 +1613,11 @@ class PdfDocumentView(context: Context) :
 
   private fun poolBudget(): Long = javaHeapCaps()?.poolBytes ?: unboundedPoolBudget()
 
-  private fun unboundedPoolBudget(): Long = MemoryBudgets.pool(width, height, plannedBaseBytes, plannedTilesAtFit, pagesLookGrey)
+  private fun unboundedPoolBudget(): Long = MemoryBudgets.pool(width, height, plannedBaseBytes, plannedTilesAtFit, plannedGrey)
 
   /** Null from API 26, where bitmap pixels are native. */
   private fun javaHeapCaps(): MemoryBudgets.HeapCaps? =
-    if (BITMAPS_ON_JAVA_HEAP) MemoryBudgets.javaHeapCaps(Runtime.getRuntime().maxMemory(), viewportBytes(), unboundedPoolBudget(), pagesLookGrey) else null
+    if (BITMAPS_ON_JAVA_HEAP) MemoryBudgets.javaHeapCaps(Runtime.getRuntime().maxMemory(), viewportBytes(), unboundedPoolBudget(), plannedGrey) else null
 
   private fun maxCacheBudget(): Long = min(MAX_CACHE_BYTES, javaHeapCaps()?.cacheBytes ?: MAX_CACHE_BYTES)
 
@@ -1627,7 +1632,7 @@ class PdfDocumentView(context: Context) :
     val heapBased = Runtime.getRuntime().maxMemory() / 6
     // Always room for the visible pages plus a little look-ahead.
     val argb = heapBased.coerceIn(MIN_CACHE_BYTES, MAX_CACHE_BYTES).coerceAtLeast(viewportBytes() * 4)
-    val budget = if (BITMAPS_ON_JAVA_HEAP && pagesLookGrey) argb / ARGB_BYTES_PER_PIXEL else argb
+    val budget = if (BITMAPS_ON_JAVA_HEAP && plannedGrey) argb / ARGB_BYTES_PER_PIXEL else argb
     return budget.coerceAtMost(maxCacheBudget())
   }
 

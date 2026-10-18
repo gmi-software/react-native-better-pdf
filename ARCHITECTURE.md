@@ -66,6 +66,7 @@ package/
     PdfDocumentSession.kt          PdfRenderer + FD owner, render thread, renderer recycling
     DocumentPage+renderPixels.kt   a page into ARGB, or grey coverage (1 byte/pixel) rendered in bands
     NativePageCoverage.kt          JNI entry: ARGB rows ↔ grey coverage
+    PageFormats.kt                 pure: which pages rendered grey or in colour, a guess for the rest
     RenderQueue.kt                 pure: replace-on-submit work queue (cancellation)
     PdfDocumentView.kt             the viewer View: gestures, drawing, cache, tiles
     TextSelectionController.kt     long press, handles, highlight, floating Copy / Select all toolbar
@@ -287,7 +288,9 @@ position first and is re-anchored after that page is measured.
   (`MemoryBudgets.javaHeapCaps`), the pool at most a quarter of that, one
   viewport stays free for a tile or the page being rendered, and the cache
   gets the rest, never less than the visible pages. There the cache counts
-  the bytes pages take, with budgets a quarter the size for grey documents.
+  the bytes pages take, the plan estimates each page by the format it last
+  rendered in (`PageFormats`), and the budgets are a quarter the size for
+  grey documents.
 - Cache key is the page; entries rendered at a different width (rotation,
   resize, crossing zoom ½ or ¼) are re-requested and replaced.
 - Memory pressure: `onTrimMemory(RUNNING_LOW, RUNNING_CRITICAL)`/`onLowMemory`
