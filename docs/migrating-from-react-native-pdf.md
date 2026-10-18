@@ -28,8 +28,8 @@ The full list, with reaction counts, is in
 ## Before you start
 
 - **New Architecture only.** `react-native-better-pdf` is a Nitro View and
-  needs Fabric (React Native 0.78+; we test 0.81+). If your app still runs the
-  legacy architecture, migrate that first.
+  needs Fabric and React Native 0.83+ (Expo SDK 55+). If your app still runs
+  the legacy architecture, migrate that first.
 - **Expo:** works in development builds; Expo Go is not supported (same as
   react-native-pdf).
 - **Dependencies:** remove `react-native-blob-util` if nothing else in your app

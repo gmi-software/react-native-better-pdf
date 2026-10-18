@@ -24,8 +24,10 @@ with SDK 37 — not recalled from memory.
 
 The example app targets Expo SDK 57 (RN 0.86.3) because that is the newest
 RN an Expo development build can use today. The library itself declares
-`react-native >= 0.81` as a peer (the Nitro Views floor is 0.78 with the
-New Architecture; 0.81 is the oldest line we intend to test).
+`react-native >= 0.83` as a peer. The Nitro Views floor is 0.78 with the New
+Architecture, but below 0.82 iOS never calls a Nitro view's `onDropView`
+([#26](https://github.com/gmi-software/react-native-better-pdf/issues/26)),
+and 0.83 (Expo SDK 55) is the oldest line the example builds on.
 
 ## Chosen Nitro architecture
 

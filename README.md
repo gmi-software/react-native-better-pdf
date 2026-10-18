@@ -37,12 +37,12 @@ PDFKit on iOS, the platform `PdfRenderer` on Android: no bundled PDFium, no WebV
 
 | Requirement | Version / note |
 | --- | --- |
-| React Native | `0.81+` |
+| React Native | `0.83+` |
 | React Native architecture | New Architecture (Fabric); Nitro Views do not support the legacy renderer |
 | Nitro Modules | `react-native-nitro-modules >=0.37.0` |
 | iOS | `15.1+` |
 | Android | `minSdkVersion 24+`; some features need a newer Android, see the [capability matrix](#capability-matrix) |
-| Expo | SDK 54+ with a development build (verified with SDK 57); Expo Go is not supported |
+| Expo | SDK 55+ with a development build (verified with SDK 57); Expo Go is not supported |
 
 Developed and tested with React Native 0.86.3 / Expo SDK 57, Xcode 27,
 Kotlin 2.1, AGP 8.12 / Gradle 9.3, Node 24.

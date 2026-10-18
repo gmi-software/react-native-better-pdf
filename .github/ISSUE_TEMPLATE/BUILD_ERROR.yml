@@ -71,7 +71,7 @@ body:
   - type: input
     attributes:
       label: React Native version
-      description: The library requires 0.81+ with the New Architecture enabled.
+      description: The library requires 0.83+ with the New Architecture enabled.
       placeholder: ex. 0.86.3
     validations:
       required: true
