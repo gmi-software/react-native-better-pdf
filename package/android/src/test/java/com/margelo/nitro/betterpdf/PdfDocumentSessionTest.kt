@@ -90,6 +90,22 @@ class PdfDocumentSessionTest {
   }
 
   @Test
+  fun `a render submitted again from its failure report runs again`() {
+    val failing = RenderRequest.Base(page = 1, bitmapWidth = 100, bitmapHeight = 100, maxPixels = 10_000)
+    val attempts = AtomicInteger()
+    val retried = CountDownLatch(1)
+    renderer.onOpenPage = { if (it == 1 && attempts.incrementAndGet() == 2) retried.countDown() }
+    lateinit var session: PdfDocumentSession
+    listener.afterRenderFailed = { request -> if (attempts.get() == 1) session.submit(listOf(request)) }
+    // The listener runs before the render thread moves on, as when the main thread is quicker.
+    session = start(runOnMain = Executor { it.run() })
+
+    session.submit(listOf(failing))
+    assertTrue("The render did not run again", retried.await(TIMEOUT_SECONDS, TimeUnit.SECONDS))
+    session.close()
+  }
+
+  @Test
   fun `a document that could not be opened settles form work`() {
     val session = start(openRenderer = { _, _ -> throw PdfFailure(PdfErrorCode.INVALID_PDF, "Not a PDF") })
 
@@ -177,6 +193,7 @@ class PdfDocumentSessionTest {
 
   private fun start(
     openRenderer: (ParcelFileDescriptor, String?) -> DocumentRenderer = { _, _ -> renderer },
+    runOnMain: Executor = Executor { mainThread.add(it) },
   ): PdfDocumentSession {
     val context = object : ContextWrapper(null) {
       override fun getApplicationContext() = this
@@ -195,7 +212,7 @@ class PdfDocumentSessionTest {
       password = null,
       bitmapPool = BitmapPool(maxBytes = 0),
       listener = listener,
-      mainThread = Executor { mainThread.add(it) },
+      mainThread = runOnMain,
       openSource = { _, _ -> ResolvedSource(descriptor, file = null) },
       openRenderer = openRenderer,
     ).also { it.start() }
@@ -219,6 +236,7 @@ class PdfDocumentSessionTest {
     val renderFailures = mutableMapOf<RenderRequest, PdfFailure>()
     val selections = mutableListOf<Pair<TextSelectionQuery, PageTextSelection?>>()
     val pageTexts = mutableListOf<Pair<Int, String?>>()
+    var afterRenderFailed: (RenderRequest) -> Unit = {}
 
     override fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, filePath: String?, isStale: Boolean) {
       opened = true
@@ -235,6 +253,7 @@ class PdfDocumentSessionTest {
     override fun onRenderFailed(request: RenderRequest, failure: PdfFailure) {
       renderResults += request
       renderFailures[request] = failure
+      afterRenderFailed(request)
     }
 
     override fun onTextSelected(query: TextSelectionQuery, selection: PageTextSelection?) {

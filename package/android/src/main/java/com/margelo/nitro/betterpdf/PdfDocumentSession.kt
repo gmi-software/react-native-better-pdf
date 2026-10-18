@@ -412,9 +412,8 @@ class PdfDocumentSession internal constructor(
   /** Reports [work] as failed with [error]: its listener call, or its promise. */
   private fun failWork(work: DocumentWork, error: Throwable) {
     when (work) {
-      is RenderRequest -> post {
-        listener.onRenderFailed(work, PdfFailure(PdfErrorCode.PAGE_RENDER_FAILED, "Rendering page ${work.page} failed", page = work.page, cause = error))
-      }
+      is RenderRequest ->
+        postRenderFailed(work, PdfFailure(PdfErrorCode.PAGE_RENDER_FAILED, "Rendering page ${work.page} failed", page = work.page, cause = error))
       is TextSelectionQuery -> post { listener.onTextSelected(work, null) }
       is PageTextQuery -> post { listener.onPageText(work.page, null) }
       is FormWork -> mainThread.execute { work.fail(IllegalStateException("The form could not be read or changed", error)) }
@@ -496,15 +495,21 @@ class PdfDocumentSession internal constructor(
         post(onDropped = { bitmapPool.release(target) }) { listener.onRendered(request, target) }
       }
     } catch (error: OutOfMemoryError) {
-      post { listener.onRenderFailed(request, PdfFailure(PdfErrorCode.OUT_OF_MEMORY, "Out of memory rendering page ${request.page}", page = request.page, cause = error)) }
+      postRenderFailed(request, PdfFailure(PdfErrorCode.OUT_OF_MEMORY, "Out of memory rendering page ${request.page}", page = request.page, cause = error))
     } catch (error: Exception) {
       // Also a renderer that could not be re-created (see rendererForNextPage):
       // this page fails, the next work creates one again.
-      post { listener.onRenderFailed(request, PdfFailure(PdfErrorCode.PAGE_RENDER_FAILED, "Rendering page ${request.page} failed", page = request.page, cause = error)) }
+      postRenderFailed(request, PdfFailure(PdfErrorCode.PAGE_RENDER_FAILED, "Rendering page ${request.page} failed", page = request.page, cause = error))
     } finally {
       bitmap?.let(bitmapPool::release)
       Trace.endSection()
     }
+  }
+
+  /** After [RenderQueue.finish]: a retry the listener submits must not be dropped as the request in flight. */
+  private fun postRenderFailed(request: RenderRequest, failure: PdfFailure) {
+    queue.finish()
+    post { listener.onRenderFailed(request, failure) }
   }
 
   private fun recordSize(page: Int, size: PdfDocumentLayout.PageSize) {
