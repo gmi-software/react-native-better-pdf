@@ -234,14 +234,14 @@ class PdfDocumentSession internal constructor(
    * Starts searching the open document on its own thread (see
    * [PdfSearchTask]); null when the document is not open. Main thread.
    */
-  internal fun startSearch(query: String, pageCount: Int, startPage: Int, listener: PdfSearchTask.Listener): PdfSearchTask? {
+  internal fun startSearch(query: String, pageCount: Int, startPage: Int, pages: Int, listener: PdfSearchTask.Listener): PdfSearchTask? {
     // On the main thread: a failed dup (descriptors exhausted) must not throw.
     val descriptor = try {
       synchronized(descriptorLock) { master?.dup() }
     } catch (_: IOException) {
       null
     } ?: return null
-    return PdfSearchTask(descriptor, password, pageCount, startPage, query, listener).also { it.start() }
+    return PdfSearchTask(descriptor, password, pageCount, startPage, pages, query, listener).also { it.start() }
   }
 
   fun close() {

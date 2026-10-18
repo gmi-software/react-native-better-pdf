@@ -60,7 +60,10 @@ import kotlin.math.roundToInt
  * `@Volatile` stats fields, which the JS thread reads.
  */
 @SuppressLint("ViewConstructor")
-class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scrollViewStyle), PdfAccessibilityHost {
+class PdfDocumentView(context: Context) :
+  View(context, null, android.R.attr.scrollViewStyle),
+  PdfAccessibilityHost,
+  SearchController.Host {
   interface Listener {
     fun onPageChanged(page: Int, pageCount: Int)
     fun onRenderFailed(failure: PdfFailure)
@@ -115,13 +118,13 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private val pageLinks = HashMap<Int, List<PageLink>>()
   private var reportedOutOfMemory = false
 
-  val pageCount: Int get() = pageSizes.size
+  override val pageCount: Int get() = pageSizes.size
 
   /** The reported current page, 0 before a document is shown. */
-  val currentPageIndex: Int get() = currentPage.coerceAtLeast(0)
+  override val currentPageIndex: Int get() = currentPage.coerceAtLeast(0)
 
   /** Matches of the active search, highlighted on screen; null when none. */
-  var searchResults: SearchResults? = null
+  override var searchResults: SearchResults? = null
     set(value) {
       field = value
       invalidate()
@@ -598,7 +601,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
    * along the scroll axis, else it lands a third down the view; when zoomed
    * wider than the view it is also centred across.
    */
-  fun revealSearchMatch(match: SearchMatch) {
+  override fun revealSearchMatch(match: SearchMatch) {
     val layout = layout ?: return
     if (match.page >= layout.pageCount || match.rects.isEmpty()) return
     invalidate()

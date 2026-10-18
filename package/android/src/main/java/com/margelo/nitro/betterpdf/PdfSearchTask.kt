@@ -18,6 +18,7 @@ internal class PdfSearchTask(
   private val password: String?,
   private val pageCount: Int,
   private val startPage: Int,
+  private val pages: Int,
   private val query: String,
   private val listener: Listener,
 ) {
@@ -29,14 +30,15 @@ internal class PdfSearchTask(
     fun onSearchFinished(task: PdfSearchTask, isSupported: Boolean)
   }
 
-  @Volatile private var cancelled = false
+  @Volatile var isCancelled = false
+    private set
   private val mainHandler = Handler(Looper.getMainLooper())
   private val thread = Thread(::run, "BetterPdf-search").apply { isDaemon = true }
 
   fun start() = thread.start()
 
   fun cancel() {
-    cancelled = true
+    isCancelled = true
   }
 
   private fun run() {
@@ -47,8 +49,8 @@ internal class PdfSearchTask(
       var current = DocumentRenderer.open(descriptor.dup(), password)
       renderer = current
       var pagesOpened = 0
-      for (offset in 0 until pageCount) {
-        if (cancelled) return
+      for (offset in 0 until pages) {
+        if (isCancelled) return
         val page = (startPage + offset) % pageCount
         if (pagesOpened >= RECYCLE_AFTER_PAGES) {
           // Same reason as the render thread: release what PDFium cached.
@@ -80,7 +82,7 @@ internal class PdfSearchTask(
   }
 
   private inline fun post(crossinline block: () -> Unit) {
-    mainHandler.post { if (!cancelled) block() }
+    mainHandler.post { if (!isCancelled) block() }
   }
 
   private companion object {
