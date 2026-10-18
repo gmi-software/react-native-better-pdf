@@ -94,6 +94,8 @@ const countItems = (items: PdfOutlineItem[]): number =>
 
 export function DocumentsScreen() {
   const document = useRef<PdfDocument | null>(null);
+  // The document whose reads are on screen; it stays set after "Close".
+  const [shown, setShown] = useState<PdfDocument | null>(null);
   const [target, setTarget] = useState<Target | null>(null);
   const [status, setStatus] = useState('Pick a document');
   const [lines, setLines] = useState<Record<string, string>>({});
@@ -121,6 +123,7 @@ export function DocumentsScreen() {
   const open = async (next: Target, password?: string) => {
     document.current?.close();
     document.current = null;
+    setShown(null);
     setTarget(next);
     setLines({});
     setCover(null);
@@ -141,6 +144,7 @@ export function DocumentsScreen() {
     const outline = await timed(() => opened.getOutline());
     const coverImage = await timed(() => opened.renderPage(0, { width: 300 }));
     if (document.current !== opened) return;
+    setShown(opened);
     setStatus(`opened in ${opening.ms} ms`);
     show(
       'summary',
@@ -234,7 +238,7 @@ export function DocumentsScreen() {
           style={[styles.cover, { aspectRatio: cover.width / cover.height }]}
         />
       )}
-      {document.current != null && (
+      {shown != null && (
         <View style={styles.actions}>
           <Button title="Thumbnails" onPress={renderThumbnails} />
           <Button title="Close" onPress={close} />

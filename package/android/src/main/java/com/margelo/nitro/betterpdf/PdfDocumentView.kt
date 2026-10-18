@@ -60,7 +60,10 @@ import kotlin.math.roundToInt
  * `@Volatile` stats fields, which the JS thread reads.
  */
 @SuppressLint("ViewConstructor")
-class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scrollViewStyle), PdfAccessibilityHost {
+class PdfDocumentView(context: Context) :
+  View(context, null, android.R.attr.scrollViewStyle),
+  PdfAccessibilityHost,
+  SearchController.Host {
   interface Listener {
     fun onPageChanged(page: Int, pageCount: Int)
     fun onRenderFailed(failure: PdfFailure)
@@ -99,7 +102,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private var pendingInitialPage: Int? = null
   /** With [pendingInitialPage]: the page point to put at the top-left corner, instead of the page's top. */
   private var pendingInitialPoint: PagePoint? = null
-  private val failedPages = HashSet<Int>()
+  private val renderFailures = RenderFailures()
   /** Set once [onDocumentLinks] arrived for the document. */
   private var hasFileLinks = false
 
@@ -115,13 +118,13 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private val pageLinks = HashMap<Int, List<PageLink>>()
   private var reportedOutOfMemory = false
 
-  val pageCount: Int get() = pageSizes.size
+  override val pageCount: Int get() = pageSizes.size
 
   /** The reported current page, 0 before a document is shown. */
-  val currentPageIndex: Int get() = currentPage.coerceAtLeast(0)
+  override val currentPageIndex: Int get() = currentPage.coerceAtLeast(0)
 
   /** Matches of the active search, highlighted on screen; null when none. */
-  var searchResults: SearchResults? = null
+  override var searchResults: SearchResults? = null
     set(value) {
       field = value
       invalidate()
@@ -244,16 +247,22 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     }
   /** Text of pages read for screen readers (null: none available); bounded by [MAX_PAGE_TEXTS]. */
   private val pageTexts = HashMap<Int, String?>()
+  private val pagesAwaitingText = HashSet<Int>()
   private val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
   private val accessibilityHelper = PdfAccessibilityHelper(this, this)
-  private val accessibilityStateListener = AccessibilityManager.AccessibilityStateChangeListener {
-    // A screen reader just turned on: read the visible pages' text.
-    requestRenders(force = true)
+  private val accessibilityStateListener = AccessibilityManager.AccessibilityStateChangeListener { isEnabled ->
+    if (!isEnabled) pagesAwaitingText.clear()
     accessibilityHelper.invalidateRoot()
+  }
+  private val touchExplorationListener = AccessibilityManager.TouchExplorationStateChangeListener { isEnabled ->
+    // A screen reader just turned on: read the visible pages' text.
+    if (isEnabled) requestRenders(force = true)
   }
 
   /** Any accessibility service (TalkBack, Switch Access, UI automation) is on. */
   private val isAccessibilityActive: Boolean get() = accessibilityManager.isEnabled
+
+  private val isScreenReaderActive: Boolean get() = accessibilityManager.isTouchExplorationEnabled
 
   init {
     ViewCompat.setAccessibilityDelegate(this, accessibilityHelper)
@@ -517,12 +526,13 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     pendingInitialPage = null
     pendingInitialPoint = null
     lastReportedViewport = null
-    failedPages.clear()
+    renderFailures.clear()
     pageLinks.clear()
     hasFileLinks = false
     pageWidgets.clear()
     staleFormPages.clear()
     pageTexts.clear()
+    pagesAwaitingText.clear()
     reportedOutOfMemory = false
     cache.clear()
     clearTiles()
@@ -600,7 +610,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
    * along the scroll axis, else it lands a third down the view; when zoomed
    * wider than the view it is also centred across.
    */
-  fun revealSearchMatch(match: SearchMatch) {
+  override fun revealSearchMatch(match: SearchMatch) {
     val layout = layout ?: return
     if (match.page >= layout.pageCount || match.rects.isEmpty()) return
     invalidate()
@@ -750,6 +760,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     val layout = layout ?: return
     if (page >= layout.pageCount) return
     pageTexts[page] = text
+    pagesAwaitingText -= page
     if (pageTexts.size > MAX_PAGE_TEXTS) {
       // Keep the pages nearest to the reader.
       pageTexts.keys.sortedByDescending { kotlin.math.abs(it - currentPage) }
@@ -787,7 +798,10 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     .replace("{page}", (page + 1).toString())
     .replace("{pageCount}", accessibilityPageCount.toString())
 
-  override fun accessibilityPageText(page: Int): String? = pageTexts[page]
+  override fun accessibilityPageText(page: Int): String? {
+    if (page !in pageTexts && pagesAwaitingText.add(page)) requestRenders()
+    return pageTexts[page]
+  }
 
   override fun dispatchHoverEvent(event: MotionEvent): Boolean =
     accessibilityHelper.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
@@ -937,6 +951,11 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       bitmapPool.release(bitmap)
       return
     }
+    renderFailures.onRendered(request)
+    if (!isAttachedToWindow) {
+      bitmapPool.release(bitmap)
+      return
+    }
     when (request) {
       is RenderRequest.Base -> {
         // Finished after the window hid (the queue was dropped then); renders again on return.
@@ -977,8 +996,11 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       }
       return
     }
-    // Never retry a page the platform renderer refused; it would loop forever.
-    if (failedPages.add(request.page)) listener?.onRenderFailed(failure)
+    if (renderFailures.onFailed(request)) {
+      listener?.onRenderFailed(failure)
+    } else {
+      requestRenders(force = true)
+    }
   }
 
   /**
@@ -1004,6 +1026,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     accessibilityManager.addAccessibilityStateChangeListener(accessibilityStateListener)
+    accessibilityManager.addTouchExplorationStateChangeListener(touchExplorationListener)
     context.applicationContext.registerComponentCallbacks(memoryCallbacks)
     bitmapPool.setMaxBytes(poolBudget())
     requestRenders(force = true)
@@ -1014,6 +1037,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     // while invisible. The document stays open and re-renders on attach.
     context.applicationContext.unregisterComponentCallbacks(memoryCallbacks)
     accessibilityManager.removeAccessibilityStateChangeListener(accessibilityStateListener)
+    accessibilityManager.removeTouchExplorationStateChangeListener(touchExplorationListener)
     scroller.forceFinished(true)
     zoomAnimator?.cancel()
     removeCallbacks(settleRunnable)
@@ -1044,7 +1068,14 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     super.onSizeChanged(w, h, oldw, oldh)
     cache.updateBudget(defaultCacheBudget(), visiblePages().toSet())
     if (isAttachedToWindow) bitmapPool.setMaxBytes(poolBudget())
-    if (w != oldw || (layoutDependsOnHeight && h != oldh)) rebuildLayout() else clampAndRefresh()
+    if (w != oldw || (layoutDependsOnHeight && h != oldh)) {
+      // A fling or zoom animation would go on in the old layout's coordinates (rotation).
+      scroller.forceFinished(true)
+      zoomAnimator?.cancel()
+      rebuildLayout()
+    } else {
+      clampAndRefresh()
+    }
   }
 
   override fun computeVerticalScrollRange(): Int =
@@ -1436,7 +1467,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     // A single page never shows its neighbours; don't spend memory on them.
     val planned = if (isSinglePage) visible.toList() else PrefetchPlanner.plan(visible, center, layout.pageCount, direction)
 
-    val bases = planned.filter { it !in failedPages }.map { baseRequest(layout, it) }
+    val bases = planned.filter(renderFailures::allowsBase).map { baseRequest(layout, it) }
     val argbBytes = bases.map { it.bitmapWidth.toLong() * it.bitmapHeight * ARGB_BYTES_PER_PIXEL }
     val pageBytes = if (BITMAPS_ON_JAVA_HEAP && pagesLookGrey) argbBytes.map { it / ARGB_BYTES_PER_PIXEL } else argbBytes
     val constrained = SystemClock.uptimeMillis() < constrainedUntilMs
@@ -1475,12 +1506,14 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       val insertAt = requests.indexOfFirst { (it as? RenderRequest)?.page !in visible }.let { if (it < 0) requests.size else it }
       requests.addAll(insertAt, tileRequests)
     }
-    if (isAccessibilityActive) {
+    if (isScreenReaderActive) {
       // Visible pages' text for screen readers, after their pixels but
       // before prefetch; dropped with the rest when they scroll away.
       val textQueries = visible.filter { it !in pageTexts }.map { PageTextQuery(it) }
       val insertAt = requests.indexOfFirst { (it as? RenderRequest)?.page !in visible }.let { if (it < 0) requests.size else it }
       requests.addAll(insertAt, textQueries)
+    } else if (pagesAwaitingText.isNotEmpty()) {
+      requests += visible.filter { it in pagesAwaitingText && it !in pageTexts }.map { PageTextQuery(it) }
     }
     if (!force && requests == lastSubmitted) return
     lastSubmitted = requests
@@ -1493,7 +1526,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   }
 
   private fun tileRequest(layout: PdfDocumentLayout, page: Int): RenderRequest.Tile? {
-    if (page in failedPages) return null
+    if (!renderFailures.allowsTile(page)) return null
     // A page without a base bitmap may still have an estimated size; its tile
     // geometry would be wrong. Tiles follow once the base layer is in.
     val base = cache.get(page) ?: return null
@@ -1554,6 +1587,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private fun clearTiles() {
     tiles.values.forEach { releaseAfterFrame(it.bitmap) }
     tiles.clear()
+    tileGeneration++
   }
 
   /**

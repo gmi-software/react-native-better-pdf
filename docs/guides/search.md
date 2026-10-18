@@ -26,6 +26,9 @@ const label = search?.isSupported === false
   fall back to the defaults.
 - Loading another document ends the search (with an event whose `query` is
   `''`).
+- `search()` is ignored before `onLoad`, also while a new `source` loads:
+  there is no event and the query is not kept. To search a document as it
+  opens, call it from `onLoad`.
 - Android searches with the platform renderer's text API (Android 15+, or
   12–14 with SDK extension 13); elsewhere the search ends at once with
   `isSupported: false`.

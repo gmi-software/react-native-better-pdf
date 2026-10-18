@@ -1,0 +1,10 @@
+# Opens the document list's entry matching ENTRY (a regex): searched from
+# the top of the list, so it comes in from below, and tapped in its upper
+# part. iOS reports an entry scrolled under the tab bar, or cut off at the
+# bottom edge, as visible, and a tap at its centre then misses it;
+# centring it could carry it under the tab bar.
+appId: software.gmi.betterpdf.example
+---
+- scrollUntilVisible: { element: "Bundled sample.*", direction: UP }
+- scrollUntilVisible: { element: "${ENTRY}" }
+- tapOn: { text: "${ENTRY}", point: "50%, 25%" }

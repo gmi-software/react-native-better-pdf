@@ -5,7 +5,8 @@ import PDFKit
 /// markup annotation a `ColorSchemeAnnotation` and every form widget a
 /// `FormWidgetAnnotation`. Separate instances of the file (page images,
 /// printing, outline) are plain `PDFDocument`s and keep the document's
-/// colours.
+/// colours; the one `getFormFields` reads is a `ColorSchemeDocument`, so
+/// its widgets are read as the displayed document's are.
 final class ColorSchemeDocument: PDFDocument, PDFDocumentDelegate {
   private let lock = NSLock()
   private var dark = false
@@ -29,8 +30,6 @@ final class ColorSchemeDocument: PDFDocument, PDFDocumentDelegate {
   /// Main thread: a widget's value was set, by the reader or by PDFKit
   /// loading its page (see `FormInteraction`).
   var widgetChanged: ((FormWidgetAnnotation) -> Void)?
-  /// Main thread: values changed since loading, by the reader or by code.
-  private(set) var formChangeCount = 0
   private var isQuiet = false
 
   func widgetDidChange(_ widget: FormWidgetAnnotation) {
@@ -38,19 +37,12 @@ final class ColorSchemeDocument: PDFDocument, PDFDocumentDelegate {
     widgetChanged?(widget)
   }
 
-  func noteFormChanged() {
-    formChangeCount += 1
-  }
-
   /// Runs `body` — code setting values — without reporting widget changes.
   /// (Writing this document would report too: PDFKit sets buttons' states
   /// again, measured; exports write a separate instance instead.)
-  func withoutReportingChanges<T>(countingAsChange: Bool = false, _ body: () throws -> T) rethrows -> T {
+  func withoutReportingChanges<T>(_ body: () throws -> T) rethrows -> T {
     isQuiet = true
-    defer {
-      isQuiet = false
-      if countingAsChange { formChangeCount += 1 }
-    }
+    defer { isQuiet = false }
     return try body()
   }
 

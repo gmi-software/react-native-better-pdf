@@ -90,6 +90,9 @@ export function OfflineScreen() {
 
   useEffect(() => {
     setServerOnline(true).catch(() => undefined);
+    // Not synchronous: `refresh` sets state only after an `await`, which the
+    // rule does not look past.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 

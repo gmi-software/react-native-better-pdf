@@ -799,6 +799,8 @@ const FIXTURES = {
   'forms-encrypted': () => formsDocument({ password: 'secret' }),
   // The same form in object streams, with a cross-reference stream.
   'forms-compressed': () => formsDocument({ objectStreams: true }),
+  // Timing: the same form on 1,000 pages, four text fields on each page after the second.
+  'forms-long': () => formsDocument({ pageCount: 1000 }),
   // A text field on a cropped page and one on a page rotated 90°, without /P.
   'forms-boxes': () =>
     buildDocument({
@@ -922,8 +924,10 @@ const FIXTURES = {
  * and an unsigned signature field; page 1 starts with a square annotation
  * that is not a field. Every widget has an appearance stream and border
  * and background colours; `/NeedAppearances` lets viewers draw their own.
+ * With `pageCount` over 2, every further page holds a parent field `pN`
+ * with four text fields, `pN.line1` to `pN.line4`.
  */
-function formsDocument(options = {}) {
+function formsDocument({ pageCount = 2, ...options } = {}) {
   const labels = [
     [0, 760, '1. Name (required)'],
     [0, 710, '2. Email'],
@@ -939,9 +943,13 @@ function formsDocument(options = {}) {
     [1, 760, '12. Date'],
     [1, 700, '13. Signature (unsigned)'],
   ];
+  const lines = [760, 700, 640, 580];
+  for (let page = 2; page < pageCount; page++) {
+    lines.forEach((y, line) => labels.push([page, y, `Line ${line + 1} (p${page + 1}.line${line + 1})`]));
+  }
   return buildDocument({
     ...options,
-    pageCount: 2,
+    pageCount,
     pageContent: (i) => ({
       content: [
         `0 g BT /F1 14 Tf 40 800 Td (Form, page ${i + 1}) Tj ET`,
@@ -965,7 +973,7 @@ function formsDocument(options = {}) {
       const rect = (x, y, w, h) => `/Rect [${x} ${y} ${x + w} ${y + h}]`;
       const da = '/DA (/Helv 12 Tf 0 g)';
       const fields = [];
-      const pageAnnots = [[], []];
+      const pageAnnots = Array.from({ length: pageCount }, () => []);
       const field = (page, dictionary) => {
         const ref = writer.add(dictionary);
         fields.push(ref);
@@ -1023,6 +1031,15 @@ function formsDocument(options = {}) {
       field(0, `<< ${common(0)} /FT /Tx /T (postcode) ${da} ${rect(200, 52, 120, 26)} /AP << /N ${textAp(120, 26)} 0 R >> >>`);
       field(1, `<< ${common(1)} /FT /Tx /T (date) ${da} ${rect(200, 750, 200, 26)} /AP << /N ${textAp(200, 26)} 0 R >> >>`);
       field(1, `<< ${common(1)} /FT /Sig /T (signature) ${rect(200, 640, 300, 70)} /AP << /N ${ap(300, 70, box(300, 70))} 0 R >> >>`);
+      const lineAp = pageCount > 2 ? textAp(300, 26) : null;
+      for (let page = 2; page < pageCount; page++) {
+        const parentRef = writer.reserve();
+        fields.push(parentRef);
+        const kids = lines.map((y, line) =>
+          widget(page, parentRef, `<< ${common(page)} /FT /Tx /T (line${line + 1}) ${da} ${rect(200, y, 300, 26)} /AP << /N ${lineAp} 0 R >> >>`),
+        );
+        writer.set(parentRef, `<< /T (p${page + 1}) /Kids [${kids.map((k) => `${k} 0 R`).join(' ')}] >>`);
+      }
 
       // Attached to the pages by buildDocument (see pendingAnnots).
       writer.pendingAnnots = pageAnnots.map((refs, page) => ({ page: r[page], refs }));

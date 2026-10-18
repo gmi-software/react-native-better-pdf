@@ -185,7 +185,9 @@ export interface PdfViewRef {
    * search; `''` clears it. Results arrive through
    * {@linkcode PdfViewProps.onSearchChange} as pages are searched. All
    * matches are highlighted; the first match at or after the current page
-   * becomes current and is scrolled into view.
+   * becomes current and is scrolled into view. Ignored before
+   * {@linkcode PdfViewProps.onLoad}, also while a new `source` loads: no
+   * event, and the query is not kept; search from `onLoad` instead.
    */
   search(query: string): void;
   /** Makes the next match current (wrapping to the first) and scrolls it into view. */
@@ -492,6 +494,9 @@ function useStableSource(source: PdfSource): NativePdfSource {
     base64: string | undefined;
     value: NativePdfSource;
   } | null>(null);
+  // A ref rather than useMemo, which may drop its cache: a new object would
+  // re-send the source. Reading it during render is the point.
+  /* eslint-disable react-hooks/refs */
   if (
     cached.current?.key !== key ||
     !Object.is(cached.current.base64, normalized.base64)
@@ -503,6 +508,7 @@ function useStableSource(source: PdfSource): NativePdfSource {
     };
   }
   return cached.current.value;
+  /* eslint-enable react-hooks/refs */
 }
 
 /**
@@ -591,6 +597,9 @@ export function PdfView({
   useLayoutEffect(() => {
     handlers.current = renderedHandlers;
   });
+  // Nitro's `callback()` only wraps a function and never calls it; the
+  // compiler cannot tell, so it reports the ref reads inside as render reads.
+  /* eslint-disable react-hooks/refs, react-hooks/preserve-manual-memoization */
   const nativeCallbacks = useMemo(
     () => ({
       onLoad: callback((event: PdfLoadEvent) =>
@@ -636,6 +645,7 @@ export function PdfView({
       }),
     [],
   );
+  /* eslint-enable react-hooks/refs, react-hooks/preserve-manual-memoization */
 
   useImperativeHandle(
     ref,
@@ -715,7 +725,7 @@ export function PdfView({
   // Only subscribe to events the app listens to, so native skips the JS hop
   // entirely for the others. Once subscribed, an event stays subscribed (the
   // handler ref makes a removed handler a no-op): unsubscribing would send
-  // `null`, which Nitro rejects.
+  // `null`, which Nitro rejects. That takes reading the set during render.
   const subscribed = useRef(new Set<keyof Handlers>());
   const subscription = <K extends keyof Handlers>(name: K) => {
     if (renderedHandlers[name] !== undefined) subscribed.current.add(name);
@@ -769,6 +779,8 @@ export function PdfView({
           searchCurrentHighlightColor,
           DEFAULT_SEARCH_CURRENT_HIGHLIGHT_COLOR,
         )}
+        // `subscription` reads its set during render (see above).
+        /* eslint-disable react-hooks/refs */
         onLoad={subscription('onLoad')}
         onLoadProgress={subscription('onLoadProgress')}
         onError={subscription('onError')}
@@ -780,6 +792,7 @@ export function PdfView({
         onSearchChange={subscription('onSearchChange')}
         onViewportChange={subscription('onViewportChange')}
         onFormChange={subscription('onFormChange')}
+        /* eslint-enable react-hooks/refs */
         overlayLayerId={overlayLayerId}
         overlays={overlays}
         hybridRef={hybridRef}

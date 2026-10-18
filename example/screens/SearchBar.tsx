@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type RefObject } from 'react';
 import { StyleSheet, Text, TextInput, View } from 'react-native';
 import type { PdfSearchChangeEvent, PdfViewRef } from 'react-native-better-pdf';
 import { Button, colors } from '../ui';
@@ -13,7 +13,7 @@ export function SearchBar({
   isCustomColor,
   onToggleColor,
 }: {
-  pdf: PdfViewRef | null;
+  pdf: RefObject<PdfViewRef | null>;
   state: PdfSearchChangeEvent | null;
   isCustomColor: boolean;
   onToggleColor: () => void;
@@ -31,15 +31,18 @@ export function SearchBar({
         value={query}
         onChangeText={(text) => {
           setQuery(text);
-          pdf?.search(text);
+          pdf.current?.search(text);
         }}
       />
       <Text testID="search-status" style={styles.status}>
         {formatStatus(state)}
       </Text>
-      <Button title="Prev" onPress={() => pdf?.searchPrevious()} />
-      <Button title="Next" onPress={() => pdf?.searchNext()} />
-      <Button title={isCustomColor ? 'Blue' : 'Yellow'} onPress={onToggleColor} />
+      <Button title="Prev" onPress={() => pdf.current?.searchPrevious()} />
+      <Button title="Next" onPress={() => pdf.current?.searchNext()} />
+      <Button
+        title={isCustomColor ? 'Blue' : 'Yellow'}
+        onPress={onToggleColor}
+      />
     </View>
   );
 }

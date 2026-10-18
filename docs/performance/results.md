@@ -169,7 +169,7 @@ emulator; its code did not change between the two runs).
   does not set it) — half the bytes per pixel, visibly lower quality in
   images — plus 0.3× thumbnails. Not copied: halving via RGB_565 would lower
   quality, and shrinking the window would bring back misses (§5). (Since
-  §19 grey pages take a quarter of the bytes with the same pixels.)
+  §20 grey pages take a quarter of the bytes with the same pixels.)
 - Janky frames on `small`/`medium`: equal within noise.
 
 ### What the numbers do not say
@@ -778,7 +778,76 @@ The same files opened in 21–64, 25–66 and 22–50 ms on iOS and in 38–170,
   for 177 ms on the UI thread). The two decode rows do not compare the
   platforms: iOS's is a debug build and does not include opening.
 
-## 19. Android grey pages in one byte per pixel (2026-10-17)
+## 19. iOS forms on long documents (2026-10-16)
+
+**Found by**: issue #28. `DocumentForm` found a field's widgets by
+loading the annotations of every page with widgets, on the main thread:
+for `getFormFields`, for every reader's edit while `onFormChange` was set,
+for `setFormFieldValues`, and to copy every widget's value before
+`exportDocument`, `print` and `renderPage` of a changed form.
+
+**Method**: `benchmarks/ios-forms/run.sh` (see its README; "before" is
+`REV` at the commit before the change), on the iOS 26.5 simulator (Apple
+Silicon Mac, quiet host): the form sources and real PDFKit in a simulator
+process, a freshly loaded document in a continuous `PDFView` (402×874 pt)
+in an off-screen `UIWindow` for every row, no app; the view's main-thread
+calls are replayed, not run. `forms-long`: the `forms` fixture's two
+pages, then a parent field with four text fields on each further page
+(1,000 pages, 4,005 fields; 5,000 pages, 20,005 fields, generated with a
+larger `pageCount`). 1,000 pages: two runs of each version, alternating
+(ranges below); 5,000 pages: one run each. Then Time Profiler with the
+Hangs instrument on the example app (release build, same simulator):
+`forms-long` open, Fields, a tap into the first field and typing, Fields,
+Export, with taps sent to the simulator (Maestro's view hierarchy reads
+would add their own main-thread work). Not measured: a device.
+
+**Change**: the form reads, from the page dictionaries, which pages each
+field's widgets are on (with the pages that have widgets, which it read
+before), and loads only those. It keeps the widgets changed by the reader
+or by code: the snapshot for exports, printing and page images holds
+those fields only, and is nil while nothing changed (formerly a change
+counter, which a rejected `setFormFieldValues` also raised).
+`getFormFields` reads a separate instance of the file on the read queue,
+filled in with that snapshot, as page images are.
+
+| Main thread | 1,000 pages: before | after | 5,000 pages: before | after |
+| --- | ---: | ---: | ---: | ---: |
+| The form, on first use | 10.5–10.7 ms | 12.8–13.0 ms | 51 ms | 65 ms |
+| First edit, page 1 (form created, `onFormChange` field) | 167–189 ms | 13.4–14.0 ms | 1.05 s | 70 ms |
+| First edit, last page | 176–217 ms | 13.7–14.0 ms | 1.38 s | 64 ms |
+| `getFormFields` after an edit | 256–370 ms | 0.1 ms | 3.24 s | 0.0 ms |
+| Snapshot for `exportDocument`, `print`, `renderPage` (two fields changed) | 256–285 ms | 0.1 ms | 3.09 s | 0.1 ms |
+| `setFormFieldValues`, one field on the last page (form created) | 179–205 ms | 12.8–14.6 ms | 1.42 s | 69 ms |
+
+| Example app, main thread in the view's form code (Time Profiler) | before | after |
+| --- | ---: | ---: |
+| Fields, as loaded | 226 ms | 1 ms |
+| Tap into the first field, typing (form created, `onFormChange`) | 5 ms (pages loaded by Fields) | 8 ms |
+| Fields after the edit | 89 ms | 15 ms |
+| Export | 88 ms | 8 ms |
+| Hangs reported | one, 295 ms | one, 275 ms |
+
+- The one hang in each trace is PDFKit creating its text field and the
+  keyboard taking it (`-[PDFKitTextView initWithAnnotation:…]`,
+  `becomeFirstResponder`) on the tap into the field, not the library's
+  code. The view's form work before the change stayed under the
+  instrument's 250 ms threshold in the app, but held the main thread for
+  up to 226 ms.
+- What is left on the main thread is the form's first use: walking the
+  page dictionaries, 13 µs per page.
+- `getFormFields` resolves after 261–272 ms at 1,000 pages (3.6 s at
+  5,000), on the read queue; the returned fields are the same in both
+  versions (hash in the run's output) and equal the displayed document's
+  own.
+- Exports, page images and printing of a changed form fill in only the
+  changed fields of the copy; the others are as the file has them. The
+  export's fields equal the displayed document's (checked for the five
+  form fixtures); the write itself (2.3–2.9 s at 1,000 pages) was already
+  off the main thread.
+- `viewer-forms`, `viewer-base64`, `viewer-print` and `viewer-page-image`
+  pass on iOS.
+
+## 20. Android grey pages in one byte per pixel (2026-10-17)
 
 **Found by**: §6 and §13 left one row where react-native-pdf used less
 memory: `small` (10 text pages), 118 vs 89.6 MB peak PSS.
@@ -846,7 +915,7 @@ the same rule. Colour pages are unchanged.
   pass from below the top, is identical on every version. The 6-level
   difference of zoomed text shows on API 34 and 37 only.
 - **Android 7.0 runs out of memory on colour pages, before and after**
-  (fixed in §20):
+  (fixed in §21):
   before Android 8 a bitmap's pixels are on the Java heap, and the
   emulator's heap is 48 MB (`dalvik.vm.heapgrowthlimit`); the budgets
   (§5, `defaultCacheBudget`) count native memory. Both builds showed
@@ -924,9 +993,9 @@ in brackets): `android-2026-10-17T10-35-36-620Z.json`, `…10-44-57-427Z…`,
   than in §13 (112 vs 131 MB), probably because its renders fell behind
   under this load; Better PDF's colour pages did not change.
 
-## 20. Android 7.x: bitmaps on the Java heap (2026-10-18)
+## 21. Android 7.x: bitmaps on the Java heap (2026-10-18)
 
-**Found by**: §19's check on Android 7.0. Before Android 8 (API 26) a
+**Found by**: §20's check on Android 7.0. Before Android 8 (API 26) a
 bitmap's pixels are on the Java heap, whose limit is `Runtime.maxMemory()`,
 but the budgets counted native memory: the cache's floor alone (4
 viewports, 31 MB on a 1080 × 1800 view) and its growth to the render plan
@@ -945,9 +1014,9 @@ budgets a quarter the size for grey documents, so it keeps the same pages
 as on newer Android unless the heap cannot hold them.
 
 **Method**: the bench scenario (load, jumps, zoom to 2.5×, swipes, every
-fifth reversed) driven over adb on the API 24 and API 28 emulators of §19,
+fifth reversed) driven over adb on the API 24 and API 28 emulators of §20,
 release builds, one run per document and build, alternating builds; "before"
-is the build of §19. `Throwing OutOfMemoryError` counted in logcat; the
+is the build of §20. `Throwing OutOfMemoryError` counted in logcat; the
 cache's bytes and misses from `getStats()`. For a typical heap, the API 24
 emulator's `dalvik.vm.heapgrowthlimit` was set to 192 MB (`adb root`,
 framework restarted). Unit tests: `MemoryBudgetsTest`.
@@ -971,8 +1040,9 @@ documents' budget not yet a quarter) gave `medium` 2 → 0 OOMs each time.
 - On a 48 MB heap a colour page (6.7 MB) leaves room for no prefetch: the
   misses stay what they were after an OOM (each OOM kept only the visible
   pages for 30 s), but no render fails and no error reaches the app.
-- On a 192 MB heap, a typical one, and from Android 8, nothing changes. The §19 numbers before grey pages for comparison (API 24,
-  48 MB): `small` 2 OOMs and 32 misses, `large` 2 and 58, `medium` 3 and 56.
+- On a 192 MB heap, a typical one, and from Android 8, nothing changes. The
+  §20 numbers before grey pages for comparison (API 24, 48 MB): `small` 2
+  OOMs and 32 misses, `large` 2 and 58, `medium` 3 and 56.
 - The first version counted grey pages at 4 bytes per pixel under the cap
   (`small` misses 11 → 31, `large` 14 → 59), then real bytes against the
   normal budget, which filled the cache with grey pages on the 192 MB heap
@@ -983,7 +1053,7 @@ documents' budget not yet a quarter) gave `medium` 2 → 0 OOMs each time.
   colour pages behind may not fit what was budgeted and render again (the
   §5 pattern). No fixture has such a mix.
 
-## 21. Both libraries after §19 and §20 (2026-10-18)
+## 22. Both libraries after §20 and §21 (2026-10-18)
 
 The current build against react-native-pdf 7.0.5 in one session: API 37
 emulator of its own (`sdk_gphone64_arm64`, 1080×2400), release builds,
@@ -1004,7 +1074,7 @@ session's input. `android-2026-10-18T13-16-21-641Z.json` (local),
 | extreme | react-native-pdf | 622 | 34 | 897.9 | 110.7 | – | – |
 
 - Better PDF is ahead in every cell. On `small` the peak is 85.3 (84.6–87.2)
-  vs 90.2 (89.9–91.0) MB, the ranges apart; §19's 90.9 vs 92.1 MB was
+  vs 90.2 (89.9–91.0) MB, the ranges apart; §20's 90.9 vs 92.1 MB was
   measured under a load average of 12–18.
 - **Janky frames are not comparable here** (§13): frame times are equal for
   both libraries in every run (p50 16–17 ms, p90 17–18 ms, p99 19–22 ms),
@@ -1015,4 +1085,3 @@ session's input. `android-2026-10-18T13-16-21-641Z.json` (local),
   draws come close to the 16.7 ms frame; a device is needed to compare.
 - JS-thread CPU while scrolling: 0.7–1.2% for both. No crash, no
   `OutOfMemoryError`.
-

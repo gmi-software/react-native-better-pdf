@@ -5,7 +5,7 @@ extension DocumentForm {
   /// Sets fields' values; all or none: throws before changing anything for
   /// an unknown or read-only field or a value its type does not take.
   func setValues(_ values: [NativePdfFormValue]) throws {
-    let changes = try values.map { value -> () -> Void in
+    let changes = try values.map { value -> (widgets: [FormWidgetAnnotation], apply: () -> Void) in
       let widgets = widgets(named: value.name)
       guard let first = widgets.first, let type = first.formFieldType else {
         throw RuntimeError.error(withMessage: "The form has no field named \"\(value.name)\"")
@@ -13,9 +13,12 @@ extension DocumentForm {
       guard !widgets.contains(where: { $0.isReadOnlyInDocument }) else {
         throw RuntimeError.error(withMessage: "The form field \"\(value.name)\" is read-only")
       }
-      return try Self.change(widgets, type: type, to: value)
+      return (widgets, try Self.change(widgets, type: type, to: value))
     }
-    changes.forEach { $0() }
+    for change in changes {
+      change.apply()
+      change.widgets.forEach(noteChange(of:))
+    }
   }
 
   private static func change(

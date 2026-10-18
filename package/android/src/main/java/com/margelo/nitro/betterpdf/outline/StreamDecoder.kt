@@ -93,6 +93,8 @@ object StreamDecoder {
     val columns = int("Columns", 1).coerceIn(1, 1 shl 20)
     val bytesPerPixel = maxOf(1, colors * bitsPerComponent / 8)
     val rowLength = (colors * bitsPerComponent * columns + 7) / 8
+    // Before allocating a row of the length the file declares (up to 64 MiB).
+    if (data.size < 1 + rowLength) return ByteArray(0)
     val output = ByteArrayOutputStream(data.size)
     var previous = ByteArray(rowLength)
     var at = 0

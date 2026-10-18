@@ -42,7 +42,13 @@ class HybridBetterPdfView(
     }
     container.onLaidOut = formFiller::place
   }
-  private val searchController = SearchController(documentView) { event -> onSearchChange?.invoke(event) }
+  private val searchController = SearchController(documentView) { event -> onSearchChange?.invoke(event) }.also { search ->
+    documentView.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+      override fun onViewAttachedToWindow(view: View) = search.onViewAttached()
+
+      override fun onViewDetachedFromWindow(view: View) = search.onViewDetached()
+    })
+  }
   override val view: View = container
 
   private val mainHandler = Handler(Looper.getMainLooper())
@@ -536,7 +542,7 @@ class HybridBetterPdfView(
     val initial = ResolvedInitialPosition.of(initialPosition, pageSizes.size)
     documentView.setDocument(session, pageSizes, initial.page, initial.scale, initial.point)
     loaded = LoadedDocument(session, pageSizes.size, filePath?.let(::File))
-    searchController.onDocumentChanged(session)
+    searchController.onDocumentChanged(session::startSearch)
     val first = pageSizes.first()
     onLoad?.invoke(
       PdfLoadEvent(

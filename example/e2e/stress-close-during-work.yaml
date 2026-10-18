@@ -13,58 +13,51 @@ appId: software.gmi.betterpdf.example
 - repeat:
     times: 5
     commands:
-      # Entries mid-list are centred: one cut off at an edge takes no tap.
       # Renders in flight.
-      - scrollUntilVisible: { element: "extreme.*", centerElement: true }
-      - tapOn: "extreme.*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "extreme.*" } }
       - extendedWaitUntil: { visible: "1 / 1000", timeout: 120000 }
       - swipe: { start: "50%, 85%", end: "50%, 15%", duration: 80 }
       - swipe: { start: "50%, 85%", end: "50%, 15%", duration: 80 }
       - tapOn: "‹ Back"
       # A search in flight.
-      - scrollUntilVisible: { element: "large.*", centerElement: true }
-      - tapOn: "large.*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "large.*" } }
       - extendedWaitUntil: { visible: "1 / 500", timeout: 120000 }
       - tapOn: "Find"
       - tapOn: { id: "search-input" }
       - inputText: "lorem"
       - tapOn: "‹ Back"
       # A page image in flight.
-      - scrollUntilVisible: { element: "medium.*", centerElement: true }
-      - tapOn: "medium.*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
       - extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
       - tapOn: "Image"
       - tapOn: "‹ Back"
       # A download in flight.
-      - scrollUntilVisible: { element: "Remote \\(slow\\).*", direction: UP }
-      - tapOn: "Remote \\(slow\\).*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Remote \\(slow\\).*" } }
       - tapOn: "‹ Back"
       # The outline of 1,000 entries being read.
-      - scrollUntilVisible: { element: "outline-large.*", centerElement: true }
-      - tapOn: "outline-large.*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "outline-large.*" } }
       - extendedWaitUntil: { visible: "1 / 1000", timeout: 60000 }
       - tapOn: "TOC"
       - tapOn: "‹ Back"
       # A form edit, a fill and an export in flight.
       # iOS labels the entry "forms, Fixture copied to the device".
-      - scrollUntilVisible: { element: "forms(, .*)?", centerElement: true }
-      - tapOn: "forms(, .*)?"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "forms(, .*)?" } }
       - extendedWaitUntil: { visible: "1 / 2", timeout: 30000 }
       - tapOn: "Fill"
       - tapOn: "Export"
       - tapOn: "‹ Back"
-      - scrollUntilVisible: { element: "Bundled sample.*", direction: UP }
 # PdfDocument (no view): closed while it renders page images.
 - tapOn: "Docs"
 - repeat:
     times: 3
     commands:
-      - scrollUntilVisible: { element: "extreme" }
+      - scrollUntilVisible: { element: "extreme", direction: UP }
       - tapOn: "extreme"
       - extendedWaitUntil: { visible: "opened in .* ms", timeout: 120000 }
       - tapOn: "Thumbnails"
       - tapOn: "Close"
-      - extendedWaitUntil: { visible: "after close: The document is closed", timeout: 30000 }
+      # Below the bottom edge on Android's screen.
+      - scrollUntilVisible: { element: "after close: The document is closed", timeout: 30000 }
 # Still alive.
 - tapOn: "Viewer"
 - scrollUntilVisible: { element: "Bundled sample.*", direction: UP }

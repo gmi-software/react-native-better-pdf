@@ -129,6 +129,8 @@ export function BenchmarkScreen({ autoRun }: { autoRun: BenchRequest | null }) {
   }, []);
 
   useEffect(() => {
+    // A deep link asked for a run (see App); starting it is this effect's job.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (autoRun != null) start(autoRun);
   }, [autoRun, start]);
 

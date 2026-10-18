@@ -2,6 +2,9 @@ package com.margelo.nitro.betterpdf
 
 import android.os.SystemClock
 
+internal typealias SearchStart =
+  (query: String, pageCount: Int, startPage: Int, pages: Int, listener: PdfSearchTask.Listener) -> PdfSearchTask?
+
 /**
  * Runs `search()` for a view: one [PdfSearchTask] at a time, its
  * [SearchResults] shown by [view], navigation, and `onSearchChange` events —
@@ -9,22 +12,46 @@ import android.os.SystemClock
  * for the first match, navigation, completion and clearing. Main thread.
  */
 internal class SearchController(
-  private val view: PdfDocumentView,
+  private val view: Host,
   private val emit: (PdfSearchChangeEvent) -> Unit,
 ) : PdfSearchTask.Listener {
-  private var session: PdfDocumentSession? = null
+  interface Host {
+    val pageCount: Int
+    val currentPageIndex: Int
+    var searchResults: SearchResults?
+
+    fun revealSearchMatch(match: SearchMatch)
+
+    fun invalidate()
+  }
+
+  private var startSearch: SearchStart? = null
   private var task: PdfSearchTask? = null
   private var results: SearchResults? = null
   private var query = ""
   private var startPage = 0
+  private var searchedPages = 0
   private var isComplete = true
   private var isSupported = true
+  private var isViewAttached = false
   private var lastEmitMs = 0L
 
-  /** A document was shown ([session]) or closed (null); ends any search on the previous one. */
-  fun onDocumentChanged(session: PdfDocumentSession?) {
+  /** A document was shown or closed (null); ends any search on the previous one. */
+  fun onDocumentChanged(startSearch: SearchStart?) {
     clear()
-    this.session = session
+    this.startSearch = startSearch
+  }
+
+  fun onViewAttached() {
+    isViewAttached = true
+    if (isComplete) return
+    runTask()
+    if (isComplete) emitNow()
+  }
+
+  fun onViewDetached() {
+    isViewAttached = false
+    cancelTask()
   }
 
   fun search(query: String) {
@@ -33,15 +60,16 @@ internal class SearchController(
       clear()
       return
     }
-    val session = session
+    if (startSearch == null) return
     val results = SearchResults()
     this.query = query
     this.results = results
     view.searchResults = results
     startPage = view.currentPageIndex
+    searchedPages = 0
     isSupported = true
-    task = session?.startSearch(query, view.pageCount, startPage, this)
-    isComplete = task == null
+    isComplete = false
+    runTask()
     emitNow()
   }
 
@@ -55,6 +83,7 @@ internal class SearchController(
     query = ""
     results = null
     view.searchResults = null
+    searchedPages = 0
     isComplete = true
     if (hadSearch) emitNow()
   }
@@ -62,6 +91,7 @@ internal class SearchController(
   override fun onSearchedPage(task: PdfSearchTask, page: Int, matches: List<List<PageRect>>) {
     if (task !== this.task) return
     val results = results ?: return
+    searchedPages++
     results.add(page, matches)
     if (matches.isNotEmpty()) view.invalidate()
     if (results.currentMatch == null && results.count > 0) {
@@ -85,6 +115,18 @@ internal class SearchController(
     match ?: return
     view.revealSearchMatch(match)
     emitNow()
+  }
+
+  private fun runTask() {
+    if (task != null || isComplete || !isViewAttached) return
+    val startSearch = startSearch ?: return
+    val pageCount = view.pageCount
+    if (searchedPages >= pageCount) {
+      isComplete = true
+      return
+    }
+    task = startSearch(query, pageCount, (startPage + searchedPages) % pageCount, pageCount - searchedPages, this)
+    if (task == null) isComplete = true
   }
 
   private fun cancelTask() {
