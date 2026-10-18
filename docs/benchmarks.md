@@ -183,7 +183,7 @@ Full tables, baselines, every experiment (including the ones that were
 reverted) and raw file names: [performance/results.md](performance/results.md).
 
 Summary, Android emulator (API 37), release builds, medians of 3 runs, both
-libraries in one session (2026-10-18, results §21):
+libraries in one session (2026-10-18, results §22):
 
 | Fixture | Load: Better / rn-pdf | Load from HTTP (incl. download): Better / rn-pdf | Peak PSS: Better / rn-pdf | Peak PSS over HTTP | Total CPU while scrolling: Better / rn-pdf |
 | --- | --- | --- | --- | --- | --- |

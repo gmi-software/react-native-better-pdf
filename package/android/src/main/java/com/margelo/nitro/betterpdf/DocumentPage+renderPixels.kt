@@ -26,7 +26,7 @@ internal enum class PixelGuess {
  * `PdfRenderer` draws into ARGB only, so a grey page renders in bands that
  * are converted as they are drawn and never needs a page-sized ARGB bitmap.
  * A page found to have colour mid-way costs up to twice a pass (results.md
- * §19), hence [guess].
+ * §20), hence [guess].
  */
 internal fun DocumentPage.renderPixels(
   pool: BitmapPool,

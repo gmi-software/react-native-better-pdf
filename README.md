@@ -169,7 +169,7 @@ an app.
 | 1000 pages, scans | 56 / 622 ms | — | 142 / 898 MB | 34 / 111% |
 
 Pages that are all grey (text, greyscale scans) are kept in one byte per
-pixel: the same pixels in a quarter of the memory (results §19).
+pixel: the same pixels in a quarter of the memory (results §20).
 
 Page jumps reach the page-change event in 0 ms (react-native-pdf: 34–50
 ms). On iOS both libraries render with PDFKit, so the numbers are close:

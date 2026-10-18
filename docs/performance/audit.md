@@ -187,7 +187,7 @@ direction.
    placeholders into blurry previews for ~0.4 MB per page.
 2. **Small-document memory**: was ~26 MB above react-native-pdf on the
    10-page fixture, from full-resolution ARGB page bitmaps. Grey pages now
-   take one byte per pixel with the same pixels (results §19): 90.9 vs
+   take one byte per pixel with the same pixels (results §20): 90.9 vs
    92.1 MB. Colour pages stay ARGB; what is left on `small` is the code of
    Android's PDF module (~9.6 MB, API 35+). Hardware bitmaps would drop the
    CPU copy of drawn pages but need device measurements: the emulator does
