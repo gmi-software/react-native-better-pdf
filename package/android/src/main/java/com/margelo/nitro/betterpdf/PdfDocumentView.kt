@@ -41,7 +41,7 @@ import kotlin.math.roundToInt
  * - **Base layer**: every page is rendered once at fit-width resolution (half
  *   or a quarter of it zoomed out, see [BaseResolution]) and kept in a
  *   byte-budgeted LRU ([LruByteCache]); evicted bitmaps go back to a
- *   [BitmapPool] for reuse.
+ *   [BitmapPool] for reuse. Grey pages take one byte per pixel ([renderPixels]).
  * - **Zoom tiles**: when zoomed beyond the base resolution, each visible page
  *   gets one viewport-sized, full-resolution crop rendered after the gesture
  *   settles. Memory stays O(viewport) no matter the zoom level.
@@ -156,6 +156,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       if (field == value) return
       field = value
       bitmapPaint.colorFilter = if (value) DARK_PAGES else null
+      coveragePaint.colorFilter = if (value) DARK_COVERAGE else COVERAGE
       placeholderPaint.color = if (value) Color.BLACK else Color.WHITE
       invalidate()
     }
@@ -267,9 +268,14 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   // region Memory
 
   val bitmapPool = BitmapPool(maxBytes = MemoryBudgets.MIN_POOL_BYTES)
+  /**
+   * Counts pages at 4 bytes per pixel, as the render plan does, so grey
+   * pages keep the same pages in less memory. Before API 26 it counts the
+   * bytes pages take: those are on the Java heap ([javaHeapCaps]).
+   */
   private val cache = LruByteCache<Int, Bitmap>(
     budgetBytes = defaultCacheBudget(),
-    sizeOf = { it.allocationByteCount.toLong() },
+    sizeOf = { if (BITMAPS_ON_JAVA_HEAP) it.allocationByteCount.toLong() else it.width.toLong() * it.height * ARGB_BYTES_PER_PIXEL },
     onEvict = { _, bitmap -> releaseAfterFrame(bitmap) },
   )
 
@@ -282,6 +288,8 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private var plannedBaseBytes = 0L
   /** Whether the last plan's base layer is below screen resolution, so tiles are drawn at zoom 1. */
   private var plannedTilesAtFit = false
+  /** Whether the last page rendered was grey coverage. */
+  private var pagesLookGrey = false
   private var tileGeneration = 0
 
   // endregion
@@ -301,6 +309,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   // endregion
 
   private val bitmapPaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG)
+  private val coveragePaint = Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG).apply { colorFilter = COVERAGE }
   private val placeholderPaint = Paint().apply { color = Color.WHITE }
   private val drawRect = RectF()
   private val tileSource = Rect()
@@ -936,6 +945,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
           return
         }
         cache.put(request.page, bitmap, protectedKeys = visiblePages().toSet())
+        pagesLookGrey = bitmap.isCoverage
         staleFormPages -= request.page
         updateCacheStats()
       }
@@ -1066,13 +1076,13 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       drawRect.set(layout.pageLeft(page), layout.pageTop(page), layout.pageRight(page), layout.pageBottom(page))
       val bitmap = cache.get(page)
       if (bitmap != null) {
-        canvas.drawBitmap(bitmap, null, drawRect, bitmapPaint)
+        canvas.drawBitmap(bitmap, null, drawRect, paintFor(bitmap))
       } else {
         canvas.drawRect(drawRect, placeholderPaint)
       }
       tiles[page]?.let { tile ->
         tileSource.set(0, 0, tile.usedWidth, tile.usedHeight)
-        canvas.drawBitmap(tile.bitmap, tileSource, tile.contentRect, bitmapPaint)
+        canvas.drawBitmap(tile.bitmap, tileSource, tile.contentRect, paintFor(tile.bitmap))
       }
       drawSearchMatches(canvas, layout, page)
     }
@@ -1427,19 +1437,20 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     val planned = if (isSinglePage) visible.toList() else PrefetchPlanner.plan(visible, center, layout.pageCount, direction)
 
     val bases = planned.filter { it !in failedPages }.map { baseRequest(layout, it) }
-    val pageBytes = bases.map { it.bitmapWidth.toLong() * it.bitmapHeight * 4 }
+    val argbBytes = bases.map { it.bitmapWidth.toLong() * it.bitmapHeight * ARGB_BYTES_PER_PIXEL }
+    val pageBytes = if (BITMAPS_ON_JAVA_HEAP && pagesLookGrey) argbBytes.map { it / ARGB_BYTES_PER_PIXEL } else argbBytes
     val constrained = SystemClock.uptimeMillis() < constrainedUntilMs
     val fit = PrefetchPlanner.fitToBudget(
       pageBytes = pageBytes,
       minKeep = bases.count { it.page in visible },
       baseBudget = if (constrained) 0L else defaultCacheBudget(),
-      maxBudget = if (constrained) 0L else MAX_CACHE_BYTES,
+      maxBudget = if (constrained) 0L else maxCacheBudget(),
     )
     if (fit.budgetBytes != cache.budgetBytes) {
       cache.updateBudget(fit.budgetBytes, visible.toSet())
       updateCacheStats()
     }
-    plannedBaseBytes = pageBytes.take(fit.keep).maxOrNull() ?: 0L
+    plannedBaseBytes = argbBytes.take(fit.keep).maxOrNull() ?: 0L
     plannedTilesAtFit = bases.take(fit.keep).any {
       baseRequest(layout, it.page, scale = 1f).bitmapWidth * TILE_THRESHOLD < layout.pageWidth(it.page)
     }
@@ -1559,18 +1570,31 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     }
   }
 
-  private fun poolBudget(): Long = MemoryBudgets.pool(width, height, plannedBaseBytes, plannedTilesAtFit)
+  private fun paintFor(bitmap: Bitmap): Paint = if (bitmap.isCoverage) coveragePaint else bitmapPaint
+
+  private fun poolBudget(): Long = javaHeapCaps()?.poolBytes ?: unboundedPoolBudget()
+
+  private fun unboundedPoolBudget(): Long = MemoryBudgets.pool(width, height, plannedBaseBytes, plannedTilesAtFit, pagesLookGrey)
+
+  /** Null from API 26, where bitmap pixels are native. */
+  private fun javaHeapCaps(): MemoryBudgets.HeapCaps? =
+    if (BITMAPS_ON_JAVA_HEAP) MemoryBudgets.javaHeapCaps(Runtime.getRuntime().maxMemory(), viewportBytes(), unboundedPoolBudget(), pagesLookGrey) else null
+
+  private fun maxCacheBudget(): Long = min(MAX_CACHE_BYTES, javaHeapCaps()?.cacheBytes ?: MAX_CACHE_BYTES)
+
+  private fun viewportBytes(): Long = max(1, width).toLong() * max(1, height) * ARGB_BYTES_PER_PIXEL
 
   private fun updateCacheStats() {
     statResidentPages = cache.count
-    statCacheBytes = cache.sizeBytes
+    statCacheBytes = cache.values.sumOf { it.allocationByteCount.toLong() }
   }
 
   private fun defaultCacheBudget(): Long {
     val heapBased = Runtime.getRuntime().maxMemory() / 6
     // Always room for the visible pages plus a little look-ahead.
-    val viewportBytes = max(1, width).toLong() * max(1, height) * 4
-    return heapBased.coerceIn(MIN_CACHE_BYTES, MAX_CACHE_BYTES).coerceAtLeast(viewportBytes * 4)
+    val argb = heapBased.coerceIn(MIN_CACHE_BYTES, MAX_CACHE_BYTES).coerceAtLeast(viewportBytes() * 4)
+    val budget = if (BITMAPS_ON_JAVA_HEAP && pagesLookGrey) argb / ARGB_BYTES_PER_PIXEL else argb
+    return budget.coerceAtMost(maxCacheBudget())
   }
 
   // endregion
@@ -1581,26 +1605,42 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
      * of CSS `hue-rotate`): white paper turns black, black text white, and
      * a red heading light red rather than cyan.
      */
-    val DARK_PAGES = ColorMatrixColorFilter(
-      ColorMatrix(
-        floatArrayOf(
-          -1f, 0f, 0f, 0f, 255f,
-          0f, -1f, 0f, 0f, 255f,
-          0f, 0f, -1f, 0f, 255f,
-          0f, 0f, 0f, 1f, 0f,
-        ),
-      ).apply {
-        postConcat(
-          ColorMatrix(
-            floatArrayOf(
-              -0.574f, 1.43f, 0.144f, 0f, 0f,
-              0.426f, 0.43f, 0.144f, 0f, 0f,
-              0.426f, 1.43f, -0.856f, 0f, 0f,
-              0f, 0f, 0f, 1f, 0f,
-            ),
+    val DARK_PAGES = ColorMatrixColorFilter(darkPages())
+
+    /**
+     * Coverage back to its greys (255 − alpha) in one draw; paper and then
+     * coverage would blend twice at an anti-aliased clip's edge.
+     */
+    val COVERAGE = ColorMatrixColorFilter(coverageToGrey())
+    val DARK_COVERAGE = ColorMatrixColorFilter(coverageToGrey().apply { postConcat(darkPages()) })
+
+    private fun darkPages() = ColorMatrix(
+      floatArrayOf(
+        -1f, 0f, 0f, 0f, 255f,
+        0f, -1f, 0f, 0f, 255f,
+        0f, 0f, -1f, 0f, 255f,
+        0f, 0f, 0f, 1f, 0f,
+      ),
+    ).apply {
+      postConcat(
+        ColorMatrix(
+          floatArrayOf(
+            -0.574f, 1.43f, 0.144f, 0f, 0f,
+            0.426f, 0.43f, 0.144f, 0f, 0f,
+            0.426f, 1.43f, -0.856f, 0f, 0f,
+            0f, 0f, 0f, 1f, 0f,
           ),
-        )
-      },
+        ),
+      )
+    }
+
+    private fun coverageToGrey() = ColorMatrix(
+      floatArrayOf(
+        0f, 0f, 0f, -1f, 255f,
+        0f, 0f, 0f, -1f, 255f,
+        0f, 0f, 0f, -1f, 255f,
+        0f, 0f, 0f, 0f, 255f,
+      ),
     )
 
     /** Translucent yellow and orange, readable over black text on white. */
@@ -1622,5 +1662,10 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     const val TILE_THRESHOLD = 1.15f
     const val MIN_CACHE_BYTES = 24L * 1024 * 1024
     const val MAX_CACHE_BYTES = 128L * 1024 * 1024
+    const val ARGB_BYTES_PER_PIXEL = 4
+
+    val BITMAPS_ON_JAVA_HEAP = Build.VERSION.SDK_INT < Build.VERSION_CODES.O
   }
 }
+
+private val Bitmap.isCoverage: Boolean get() = config == Bitmap.Config.ALPHA_8

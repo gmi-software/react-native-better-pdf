@@ -9,6 +9,8 @@ add_library(${PACKAGE_NAME} SHARED
         src/main/cpp/cpp-adapter.cpp
         src/main/cpp/Base64Document.cpp
         src/main/cpp/NativeBase64Document.cpp
+        src/main/cpp/NativePageCoverage.cpp
+        src/main/cpp/PageCoverage.cpp
 )
 
 include(${CMAKE_SOURCE_DIR}/../nitrogen/generated/android/NitroBetterPdf+autolinking.cmake)
@@ -29,4 +31,5 @@ target_link_libraries(
         ${PACKAGE_NAME}
         ${LOG_LIB}
         android
+        jnigraphics
 )
