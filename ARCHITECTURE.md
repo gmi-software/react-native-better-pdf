@@ -304,8 +304,13 @@ involved; the bars fade on the platform's schedule.
 one virtual node per visible page (label + text), the host as a scrollable
 list. `PdfDocumentView` implements `PdfAccessibilityHost` (visible pages,
 page bounds in view coordinates, hit testing, labels, cached text) and
-queues `PageTextQuery` work for visible pages without text only while
-`AccessibilityManager.isEnabled`. The render thread answers it through
+queues `PageTextQuery` work for visible pages without text. While a screen
+reader is on (`isTouchExplorationEnabled`), which reads pages as they come
+into view, the text goes after the visible pages' pixels and before the
+look-ahead. Other services (Switch Access, password managers, UI
+automation such as Maestro) also turn accessibility on but may never read
+a page: their text is read only for pages whose node a service asked for,
+after the look-ahead. The render thread answers it through
 `DocumentPage.readText()`.
 
 ### Search

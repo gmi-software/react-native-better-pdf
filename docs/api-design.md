@@ -812,10 +812,16 @@ Design:
   `ScrollView` with collection info (page count) and handles
   `ACTION_SCROLL_FORWARD/BACKWARD` (a page in paged layouts, 90% of a screen
   otherwise). The host's state description follows the current page.
-- **Text is read only while an accessibility service is on**, only for
-  visible pages, as `PageTextQuery` work queued after their renders (dropped
-  with them when they scroll away) and cached for the 32 pages nearest the
-  reader. Without a service nothing changes. It comes from
+- **Text is read only for accessibility services**, only for visible
+  pages, as `PageTextQuery` work (dropped with the renders when they scroll
+  away) and cached for the 32 pages nearest the reader. While a screen
+  reader is on (`isTouchExplorationEnabled`) it is queued after the visible
+  pages' renders, ahead of the look-ahead. Other services also turn
+  accessibility on — Switch Access, password managers, UI automation — and
+  may never read a page, so for them a page's text is read when its node
+  is read, after the look-ahead (in 1.0.1 every service had it read
+  ahead of the look-ahead, for every visible page). Without a service
+  nothing changes. It comes from
   `getTextContents` — Android 15+, or 12–14 with SDK extension 13; older
   versions read the label only (verified on API 34: "Page 1 of 100").
 - **iOS:** PDFKit already exposes the text; the viewer posts
@@ -830,7 +836,8 @@ Design:
   itself. Found by the regression run (`viewer-scroll-enabled` could no
   longer find `embedded-pdf`).
 - **Tested:** `viewer-accessibility` asserts the page nodes with text on
-  Android (first and last page), a localised label, and PDFKit's text on
+  Android (first and last page; Maestro is not a screen reader, so the text
+  is read on demand there), a localised label, and PDFKit's text on
   iOS. Not tested automatically: speech itself, TalkBack's scroll actions
   and the VoiceOver announcement (they need a real screen-reader session).
 

@@ -243,16 +243,22 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     }
   /** Text of pages read for screen readers (null: none available); bounded by [MAX_PAGE_TEXTS]. */
   private val pageTexts = HashMap<Int, String?>()
+  private val pagesAwaitingText = HashSet<Int>()
   private val accessibilityManager = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
   private val accessibilityHelper = PdfAccessibilityHelper(this, this)
-  private val accessibilityStateListener = AccessibilityManager.AccessibilityStateChangeListener {
-    // A screen reader just turned on: read the visible pages' text.
-    requestRenders(force = true)
+  private val accessibilityStateListener = AccessibilityManager.AccessibilityStateChangeListener { isEnabled ->
+    if (!isEnabled) pagesAwaitingText.clear()
     accessibilityHelper.invalidateRoot()
+  }
+  private val touchExplorationListener = AccessibilityManager.TouchExplorationStateChangeListener { isEnabled ->
+    // A screen reader just turned on: read the visible pages' text.
+    if (isEnabled) requestRenders(force = true)
   }
 
   /** Any accessibility service (TalkBack, Switch Access, UI automation) is on. */
   private val isAccessibilityActive: Boolean get() = accessibilityManager.isEnabled
+
+  private val isScreenReaderActive: Boolean get() = accessibilityManager.isTouchExplorationEnabled
 
   init {
     ViewCompat.setAccessibilityDelegate(this, accessibilityHelper)
@@ -514,6 +520,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     pageWidgets.clear()
     staleFormPages.clear()
     pageTexts.clear()
+    pagesAwaitingText.clear()
     reportedOutOfMemory = false
     cache.clear()
     clearTiles()
@@ -741,6 +748,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     val layout = layout ?: return
     if (page >= layout.pageCount) return
     pageTexts[page] = text
+    pagesAwaitingText -= page
     if (pageTexts.size > MAX_PAGE_TEXTS) {
       // Keep the pages nearest to the reader.
       pageTexts.keys.sortedByDescending { kotlin.math.abs(it - currentPage) }
@@ -778,7 +786,10 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     .replace("{page}", (page + 1).toString())
     .replace("{pageCount}", accessibilityPageCount.toString())
 
-  override fun accessibilityPageText(page: Int): String? = pageTexts[page]
+  override fun accessibilityPageText(page: Int): String? {
+    if (page !in pageTexts && pagesAwaitingText.add(page)) requestRenders()
+    return pageTexts[page]
+  }
 
   override fun dispatchHoverEvent(event: MotionEvent): Boolean =
     accessibilityHelper.dispatchHoverEvent(event) || super.dispatchHoverEvent(event)
@@ -1002,6 +1013,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   override fun onAttachedToWindow() {
     super.onAttachedToWindow()
     accessibilityManager.addAccessibilityStateChangeListener(accessibilityStateListener)
+    accessibilityManager.addTouchExplorationStateChangeListener(touchExplorationListener)
     context.applicationContext.registerComponentCallbacks(memoryCallbacks)
     bitmapPool.setMaxBytes(poolBudget())
     requestRenders(force = true)
@@ -1012,6 +1024,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     // while invisible. The document stays open and re-renders on attach.
     context.applicationContext.unregisterComponentCallbacks(memoryCallbacks)
     accessibilityManager.removeAccessibilityStateChangeListener(accessibilityStateListener)
+    accessibilityManager.removeTouchExplorationStateChangeListener(touchExplorationListener)
     scroller.forceFinished(true)
     zoomAnimator?.cancel()
     removeCallbacks(settleRunnable)
@@ -1479,12 +1492,14 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       val insertAt = requests.indexOfFirst { (it as? RenderRequest)?.page !in visible }.let { if (it < 0) requests.size else it }
       requests.addAll(insertAt, tileRequests)
     }
-    if (isAccessibilityActive) {
+    if (isScreenReaderActive) {
       // Visible pages' text for screen readers, after their pixels but
       // before prefetch; dropped with the rest when they scroll away.
       val textQueries = visible.filter { it !in pageTexts }.map { PageTextQuery(it) }
       val insertAt = requests.indexOfFirst { (it as? RenderRequest)?.page !in visible }.let { if (it < 0) requests.size else it }
       requests.addAll(insertAt, textQueries)
+    } else if (pagesAwaitingText.isNotEmpty()) {
+      requests += visible.filter { it in pagesAwaitingText && it !in pageTexts }.map { PageTextQuery(it) }
     }
     if (!force && requests == lastSubmitted) return
     lastSubmitted = requests
