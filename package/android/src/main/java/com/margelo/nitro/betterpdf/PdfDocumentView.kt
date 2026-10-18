@@ -99,7 +99,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private var pendingInitialPage: Int? = null
   /** With [pendingInitialPage]: the page point to put at the top-left corner, instead of the page's top. */
   private var pendingInitialPoint: PagePoint? = null
-  private val failedPages = HashSet<Int>()
+  private val renderFailures = RenderFailures()
   /** Set once [onDocumentLinks] arrived for the document. */
   private var hasFileLinks = false
 
@@ -508,7 +508,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     pendingInitialPage = null
     pendingInitialPoint = null
     lastReportedViewport = null
-    failedPages.clear()
+    renderFailures.clear()
     pageLinks.clear()
     hasFileLinks = false
     pageWidgets.clear()
@@ -928,6 +928,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       bitmapPool.release(bitmap)
       return
     }
+    renderFailures.onRendered(request)
     when (request) {
       is RenderRequest.Base -> {
         // Finished after the window hid (the queue was dropped then); renders again on return.
@@ -967,8 +968,11 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       }
       return
     }
-    // Never retry a page the platform renderer refused; it would loop forever.
-    if (failedPages.add(request.page)) listener?.onRenderFailed(failure)
+    if (renderFailures.onFailed(request)) {
+      listener?.onRenderFailed(failure)
+    } else {
+      requestRenders(force = true)
+    }
   }
 
   /**
@@ -1433,7 +1437,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     // A single page never shows its neighbours; don't spend memory on them.
     val planned = if (isSinglePage) visible.toList() else PrefetchPlanner.plan(visible, center, layout.pageCount, direction)
 
-    val bases = planned.filter { it !in failedPages }.map { baseRequest(layout, it) }
+    val bases = planned.filter(renderFailures::allowsBase).map { baseRequest(layout, it) }
     val pageBytes = bases.map { it.bitmapWidth.toLong() * it.bitmapHeight * 4 }
     val constrained = SystemClock.uptimeMillis() < constrainedUntilMs
     val fit = PrefetchPlanner.fitToBudget(
@@ -1489,7 +1493,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   }
 
   private fun tileRequest(layout: PdfDocumentLayout, page: Int): RenderRequest.Tile? {
-    if (page in failedPages) return null
+    if (!renderFailures.allowsTile(page)) return null
     // A page without a base bitmap may still have an estimated size; its tile
     // geometry would be wrong. Tiles follow once the base layer is in.
     val base = cache.get(page) ?: return null

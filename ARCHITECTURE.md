@@ -206,9 +206,12 @@ viewport change (main)
   `PdfRendererPreV`) and posts the
   result; the view keeps it in page points and draws the highlight and
   handles in view coordinates on top of the pages.
-- **Failure isolation**: a page that throws is recorded in `failedPages`,
-  reported once (`page-render-failed`) and drawn as a placeholder, never
-  retried in a loop.
+- **Failure isolation** (`RenderFailures`): a failed render is retried
+  straight away, once, since the first failure may be transient (the session
+  could not re-create its renderer). A page that fails twice in a row is reported
+  once (`page-render-failed`), drawn as a placeholder and not requested
+  again, so it never fails in a loop. Base bitmaps and zoom tiles are
+  counted apart: a page whose tiles fail keeps its base bitmap.
 
 ### Page sizes and PDFium's document cache
 
