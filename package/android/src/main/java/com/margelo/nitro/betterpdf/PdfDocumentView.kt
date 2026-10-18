@@ -1034,7 +1034,14 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
     super.onSizeChanged(w, h, oldw, oldh)
     cache.updateBudget(defaultCacheBudget(), visiblePages().toSet())
     if (isAttachedToWindow) bitmapPool.setMaxBytes(poolBudget())
-    if (w != oldw || (layoutDependsOnHeight && h != oldh)) rebuildLayout() else clampAndRefresh()
+    if (w != oldw || (layoutDependsOnHeight && h != oldh)) {
+      // A fling or zoom animation would go on in the old layout's coordinates (rotation).
+      scroller.forceFinished(true)
+      zoomAnimator?.cancel()
+      rebuildLayout()
+    } else {
+      clampAndRefresh()
+    }
   }
 
   override fun computeVerticalScrollRange(): Int =
