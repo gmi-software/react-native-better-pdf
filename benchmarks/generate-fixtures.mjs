@@ -692,6 +692,34 @@ const FIXTURES = {
   large: () =>
     scanned(500, { width: 1240, height: 1754, gray: true, quality: 60 }),
 
+  // Text pages and pages with a colour photo, alternating: grey and colour
+  // pages in one render plan.
+  'mixed-colour': () => {
+    const photos = imagePool(8, {
+      width: 900,
+      height: 600,
+      gray: false,
+      quality: 80,
+    });
+    return buildDocument({
+      pageCount: 100,
+      pageContent: (i) =>
+        i % 2 === 0
+          ? { content: textPage(i, { fontSize: 8 }) }
+          : {
+              content: `${textPage(i, { fontSize: 8 })}\nq 400 0 0 267 97 300 cm /Im0 Do Q`,
+              images: [
+                {
+                  name: 'Im0',
+                  jpeg: photos[i % photos.length],
+                  width: 900,
+                  height: 600,
+                },
+              ],
+            },
+    });
+  },
+
   extreme: () =>
     scanned(1000, { width: 1240, height: 1754, gray: false, quality: 50 }),
 

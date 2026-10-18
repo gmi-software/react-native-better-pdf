@@ -21,6 +21,7 @@ class LruByteCache<K : Any, V : Any>(
 
   val count: Int get() = entries.size
   val keys: Set<K> get() = entries.keys
+  val values: Collection<V> get() = entries.values
 
   /** Lookup that marks [key] as most recently used. */
   fun get(key: K): V? = entries[key]

@@ -3,7 +3,8 @@ package com.margelo.nitro.betterpdf
 import android.graphics.Bitmap
 
 /**
- * Reuses ARGB_8888 bitmaps of identical dimensions and frees the rest eagerly.
+ * Reuses bitmaps of identical dimensions and config and frees the rest
+ * eagerly.
  *
  * Pages of one document are usually the same size, so a page bitmap evicted
  * from the cache can be handed straight to the renderer for the next page
@@ -28,13 +29,13 @@ class BitmapPool(private var maxBytes: Long) {
   var allocations = 0L
     private set
 
-  /** Returns a bitmap of exactly [width] x [height]; contents are undefined. */
-  fun acquire(width: Int, height: Int): Bitmap {
+  /** Returns a [config] bitmap of exactly [width] x [height]; contents are undefined. */
+  fun acquire(width: Int, height: Int, config: Bitmap.Config = Bitmap.Config.ARGB_8888): Bitmap {
     synchronized(lock) {
       val iterator = free.iterator()
       while (iterator.hasNext()) {
         val bitmap = iterator.next()
-        if (bitmap.width == width && bitmap.height == height) {
+        if (bitmap.width == width && bitmap.height == height && bitmap.config == config) {
           iterator.remove()
           freeBytes -= bitmap.allocationByteCount
           return bitmap
@@ -42,7 +43,7 @@ class BitmapPool(private var maxBytes: Long) {
       }
     }
     allocations++
-    return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    return Bitmap.createBitmap(width, height, config)
   }
 
   fun release(bitmap: Bitmap) {

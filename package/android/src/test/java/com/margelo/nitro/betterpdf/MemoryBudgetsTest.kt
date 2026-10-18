@@ -39,9 +39,55 @@ class MemoryBudgetsTest {
   }
 
   @Test
+  fun `a grey document's pool holds the same bitmaps as coverage, and a band`() {
+    val page = bytes(1080, 1398)
+    assertEquals(
+      MemoryBudgets.pool(1080, 2400, page, tilesAtFit = false) / 4 + MemoryBudgets.BAND_BYTES,
+      MemoryBudgets.pool(1080, 2400, page, tilesAtFit = false, greyPages = true),
+    )
+    assertEquals(MemoryBudgets.MIN_POOL_BYTES / 4 + MemoryBudgets.BAND_BYTES, MemoryBudgets.pool(400, 300, bytes(400, 518), tilesAtFit = false, greyPages = true))
+  }
+
+  @Test
   fun `small views keep the minimum`() {
     assertEquals(MemoryBudgets.MIN_POOL_BYTES, MemoryBudgets.pool(400, 300, bytes(400, 518), tilesAtFit = false))
   }
 
+  // Before API 26 the pixels are on the Java heap; the bench viewer is 1080 x 1800.
+
+  @Test
+  fun `on a 48 MB Java heap the bitmaps stay within a third of it`() {
+    val caps = MemoryBudgets.javaHeapCaps(maxHeapBytes = MB * 48, viewportBytes = bytes(1080, 1800), poolBytes = MemoryBudgets.MIN_POOL_BYTES)
+    assertTrue(caps.cacheBytes >= 0)
+    assertTrue(caps.cacheBytes + caps.poolBytes + bytes(1080, 1800) <= MB * 16)
+  }
+
+  @Test
+  fun `a 192 MB Java heap keeps the whole plan of colour pages`() {
+    val caps = MemoryBudgets.javaHeapCaps(maxHeapBytes = MB * 192, viewportBytes = bytes(1080, 1800), poolBytes = MemoryBudgets.MIN_POOL_BYTES)
+    // Two visible pages, two ahead and two behind (PrefetchPlanner).
+    assertTrue(caps.cacheBytes >= 6 * bytes(1080, 1528))
+    assertEquals(MemoryBudgets.MIN_POOL_BYTES, caps.poolBytes)
+  }
+
+  @Test
+  fun `a grey document on a 48 MB Java heap keeps its whole plan as coverage`() {
+    val pool = MemoryBudgets.pool(1080, 1800, bytes(1080, 1528), tilesAtFit = false, greyPages = true)
+    val caps = MemoryBudgets.javaHeapCaps(maxHeapBytes = MB * 48, viewportBytes = bytes(1080, 1800), poolBytes = pool, greyPages = true)
+    assertTrue(caps.cacheBytes >= 6 * bytes(1080, 1528) / 4)
+    assertTrue(caps.cacheBytes + caps.poolBytes + bytes(1080, 1800) / 4 + MemoryBudgets.BAND_BYTES <= MB * 16)
+  }
+
+  @Test
+  fun `a heap too small for a viewport keeps nothing beyond the visible pages`() {
+    val caps = MemoryBudgets.javaHeapCaps(maxHeapBytes = MB * 16, viewportBytes = bytes(1080, 1800), poolBytes = MemoryBudgets.MIN_POOL_BYTES)
+    assertEquals(0L, caps.cacheBytes)
+    assertTrue(caps.poolBytes <= MB * 16 / 3)
+  }
+
   private fun bytes(width: Int, height: Int): Long = width.toLong() * height * 4
+
+  private companion object {
+    const val MB = 1024L * 1024
+  }
 }

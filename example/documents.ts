@@ -31,6 +31,7 @@ export const FIXTURES = [
   'malformed-empty',
   'malformed-truncated',
   'malformed-garbage-xref',
+  'mixed-colour',
 ] as const;
 export type FixtureName = (typeof FIXTURES)[number];
 

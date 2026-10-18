@@ -159,14 +159,17 @@ Plus `react-native-nitro-modules` (≈ 1 MB), shared by every Nitro module in
 an app.
 
 **Speed and memory** (Android emulator, release builds, medians of 3 runs,
-2026-10-07):
+2026-10-18, both libraries in one session):
 
 | Document | Load: better-pdf / rn-pdf | Load over HTTP, download included | Peak memory (PSS) | CPU while scrolling |
 | --- | --- | --- | --- | --- |
-| 10 pages, text | 55 / 82 ms | 72 / 113 ms | 118 / 90 MB (rn-pdf lower) | 15 / 22% |
-| 100 pages, images | 64 / 198 ms | 128 / 262 ms | 130 / 131 MB | 24 / 50% |
-| 500 pages, scans | 64 / 482 ms | 585 / 965 ms | 138 / 551 MB | 28 / 113% |
-| 1000 pages, scans | 91 / 746 ms | — | 144 / 897 MB | 27 / 114% |
+| 10 pages, text | 57 / 67 ms | 74 / 131 ms | 85 / 90 MB | 16 / 33% |
+| 100 pages, images | 43 / 165 ms | 104 / 283 ms | 128 / 130 MB | 26 / 59% |
+| 500 pages, scans | 47 / 417 ms | 592 / 1202 ms | 104 / 550 MB | 29 / 111% |
+| 1000 pages, scans | 56 / 622 ms | — | 142 / 898 MB | 34 / 111% |
+
+Pages that are all grey (text, greyscale scans) are kept in one byte per
+pixel: the same pixels in a quarter of the memory (results §20).
 
 Page jumps reach the page-change event in 0 ms (react-native-pdf: 34–50
 ms). On iOS both libraries render with PDFKit, so the numbers are close:

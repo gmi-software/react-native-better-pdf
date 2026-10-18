@@ -168,7 +168,8 @@ emulator; its code did not change between the two runs).
   256-px parts in `RGB_565` unless `useBestQuality` is set (react-native-pdf
   does not set it) — half the bytes per pixel, visibly lower quality in
   images — plus 0.3× thumbnails. Not copied: halving via RGB_565 would lower
-  quality, and shrinking the window would bring back misses (§5).
+  quality, and shrinking the window would bring back misses (§5). (Since
+  §20 grey pages take a quarter of the bytes with the same pixels.)
 - Janky frames on `small`/`medium`: equal within noise.
 
 ### What the numbers do not say
@@ -845,3 +846,262 @@ filled in with that snapshot, as page images are.
   off the main thread.
 - `viewer-forms`, `viewer-base64`, `viewer-print` and `viewer-page-image`
   pass on iOS.
+
+## 20. Android grey pages in one byte per pixel (2026-10-17)
+
+**Found by**: §6 and §13 left one row where react-native-pdf used less
+memory: `small` (10 text pages), 118 vs 89.6 MB peak PSS.
+
+**Breakdown** (`dumpsys meminfo` about once a second through the bench
+scenario, before the change, API 37 emulator, release): the app without a
+viewer is 64–67 MB for both libraries. While scrolling, Better PDF's
+native heap was 58.7 MB, react-native-pdf's 26.5 MB, the app alone 17.2
+MB. Better PDF's 41.5 MB were the page cache (33 MB: 5 pages of 6.6 MB in
+ARGB), one pooled page (6.6 MB) and ~2 MB besides. In some runs of Better
+PDF one 500 ms sample also held a transient ~10 MB of `Dalvik Other` (GC
+data), which then made the run's peak: `small`'s peak PSS varies by about
+10 MB between runs for that reason alone.
+
+**Change**: a page whose pixels are all grey (r = g = b, as on text pages
+and greyscale scans) is kept as ALPHA_8 coverage, 255 − grey, in a quarter
+of the bytes, and drawn through a colour matrix that turns the coverage
+back into the same greys (`DocumentPage+renderPixels.kt`, `PageCoverage.cpp`).
+`PdfRenderer` renders into ARGB only, so a page renders in 1 MB bands into
+a scratch bitmap, each converted as it is drawn: a grey page never needs a
+page-sized ARGB bitmap. At the first band with colour the rest of the page
+renders in one pass into ARGB and the bands before it are converted back;
+once a document's new page had colour, the next new pages render in one
+pass and are converted afterwards if grey, and a page known to have colour
+is not checked, and one known to be grey renders in bands. The cache counts every page at 4 bytes per pixel, as the
+render plan does, so it keeps the same pages either way; the pool keeps a
+quarter of its budget plus the band for grey documents. Zoom tiles follow
+the same rule. Colour pages are unchanged.
+
+**Pixels**:
+
+- A temporary probe rendered every request a second time in one pass into
+  ARGB and compared the two (API 37): 15 renders of `small` (all coverage,
+  one a 2.5× tile) and 21 of `medium` (all ARGB, three tiles), 0 differing
+  pixels.
+- Screenshots, before vs after, on API 37 and on API 34 without the updated
+  PDF module (S extension 7, plain `PdfRenderer`), the same on both: the
+  Embedded sample (text) in light and dark differs by 1–2 levels of 255 at
+  2,400–2,700 pixels (rounding in the colour matrix); `medium` at 2× is
+  identical. `small` at 2.5× differs by up to 6 levels at glyph edges
+  (119,733 pixels, as many lighter as darker), while the probe found the
+  rendered tile identical: the difference comes from drawing, most likely
+  the GPU's filtering of a one-byte texture at the tile's fractional offset,
+  not from rendering in bands. Repeated screenshots of each build are
+  identical. A first version drew the paper and then the coverage over it:
+  up to 34 levels at 14 pixels on the view's rounded corner, where the
+  anti-aliased clip blended twice; the colour matrix draws once.
+- Older Android versions (2026-10-18; emulators with Google APIs arm64
+  images, the plain `PdfRenderer`: no updated PDF module on any of them).
+  The same screenshots before vs after, and the bench scenario with swipes
+  for both builds and `small`, `medium`, `large`. "Pages" are `small`,
+  `medium` (whose first page has its colour image below the text, so it
+  takes the band-then-one-pass path) and `large` at load, and the Embedded
+  sample in light and dark. Most differing level of 255, and pixels:
+
+  | Android | Pages | `medium` at 2× | `small` at 2.5× (tile) | Scrolling: OOMs, before → after | Crashes |
+  | --- | --- | --- | --- | --- | ---: |
+  | 7.0 (API 24) | 1 (66,000–720,000) | identical but for the error text | 1 (67,488) | `small` 2 → 0, `medium` 3 → 2, `large` 2 → 0 | 0 |
+  | 9 (API 28) | 1 (1,765–13,732) | identical | identical | none | 0 |
+  | 12 (API 31) | 1 (1,866–14,751) | identical | identical | none | 0 |
+  | 14 (API 34) | 2 (2,400–2,700) | identical | 6 (119,733) | – | 0 |
+  | 16+ (API 37) | 2 (2,400–2,700) | identical | 6 (119,733) | none | 0 |
+
+  `medium`'s first page, rendered in bands until its image, then in one
+  pass from below the top, is identical on every version. The 6-level
+  difference of zoomed text shows on API 34 and 37 only.
+- **Android 7.0 runs out of memory on colour pages, before and after**
+  (fixed in §21):
+  before Android 8 a bitmap's pixels are on the Java heap, and the
+  emulator's heap is 48 MB (`dalvik.vm.heapgrowthlimit`); the budgets
+  (§5, `defaultCacheBudget`) count native memory. Both builds showed
+  "Out of memory rendering page 4" opening `medium` at 2×. While scrolling,
+  each OOM leaves only the visible pages for 30 s: misses before → after
+  were 32 → 11 (`small`), 56 → 55 (`medium`), 58 → 14 (`large`). Grey
+  documents now fit; colour ones do not. On Android 9 and 12 nothing ran
+  out of memory, cache misses were unchanged (11, 14, 14) and the cache held
+  6.3–7.9 instead of 25.2–31.5 MB for `small` and 9.4 instead of 37.8 MB
+  for `large`.
+- Not checked: Android 12–13 with the updated PDF module (S extension 13,
+  `PdfRendererPreV`), which these emulator images do not have; real devices.
+- `PageCoverage.cpp` has a host test (`package/test/coverage`); each of five
+  broken variants (no alpha check, one channel compared, an off-by-one
+  grey, a wrong alpha back, one row too many) fails it.
+
+**Render time** (temporary probe: each variant rendered 7 times per page in
+the same process, medians, pages 1–4 of each fixture, ms; "bands" is the
+grey path, which on a colour page means bands until the first colour band,
+then one pass):
+
+| | one pass (before) | one pass + check | bands, 1 MB | 2 MB | 4 MB |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `small`, page | 6.7–8.2 | 6.8–9.0 | 6.9–8.3 | 6.4–9.2 | 6.8–7.5 |
+| `small`, 2.5× tile | 8.5–9.7 | 8.9–16.4 | 9.6–18.3 | 9.3–12.8 | 8.8–11.4 |
+| `large` (grey scans), page | 29.0–47.8 | 26.6–38.0 | 24.2–28.5 | 22.6–29.2 | 22.9–46.0 |
+| `medium` (colour), page | 16.8–21.3 | 17.0–23.8 | 25.9–46.3 | 31.6–44.3 | 37.6–48.0 |
+| `extreme` (colour scans), page | 27.7–42.1 | 25.8–45.4 | 37.2–45.7 | 34.4–37.9 | 42.2–51.4 |
+
+Bands cost grey pages nothing measurable and colour pages up to twice a
+pass, which is why only a document's first colour page renders that way;
+the check after one pass is within the noise. Larger bands were no faster.
+
+**Result** (3 interleaved pairs, before/after, then react-native-pdf 7.0.5
+in the same session, on an emulator no other session used; medians, range
+in brackets): `android-2026-10-17T10-35-36-620Z.json`, `…10-44-57-427Z…`,
+`…10-55-24-353Z…` (before), `…10-40-14-706Z…`, `…10-50-35-245Z…`,
+`…11-01-22-486Z…` (after), `…11-22-45-765Z…` and `…11-31-57-846Z…`
+(react-native-pdf); HTTP: `…11-05-24-308Z…`, `…11-12-56-651Z…`,
+`…11-09-05-103Z…`, `…11-16-51-209Z…`, `…11-27-46-755Z…`.
+
+| Peak PSS (MB) | before | after | react-native-pdf | `cacheBytes` before → after | bitmap allocations | misses |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `small` | 128.5 (122.3–137.6) | **90.9** (90.7–91.7) | 92.1 (90.7–92.8) | 37.8 → 9.4 MB | 18 → 26 | 11 → 11 |
+| `small` over HTTP | 124.9 (123–126.8) | **96.6** (91.5–101.7) | 100.5 (99.6–101.5) | 31.5 → 9.4 MB | 19.5 → 26 | 12 → 11.5 |
+| `medium` | 135.8 (135.7–142.7) | 134.2 (128.2–137.1) | 112.3 (110.7–129.5) | 37.8 → 37.8 MB | 22 → 26 | 14 → 14 |
+| `medium` over HTTP | 136.4 (136.2–136.7) | 137.1 (133.8–140.4) | 147.3 (138–156.7) | 37.8 → 37.8 MB | 21 → 27.5 | 14 → 14 |
+| `large` | 144.7 (144.3–146.3) | **110.4** (104.7–110.9) | 700 (one run) | 37.8 → 9.4 MB | 16 → 15 | 14 → 14 |
+| `extreme` | 145.9 (139.9–146.1) | 142.4 (128.4–146.7) | 782.9 (one run) | 37.8 → 37.8 MB | 14 → 18 | 14 → 14 |
+
+- Grey documents (`small`, `large`) hold the same pages (cache misses and
+  renders unchanged) in a quarter of the bytes: 28–38 MB less at peak.
+  Colour documents (`medium`, `extreme`) are unchanged within noise.
+- `small` now peaks at or below react-native-pdf (90.9 vs 92.1 MB; over
+  HTTP 96.6 vs 100.5 MB). The page pixels are below its own: while
+  scrolling, native heap 31.5 vs 38.6 MB (one sample each). What is left
+  is code: `.so` mappings of 12.5 vs 3.2 MB. `/proc/<pid>/smaps` puts it on
+  Android's PDF module (API 35+): once `PdfRenderer` opens, the process maps
+  306 libraries for 12.7 MB of PSS (`libpdfclient.so`, which contains
+  PDFium, 2.3 MB, and the libraries it loads), against 3.1 MB before; the
+  build before the change maps the same. react-native-pdf's own PDFium
+  costs ~2 MB inside its APK mapping. Every app that uses `PdfRenderer` on
+  API 35+ pays this once.
+- The pairs ran the build before one rule was added (a page known to be
+  grey renders in bands also after a colour page). One run of the final
+  build: 91.1, 139.8, 113.6 and 142.6 MB (`…12-02-23-692Z…`).
+- More bitmap allocations (+4 to +8 per run): the grey pool is a quarter
+  of the size, and the first colour page of a document allocates a
+  coverage bitmap it does not keep.
+- **Times are not comparable in this session**: the host's load average was
+  12–18 (other sessions' emulators and builds), the scroll windows drew 40–85
+  frames in 10 s, and loads took 0.5–2 s for both libraries. Loading is not
+  affected by the change (the load event comes before the first render);
+  render cost is the probe above. react-native-pdf's `medium` peaked lower
+  than in §13 (112 vs 131 MB), probably because its renders fell behind
+  under this load; Better PDF's colour pages did not change.
+
+## 21. Android 7.x: bitmaps on the Java heap (2026-10-18)
+
+**Found by**: §20's check on Android 7.0. Before Android 8 (API 26) a
+bitmap's pixels are on the Java heap, whose limit is `Runtime.maxMemory()`,
+but the budgets counted native memory: the cache's floor alone (4
+viewports, 31 MB on a 1080 × 1800 view) and its growth to the render plan
+(up to 128 MB) exceed a small heap. On the API 24 emulator (48 MB,
+`dalvik.vm.heapgrowthlimit`) the app's own objects took 9–12 MB of the heap
+on the home screen; opening `medium` grew the heap to 40 MB within seconds,
+then a 6.7 MB page failed with `OutOfMemoryError`.
+
+**Change** (below API 26 only; API 26+ unchanged): the viewer's bitmaps get
+a third of the Java heap (`MemoryBudgets.javaHeapCaps`: 16 MB of 48 MB,
+64 MB of 192 MB). The pool keeps at most a quarter of it, one viewport stays
+free for a zoom tile or the page being rendered (coverage and a band for
+grey documents), and the cache gets the rest, never less than the visible
+pages. The cache counts the bytes a page takes instead of 4 per pixel, with
+budgets a quarter the size for grey documents, so it keeps the same pages
+as on newer Android unless the heap cannot hold them.
+
+**Method**: the bench scenario (load, jumps, zoom to 2.5×, swipes, every
+fifth reversed) driven over adb on the API 24 and API 28 emulators of §20,
+release builds, one run per document and build, alternating builds; "before"
+is the build of §20. `Throwing OutOfMemoryError` counted in logcat; the
+cache's bytes and misses from `getStats()`. For a typical heap, the API 24
+emulator's `dalvik.vm.heapgrowthlimit` was set to 192 MB (`adb root`,
+framework restarted). Unit tests: `MemoryBudgetsTest`.
+
+| API 24, 48 MB heap, 2 pairs | OOMs, before → after | Misses, before → after | Cache, before → after |
+| --- | --- | --- | --- |
+| `small` | 0, 0 → 0, 0 | 11, 11 → 11, 11 | 6.3 MB, both |
+| `medium` | 2, 2 → 0, 0 | 57, 58 → 58, 59 | 18.9 / 12.6 MB, both |
+| `large` | 0, 0 → 0, 0 | 14, 14 → 14, 14 | 9.4 MB, both |
+| `medium` opened at 2× | 2 → 0: "Out of memory rendering page 4" gone | | |
+| `medium` scrolled at 1.3× (two pages, a tile each), 2 pairs | 3, 3 → 0, 0 | 46, 49 → 47, 49 | 12.6 MB, both |
+
+Three more pairs with an intermediate version (the same caps, grey
+documents' budget not yet a quarter) gave `medium` 2 → 0 OOMs each time.
+
+| 192 MB heap (API 24) and API 28 | OOMs | Misses, before → after | Cache, before → after |
+| --- | --- | --- | --- |
+| API 24, `small` / `medium` / `large` | 0, both | 11 / 14 / 14 → 11 / 14 / 14 | 7.9 / 37.8 / 9.4 MB, both |
+| API 28, `small` / `medium` / `large` | 0, both | 11 / 14 / 14 → 11 / 14 / 14 | 6.3 / 37.8 / 9.4 MB, both |
+
+- On a 48 MB heap a colour page (6.7 MB) leaves room for no prefetch: the
+  misses stay what they were after an OOM (each OOM kept only the visible
+  pages for 30 s), but no render fails and no error reaches the app.
+- On a 192 MB heap, a typical one, and from Android 8, nothing changes. The
+  §20 numbers before grey pages for comparison (API 24, 48 MB): `small` 2
+  OOMs and 32 misses, `large` 2 and 58, `medium` 3 and 56.
+- The first version counted grey pages at 4 bytes per pixel under the cap
+  (`small` misses 11 → 31, `large` 14 → 59), then real bytes against the
+  normal budget, which filled the cache with grey pages on the 192 MB heap
+  (`small` 7.9 → 15.7 MB, `large` 9.4 → 31.5 MB); the budgets now follow
+  the document.
+- **Documents that mix grey and colour pages** (found in review of this
+  change): the plan estimated every page by the format of the last page
+  rendered, so after a grey page the cached colour pages were counted at a
+  quarter of their bytes, did not fit the budget and rendered again (the §5
+  pattern). Now each page is estimated by the format it last rendered in,
+  and only pages not rendered yet follow the last page (`PageFormats`); the
+  pool and the heap caps use coverage sizes only when every planned page
+  is grey. Measured with a new fixture, `mixed-colour` (100 pages: text,
+  then text with a colour photo, alternating), one run per build, 2 pairs:
+
+  | `mixed-colour` | Renders in the scroll window, before → after | Misses, before → after |
+  | --- | --- | --- |
+  | API 24, 192 MB heap | 1,749, 1,734 → 77, 76 | 47, 52 → 14, 14 |
+  | API 24, 48 MB heap | 256, 240 → 67, 71 | 41, 41 → 49, 53 |
+  | API 37 | 109, 126 → 110, 107 | 14, 14 → 14, 14 |
+
+  On a typical heap the colour pages rendered again ~170 times a second
+  before. On the 48 MB heap fewer colour pages fit once they are counted
+  right, so a few more pages are blank when they scroll in, for a quarter
+  of the renders. On API 37 bitmap allocations fell from 96–100 to 85–87
+  (the pool can now hold a colour page) and peak PSS was 113.3 and 114.4 →
+  123.1 and 114.2 MB, within the ~10 MB a GC transient makes (§20).
+  `small`, `medium` and `large` on API 24 (48 MB) were unchanged (misses
+  11, 54–56, 14).
+
+## 22. Both libraries after §20 and §21 (2026-10-18)
+
+The current build against react-native-pdf 7.0.5 in one session: API 37
+emulator of its own (`sdk_gphone64_arm64`, 1080×2400), release builds,
+`run-android.mjs --runs 3`, local then `--source remote`; host load average
+4.5–7 (another session's iOS simulator), a continuous logcat with no other
+session's input. `android-2026-10-18T13-16-21-641Z.json` (local),
+`android-2026-10-18T13-25-40-165Z.json` (HTTP). Medians of 3:
+
+| Fixture | Library | Load (ms) | Jump (ms) | Peak PSS (MB) | Total CPU % | Load over HTTP (ms) | Peak PSS over HTTP (MB) |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| small | better | **57** | 0 | **85.3** | **16.4** | **74** | **86.3** |
+| small | react-native-pdf | 67 | 50 | 90.2 | 32.6 | 131 | 105.1 |
+| medium | better | **43** | 0 | **127.6** | **25.5** | **104** | **132.7** |
+| medium | react-native-pdf | 165 | 50 | 129.7 | 59 | 283 | 145.5 |
+| large | better | **47** | 0 | **104.2** | **28.5** | **592** | **104.8** |
+| large | react-native-pdf | 417 | 33 | 549.6 | 110.9 | 1202 | 564.1 |
+| extreme | better | **56** | 0 | **142.1** | **33.8** | – | – |
+| extreme | react-native-pdf | 622 | 34 | 897.9 | 110.7 | – | – |
+
+- Better PDF is ahead in every cell. On `small` the peak is 85.3 (84.6–87.2)
+  vs 90.2 (89.9–91.0) MB, the ranges apart; §20's 90.9 vs 92.1 MB was
+  measured under a load average of 12–18.
+- **Janky frames are not comparable here** (§13): frame times are equal for
+  both libraries in every run (p50 16–17 ms, p90 17–18 ms, p99 19–22 ms),
+  and each run is either ~490 frames at 0.2% janky or ~310–350 frames at
+  40–59%. Better PDF's runs took the slow mode in 8 of 21, react-native-pdf's
+  in 1 of 21 (`small` over HTTP), and two of its `medium` runs were at 9–13%.
+  §13 put the cause on the emulator's software GPU, where Better PDF's
+  draws come close to the 16.7 ms frame; a device is needed to compare.
+- JS-thread CPU while scrolling: 0.7–1.2% for both. No crash, no
+  `OutOfMemoryError`.

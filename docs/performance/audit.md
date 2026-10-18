@@ -185,9 +185,13 @@ direction.
 1. **Direction-change misses (2.6%)**: a low-resolution thumbnail layer (as
    react-native-pdf/AndroidPdfViewer does) would turn remaining white
    placeholders into blurry previews for ~0.4 MB per page.
-2. **Small-document memory**: ~26 MB above react-native-pdf on the 10-page
-   fixture, from full-resolution ARGB page bitmaps. Options: render the base
-   layer at 0.75× and rely on tiles for detail; measure quality vs memory.
+2. **Small-document memory**: was ~26 MB above react-native-pdf on the
+   10-page fixture, from full-resolution ARGB page bitmaps. Grey pages now
+   take one byte per pixel with the same pixels (results §20): 90.9 vs
+   92.1 MB. Colour pages stay ARGB; what is left on `small` is the code of
+   Android's PDF module (~9.6 MB, API 35+). Hardware bitmaps would drop the
+   CPU copy of drawn pages but need device measurements: the emulator does
+   not count graphics memory.
 3. **iOS device profiling**: Instruments (Allocations, Leaks, Core Animation)
    on hardware — simulator footprint is only a proxy (audit M7).
 4. **Render time moved to first view (B1 trade-off)**: parsing now happens on

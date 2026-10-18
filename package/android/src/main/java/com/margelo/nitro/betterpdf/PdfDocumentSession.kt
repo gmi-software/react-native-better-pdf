@@ -2,9 +2,7 @@ package com.margelo.nitro.betterpdf
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Matrix
-import android.graphics.Rect
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -281,6 +279,10 @@ class PdfDocumentSession internal constructor(
   private lateinit var measured: BooleanArray
   private lateinit var linksRead: BooleanArray
   private lateinit var formWidgetsRead: BooleanArray
+  /** How pages rendered, which picks the next [PixelGuess]; render thread only. */
+  private lateinit var colourPages: BooleanArray
+  private lateinit var greyPages: BooleanArray
+  private var lastNewPageHadColour = false
   /** The renderer can show and edit a form here (decided at open). */
   private var canFillForm = false
   private val form = DocumentForm { reads.readFormFields(cacheDirectory) }
@@ -353,6 +355,8 @@ class PdfDocumentSession internal constructor(
     measured = BooleanArray(pageCount).also { it[0] = true }
     linksRead = BooleanArray(pageCount)
     formWidgetsRead = BooleanArray(pageCount)
+    colourPages = BooleanArray(pageCount)
+    greyPages = BooleanArray(pageCount)
     return firstPage
   }
 
@@ -466,29 +470,31 @@ class PdfDocumentSession internal constructor(
         recordSize(request.page, size)
         recordLinks(request.page, page)
         recordFormWidgets(request.page, page)
+        val isNew = !colourPages[request.page] && !greyPages[request.page]
+        val guess = when {
+          colourPages[request.page] -> PixelGuess.COLOUR
+          greyPages[request.page] -> PixelGuess.PROBABLY_GREY
+          lastNewPageHadColour -> PixelGuess.PROBABLY_COLOUR
+          else -> PixelGuess.PROBABLY_GREY
+        }
         val target = when (request) {
           is RenderRequest.Base -> {
             val (width, height) = baseBitmapSize(request, size)
-            bitmapPool.acquire(width, height)
-          }
-          is RenderRequest.Tile -> bitmapPool.acquire(request.bitmapWidth, request.bitmapHeight)
-        }
-        bitmap = target
-        target.eraseColor(Color.WHITE)
-        when (request) {
-          is RenderRequest.Base -> {
-            val matrix = Matrix().apply { setScale(target.width / size.widthPoints, target.height / size.heightPoints) }
-            page.renderForDisplay(target, null, matrix)
+            val matrix = Matrix().apply { setScale(width / size.widthPoints, height / size.heightPoints) }
+            page.renderPixels(bitmapPool, width, height, width, height, matrix, guess)
           }
           is RenderRequest.Tile -> {
             val matrix = Matrix().apply {
               setScale(request.scale, request.scale)
               postTranslate(request.dx, request.dy)
             }
-            val clip = Rect(0, 0, request.usedWidth, request.usedHeight)
-            page.renderForDisplay(target, clip, matrix)
+            page.renderPixels(bitmapPool, request.bitmapWidth, request.bitmapHeight, request.usedWidth, request.usedHeight, matrix, guess)
           }
         }
+        bitmap = target
+        val hasColour = target.config == Bitmap.Config.ARGB_8888
+        if (hasColour) colourPages[request.page] = true else greyPages[request.page] = true
+        if (isNew) lastNewPageHadColour = hasColour
         pagesRendered.incrementAndGet()
         renderNanos.addAndGet(SystemClock.elapsedRealtimeNanos() - start)
         bitmap = null

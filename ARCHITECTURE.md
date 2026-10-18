@@ -64,6 +64,9 @@ package/
   android/src/main/java/com/margelo/nitro/betterpdf/
     HybridBetterPdfView.kt         props/methods/events, session lifecycle
     PdfDocumentSession.kt          PdfRenderer + FD owner, render thread, renderer recycling
+    DocumentPage+renderPixels.kt   a page into ARGB, or grey coverage (1 byte/pixel) rendered in bands
+    NativePageCoverage.kt          JNI entry: ARGB rows ↔ grey coverage
+    PageFormats.kt                 pure: which pages rendered grey or in colour, a guess for the rest
     RenderQueue.kt                 pure: replace-on-submit work queue (cancellation)
     PdfDocumentView.kt             the viewer View: gestures, drawing, cache, tiles
     TextSelectionController.kt     long press, handles, highlight, floating Copy / Select all toolbar
@@ -89,17 +92,21 @@ package/
     PageImageRequest.kt            renderPage validation and file write (view and document)
     outline/                       bounded PDF parser: outline, page tree, /Info (PdfDate)
   android/src/main/cpp/
-    cpp-adapter.cpp                JNI_OnLoad: Nitro's natives, then NativeBase64Document's
+    cpp-adapter.cpp                JNI_OnLoad: Nitro's natives, then NativeBase64Document's and NativePageCoverage's
     Base64Document.{hpp,cpp}       pure: base64 decoding by the library's rules (same as iOS)
     NativeBase64Document.cpp       decodes from the buffer straight into the file descriptor
+    PageCoverage.{hpp,cpp}         pure: grey RGBA rows ↔ coverage, and whether rows are grey
+    NativePageCoverage.cpp         the same on locked Bitmap pixels
 ```
 
 No C++ core: the only consumer of shared logic would be Android (PDFKit
 already virtualizes on iOS), so a C++ core would add a JNI hop to the
-per-frame path without a second caller. See the research notes. The one
-piece of hand-written C++ decodes a `{ base64 }` source on Android, from the
-native buffer JS hands over straight into the file, so neither a Java string
-nor a byte array of the document's size is made (see api-design "Source").
+per-frame path without a second caller. See the research notes. Two pieces
+of hand-written C++ do byte work on Android: one decodes a `{ base64 }`
+source from the native buffer JS hands over straight into the file, so
+neither a Java string nor a byte array of the document's size is made (see
+api-design "Source"); the other turns rendered grey pixels into coverage on
+the render thread, once per render (see "Cache strategy").
 
 ## Threading
 
@@ -245,9 +252,9 @@ position first and is re-anchored after that page is measured.
 
 | Layer        | What                                             | Bound                                                   |
 | ------------ | ------------------------------------------------ | ------------------------------------------------------- |
-| Base cache   | one bitmap per page, ≤ fit width (`LruByteCache`)| `clamp(maxHeap / 6, 24 MB, 128 MB)`, ≥ 4 viewports      |
+| Base cache   | one bitmap per page, ≤ fit width (`LruByteCache`)| `clamp(maxHeap / 6, 24 MB, 128 MB)`, ≥ 4 viewports, counting every page at 4 bytes per pixel |
 | Zoom tiles   | one viewport-sized full-res crop per visible page| visible pages × 1 viewport                              |
-| Bitmap pool  | free bitmaps for reuse                           | `max(8 MB, 1 viewport, 1 base page)`, or base page + 1 viewport when tiles are drawn at zoom 1; 0 while detached |
+| Bitmap pool  | free bitmaps for reuse                           | `max(8 MB, 1 viewport, 1 base page)`, or base page + 1 viewport when tiles are drawn at zoom 1; a quarter of that + a 1 MB band for grey pages; 0 while detached |
 
 - Visible pages are *protected*: they are never evicted to make room, so the
   budget can be exceeded only by what is on screen.
@@ -267,6 +274,23 @@ position first and is re-anchored after that page is measured.
   the page is also capped below screen resolution (landscape phones), tiles
   are drawn even at zoom 1, and the pool fits a page and a tile together so
   the two do not push each other out.
+- Grey pages (every pixel r = g = b: text, greyscale scans) are kept as
+  ALPHA_8 coverage, 255 − grey, a quarter of the bytes, and drawn back
+  through a colour matrix as the same greys. `PdfRenderer` renders into
+  ARGB only, so such a page renders in 1 MB bands, each converted as it is
+  drawn; at the first band with colour the rest renders in one pass into
+  ARGB. Once a document's new page had colour, the next ones render in one
+  pass and are converted afterwards if grey (`renderPixels`). The cache
+  counts every page at 4 bytes per pixel, so it keeps the same pages either
+  way.
+- Before Android 8 (API 26) bitmap pixels are on the Java heap: all of the
+  viewer's bitmaps get a third of `Runtime.maxMemory()`
+  (`MemoryBudgets.javaHeapCaps`), the pool at most a quarter of that, one
+  viewport stays free for a tile or the page being rendered, and the cache
+  gets the rest, never less than the visible pages. There the cache counts
+  the bytes pages take, the plan estimates each page by the format it last
+  rendered in (`PageFormats`), and the budgets are a quarter the size for
+  grey documents.
 - Cache key is the page; entries rendered at a different width (rotation,
   resize, crossing zoom ½ or ¼) are re-requested and replaced.
 - Memory pressure: `onTrimMemory(RUNNING_LOW, RUNNING_CRITICAL)`/`onLowMemory`

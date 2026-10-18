@@ -21,7 +21,8 @@ Generated deterministically by `node benchmarks/generate-fixtures.mjs`
 
 Every page has its own image object, so neither renderer can reuse a decoded
 image across pages. Additional fixtures for correctness tests: `mixed-sizes`
-(portrait, landscape, a 226×3000 pt receipt, square), `encrypted` (RC4-40,
+(portrait, landscape, a 226×3000 pt receipt, square), `mixed-colour` (100
+pages alternating text and text with a colour photo), `encrypted` (RC4-40,
 password `secret`), and malformed files (empty, not a PDF, truncated,
 corrupt xref).
 
@@ -182,15 +183,15 @@ deprecated-react-native-prop-types 46 KB.
 Full tables, baselines, every experiment (including the ones that were
 reverted) and raw file names: [performance/results.md](performance/results.md).
 
-Summary, Android emulator (API 37), release builds, medians of 3 runs
-(2026-10-07, the 1.0 release candidate, results §13):
+Summary, Android emulator (API 37), release builds, medians of 3 runs, both
+libraries in one session (2026-10-18, results §22):
 
-| Fixture | Load: Better / rn-pdf | Load from HTTP (incl. download): Better / rn-pdf | Peak PSS: Better / rn-pdf | Total CPU while scrolling: Better / rn-pdf |
-| --- | --- | --- | --- | --- |
-| small (10 p) | 55 / 82 ms | 72 / 113 ms | **118** / **89.6** MB (rn-pdf lower) | 15 / 22% |
-| medium (100 p) | 64 / 198 ms | 128 / 262 ms | 130.1 / 131.1 MB | 24 / 50% |
-| large (500 p) | 64 / 482 ms | 585 / 965 ms | 138.4 / 551.1 MB | 28 / 113% |
-| extreme (1000 p) | 91 / 746 ms | — | 143.7 / 897 MB | 27 / 114% |
+| Fixture | Load: Better / rn-pdf | Load from HTTP (incl. download): Better / rn-pdf | Peak PSS: Better / rn-pdf | Peak PSS over HTTP | Total CPU while scrolling: Better / rn-pdf |
+| --- | --- | --- | --- | --- | --- |
+| small (10 p) | 57 / 67 ms | 74 / 131 ms | 85.3 / 90.2 MB | 86.3 / 105.1 MB | 16.4 / 32.6% |
+| medium (100 p) | 43 / 165 ms | 104 / 283 ms | 127.6 / 129.7 MB | 132.7 / 145.5 MB | 25.5 / 59% |
+| large (500 p) | 47 / 417 ms | 592 / 1202 ms | 104.2 / 549.6 MB | 104.8 / 564.1 MB | 28.5 / 110.9% |
+| extreme (1000 p) | 56 / 622 ms | — | 142.1 / 897.9 MB | — | 33.8 / 110.7% |
 
 Page jumps: 0 ms vs 34–50 ms to the page-change event. JS-thread CPU
 while scrolling is equal (under 1%) and so is the number of JS callbacks.
