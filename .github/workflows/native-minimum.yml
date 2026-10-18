@@ -1,0 +1,28 @@
+name: Native (minimum)
+
+# Builds the example on Expo SDK 55 (React Native 0.83), the floor declared in
+# peerDependencies. Raise both together.
+#
+# Weekly rather than on every pull request: it would double the native build
+# time for breakage few changes introduce.
+on:
+  schedule:
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/native-minimum.yml'
+      - '.github/workflows/native-build.yml'
+
+concurrency:
+  group: native-minimum-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  native:
+    permissions:
+      contents: read
+    uses: ./.github/workflows/native-build.yml
+    with:
+      expo-sdk: '55'

@@ -8,6 +8,11 @@ name: Native build
 # whole chain on every run. package/nitrogen is committed and needs no codegen.
 on:
   workflow_call:
+    inputs:
+      expo-sdk:
+        description: Expo SDK major version to build the example on instead of its own.
+        type: string
+        default: ''
 
 jobs:
   ios:
@@ -45,6 +50,18 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Move the example to the requested Expo SDK
+        if: inputs.expo-sdk != ''
+        working-directory: example
+        env:
+          EXPO_SDK: ${{ inputs.expo-sdk }}
+        run: |
+          bunx expo install "expo@^$EXPO_SDK.0.0" --fix
+          # The nested copy of package/'s newer react-native devDependency breaks
+          # the library's Android codegen. Apps have no such copy.
+          rm -rf ../package/node_modules
+          node -p "'React Native ' + require('react-native/package.json').version"
 
       - name: Restore the CocoaPods cache
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -144,6 +161,18 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      - name: Move the example to the requested Expo SDK
+        if: inputs.expo-sdk != ''
+        working-directory: example
+        env:
+          EXPO_SDK: ${{ inputs.expo-sdk }}
+        run: |
+          bunx expo install "expo@^$EXPO_SDK.0.0" --fix
+          # The nested copy of package/'s newer react-native devDependency breaks
+          # the library's Android codegen. Apps have no such copy.
+          rm -rf ../package/node_modules
+          node -p "'React Native ' + require('react-native/package.json').version"
 
       # Also where the Gradle wrapper and settings.gradle come from.
       - name: Prebuild the example app
