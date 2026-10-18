@@ -185,7 +185,9 @@ export interface PdfViewRef {
    * search; `''` clears it. Results arrive through
    * {@linkcode PdfViewProps.onSearchChange} as pages are searched. All
    * matches are highlighted; the first match at or after the current page
-   * becomes current and is scrolled into view.
+   * becomes current and is scrolled into view. Ignored before
+   * {@linkcode PdfViewProps.onLoad}, also while a new `source` loads: no
+   * event, and the query is not kept; search from `onLoad` instead.
    */
   search(query: string): void;
   /** Makes the next match current (wrapping to the first) and scrolls it into view. */

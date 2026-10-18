@@ -33,14 +33,14 @@ internal class SearchController(
       clear()
       return
     }
-    val session = session
+    val session = session ?: return
     val results = SearchResults()
     this.query = query
     this.results = results
     view.searchResults = results
     startPage = view.currentPageIndex
     isSupported = true
-    task = session?.startSearch(query, view.pageCount, startPage, this)
+    task = session.startSearch(query, view.pageCount, startPage, this)
     isComplete = task == null
     emitNow()
   }

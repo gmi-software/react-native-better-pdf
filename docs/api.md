@@ -72,7 +72,7 @@ each page. The viewer adds no safe-area insets on either platform, like
 | `renderPage(page, options)` | A PNG or JPEG file of a page |
 | `print(options?)` | The system print dialog |
 | `getFormFields()` / `setFormFieldValues(values)` / `exportDocument(options?)` | Read, fill in and save the form |
-| `search(query)` / `searchNext()` / `searchPrevious()` / `clearSearch()` | Full-text search |
+| `search(query)` / `searchNext()` / `searchPrevious()` / `clearSearch()` | Full-text search. `search` is ignored before `onLoad` |
 | `getStats()` | Render and cache statistics, for diagnostics |
 
 `goToPage`, `zoomTo` and `goToViewport` ignore `NaN` and `±Infinity`, e.g.

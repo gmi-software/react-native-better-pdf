@@ -970,6 +970,9 @@ restore the position, scroll events, "read to the end"; see
   through `onScaleChange` then, as after any `zoomTo`. In 1.0.1 iOS showed
   the initial position and zoom there instead (e2e `viewer-initial`, "Zero
   width" entries).
+  `search` is ignored the same way, with no `onSearchChange` event (in
+  1.0.1 Android reported a finished search with no matches, and the
+  document's load then cleared it).
 - **A page outside the document** is clamped, and its point dropped: the
   nearest page is shown from its top, for `initialViewport` and
   `goToViewport` on both platforms. Clamping is native because only native
