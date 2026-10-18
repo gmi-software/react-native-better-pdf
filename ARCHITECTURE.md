@@ -279,7 +279,8 @@ position first and is re-anchored after that page is measured.
   rendering is discarded. When it shows again, the visible pages' neighbours
   are prefetched right away.
 - Detached from window (e.g. a screen hidden under a native stack): all
-  bitmaps are dropped; the document stays open and re-renders on attach.
+  bitmaps are dropped, and a render that finishes later is discarded; the
+  document stays open and re-renders on attach.
 - Bitmaps that leave the cache go to the pool or are `recycle()`d
   immediately rather than waiting for a GC (the Java heap of a PDF viewer is
   tiny, so GCs are rare and native pixel memory would pile up).
@@ -341,7 +342,7 @@ place.
 | `source`/`password` change | old session `close()`d; new session started                              |
 | `onDropView`          | `on*` callbacks released, session closed, all bitmaps dropped                |
 | `session.close()`     | queue cleared, download aborted, pending main-thread results dropped; the worker finishes the in-flight render, then closes the renderer (and with it the FD) |
-| Detach from window    | bitmaps dropped, pool emptied, queue emptied                                 |
+| Detach from window    | bitmaps dropped (also renders finishing later), pool emptied, queue emptied  |
 | Window hidden         | queue emptied, a late off-screen render discarded; on `UI_HIDDEN`, off-screen pages dropped and pool emptied |
 | Window shown again    | render plan resubmitted, so neighbours of the visible pages are prefetched   |
 

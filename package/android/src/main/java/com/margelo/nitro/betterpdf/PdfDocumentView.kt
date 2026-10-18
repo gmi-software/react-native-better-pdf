@@ -929,6 +929,10 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
       return
     }
     renderFailures.onRendered(request)
+    if (!isAttachedToWindow) {
+      bitmapPool.release(bitmap)
+      return
+    }
     when (request) {
       is RenderRequest.Base -> {
         // Finished after the window hid (the queue was dropped then); renders again on return.
