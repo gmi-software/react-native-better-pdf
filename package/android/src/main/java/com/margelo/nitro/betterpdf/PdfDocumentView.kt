@@ -1558,6 +1558,7 @@ class PdfDocumentView(context: Context) : View(context, null, android.R.attr.scr
   private fun clearTiles() {
     tiles.values.forEach { releaseAfterFrame(it.bitmap) }
     tiles.clear()
+    tileGeneration++
   }
 
   /**

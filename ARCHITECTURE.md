@@ -333,7 +333,9 @@ again at half or a quarter of their size. When the viewport settles for
 full-resolution tile per visible page is rendered using `PdfRenderer`'s
 clip + matrix. Tiles carry their own content-space rect and scale, so a
 tile that finishes after the user zoomed again still lands in the right
-place.
+place. A relayout (rotation, a page's real size, `contentInset`,
+`pageSpacing`) drops the tiles, and those still rendering when they
+arrive.
 
 ### Lifecycle
 
