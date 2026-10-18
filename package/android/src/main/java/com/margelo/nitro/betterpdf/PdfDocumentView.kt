@@ -13,7 +13,6 @@ import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import android.graphics.Rect
 import android.graphics.RectF
-import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.view.GestureDetector
@@ -209,15 +208,15 @@ class PdfDocumentView(context: Context) :
     }
 
   /**
-   * Whether a long press selects text. PdfRenderer exposes page text from
-   * Android 15 (API 35); earlier versions keep long presses inert. The
+   * Whether a long press selects text. Devices without
+   * [DocumentRenderer.supportsTextSelection] keep long presses inert. The
    * detector's long press stays on either way: turning it off would make a
    * long press end as a tap.
    */
   var isTextSelectionEnabled = true
     set(value) {
       field = value
-      textSelection.isEnabled = value && Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM
+      textSelection.isEnabled = value && DocumentRenderer.supportsTextSelection
     }
   private var shownPage = 0
   /** Set when a fling in paged mode was turned into a page snap. */

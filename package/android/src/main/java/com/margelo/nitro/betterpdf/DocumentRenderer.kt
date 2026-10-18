@@ -3,6 +3,7 @@ package com.margelo.nitro.betterpdf
 import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.ext.SdkExtensions
+import androidx.annotation.ChecksSdkIntAtLeast
 import java.io.IOException
 
 /**
@@ -39,15 +40,27 @@ internal interface DocumentRenderer : AutoCloseable {
 
   companion object {
     /** Whether this device can open password-protected documents. */
-    val supportsPasswords: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM || hasPreV
+    val supportsPasswords: Boolean get() = hasNewerRendererApi(Build.VERSION.SDK_INT, sExtensionVersion)
 
     /** Whether this device can fill forms in and write documents: the same renderers. */
     val supportsForms: Boolean get() = supportsPasswords
 
+    /** Whether a long press can select text: the same renderers. */
+    val supportsTextSelection: Boolean get() = supportsPasswords
+
     /** Android 12–14 with SDK extension 13; API 35+ uses `PdfRenderer` itself. */
-    private val hasPreV: Boolean
-      get() = Build.VERSION.SDK_INT in Build.VERSION_CODES.S until Build.VERSION_CODES.VANILLA_ICE_CREAM &&
-        SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) >= PRE_V_EXTENSION_VERSION
+    @get:ChecksSdkIntAtLeast(api = PRE_V_EXTENSION_VERSION, extension = Build.VERSION_CODES.S)
+    private val hasPreV: Boolean get() = usesPreV(Build.VERSION.SDK_INT, sExtensionVersion)
+
+    private val sExtensionVersion: Int
+      get() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) SdkExtensions.getExtensionVersion(Build.VERSION_CODES.S) else 0
+
+    /** Android 15+, or Android 12–14 with SDK extension 13 ([usesPreV]). */
+    internal fun hasNewerRendererApi(sdk: Int, sExtension: Int): Boolean =
+      sdk >= Build.VERSION_CODES.VANILLA_ICE_CREAM || usesPreV(sdk, sExtension)
+
+    private fun usesPreV(sdk: Int, sExtension: Int): Boolean =
+      sdk in Build.VERSION_CODES.S until Build.VERSION_CODES.VANILLA_ICE_CREAM && sExtension >= PRE_V_EXTENSION_VERSION
 
     /**
      * Opens [descriptor] (taking ownership) with the best renderer available.
