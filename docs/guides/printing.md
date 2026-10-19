@@ -20,8 +20,10 @@ if (result?.isSubmitted) showToast('Sent to the printer');
   the document is long),
   when the app is not in the foreground, and on iOS when the device cannot
   print or the document's permissions forbid printing (Android has no API
-  to read them and prints anyway). On iPad the dialog opens as a popover
-  from the view.
+  to read them and prints anyway). Also rejects for a view showing several
+  sources (see
+  [Several documents as one](sources-and-loading.md#several-documents-as-one)).
+  On iPad the dialog opens as a popover from the view.
 - Printing a file the app already has needs no viewer: `onLoad`'s
   `filePath` works with `expo-print` or `react-native-print`. This method
   adds what they cannot: protected documents, `content://` sources, and the

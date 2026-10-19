@@ -52,15 +52,16 @@ ref.current?.zoomTo(1);               // "reset zoom"
 
 ```ts
 type PdfSource =
-  | PdfUriSource      // { uri, headers?, cache?, maxAgeMs?, cacheKey? }: http(s)://, file://, content://
-  | { filePath: string } // absolute path
-  | PdfBase64Source      // { base64 }: the document's bytes
-  | number;              // require('./doc.pdf')
+  | PdfUriSource    // { uri, headers?, cache?, maxAgeMs?, cacheKey?, password? }: http(s)://, file://, content://
+  | PdfFileSource   // { filePath, password? }: absolute path
+  | PdfBase64Source // { base64, password? }: the document's bytes
+  | number;         // require('./doc.pdf')
 ```
 
 - Normalized in JS into one native shape `{ uri, base64?, headers?, cache?,
-  maxAgeMs?, cacheKey? }` so native code handles a single representation
-  (`uri` is `''` for base64).
+  maxAgeMs?, cacheKey?, password? }` so native code handles a single
+  representation (`uri` is `''` for base64). `PdfView` sends a list of
+  them, one per source; see "Several sources".
 - Remote files are downloaded **natively** (URLSession / HttpURLConnection)
   into a shared cache, keyed by a hash of `cacheKey` or of the URL and
   headers. No blob-util, no JS base64. See "Caching and offline".
@@ -1797,6 +1798,139 @@ showing the viewer.
   twelve thumbnails requested at once. The view's flows over the shared
   code (page images, page sizes, outline, passwords, printing, offline,
   errors) pass on both platforms.
+
+## Several sources
+
+```tsx
+<PdfView
+  source={[
+    { uri: 'https://example.com/setlist/1.pdf' },
+    { uri: 'https://example.com/setlist/2.pdf', password: 'secret' },
+    require('./encore.pdf'),
+  ]}
+  horizontal
+  enablePaging
+  onLoad={({ pageCount, sources }) => setSongs(sources)}
+/>
+```
+
+Requested in #5: a setlist app keeps every song in its own PDF and shows
+the setlist as one document, swiping from song to song. The workaround, a
+paging `FlatList` of `singlePage` views, cannot zoom: `singlePage` gives
+every gesture to the list.
+
+- **One document made of several files.** Pages follow in source order,
+  and every page number counts across the whole set: events
+  (`onPageChange`, `onViewportChange`, `onPageTap`, `onSearchChange`,
+  `onTextSelectionChange`), `initialPage`, `goToPage`, `goToViewport`,
+  overlays, `renderPage`, `getPageSizes` and `getOutline`. Zoom, layouts
+  and paging behave as with one file.
+- **`source` takes the array**, not a new `sources` prop: one source and a
+  list are the same idea, and one prop cannot be set twice. Unlike
+  React Native's `Image`, whose `source={[…]}` lists candidates to choose
+  from, every source is shown.
+- **`onLoad` maps pages to sources:** `sources[i]` is `{ pageCount,
+  firstPage, filePath?, isStale }`, and `pageCount` is their sum. With
+  several sources the top-level `filePath` is `undefined` (no one file
+  holds the document) and `isStale` is `true` when any source is stale. A
+  single source is reported in `sources` too, so apps need no special
+  case.
+- **A password per source:** `{ uri, password }`, `{ filePath,
+  password }` and `{ base64, password }`. The `password` prop applies to
+  every source without one, including bundled assets (`require()` returns
+  a number, which cannot carry one), so single-source apps keep working
+  unchanged.
+  `PdfDocument.open` follows the same rule with its `password` option;
+  `PdfCache` ignores passwords (it only downloads).
+- **All or nothing.** Sources open in parallel; the first failure cancels
+  the others and `onError` reports it with `sourceIndex`. Showing the
+  sources that did open would renumber every page after a failed one,
+  and the app's map from pages to songs with it. An empty list is an
+  `invalid-source` error.
+- **Load progress** sums the bytes of every download; `totalBytes` is set
+  only while every download reports its size.
+- **Viewing only.** `print`, `exportDocument`, `getFormFields` and
+  `setFormFieldValues` reject when there are several sources, and form
+  fields cannot be filled in by touch (they are still drawn). Printing and
+  exporting need one file, and Android has no API that merges PDF files
+  (the library's own parser only reads); see principle 5.
+- **Links** within a source lead to its pages in the set. The named
+  actions mean the whole set, as PDFKit handles them; Android follows:
+  `FirstPage` and `LastPage` lead to the set's ends, and `NextPage` and
+  `PrevPage` on a source's last or first page to the neighbouring
+  source's page. Links to another file are not followed, as with one
+  source.
+- **The outline** is the sources' outlines in source order, with their
+  pages counted across the set.
+- **Search** runs across every source, in page order.
+- **Changing `source`** reloads the whole set when any source changes,
+  with the same rule per source as for one: a source with an unchanged
+  `cacheKey` is the same document even when its `uri` or `headers`
+  change. Changing a password reloads too.
+- **Pages of different sizes** lay out as in one document with mixed
+  sizes; with `spreadMode`, a source may start on the right-hand page.
+- **iOS assembles one `PDFDocument`** from the sources' pages
+  (`insert(_:at:)`), keeping the sources open while it is shown. Checked
+  with PDFKit before building it: an inserted page reports the assembled
+  document as its `document` (so dark pages and form widgets read its
+  settings) and keeps its class, and search finds matches on every
+  inserted page. A link's destination resolves lazily against the
+  document its page is in: read after the move it has no page, read
+  before it keeps pointing at the page, which PDFView then finds at its
+  index in the set. The loader reads every page's link destinations
+  before moving it, ~0.2 ms a page (186 ms for the 1000-page scan,
+  measured on a Mac). The assembled document has no file URL, so outline,
+  page sizes and page images read the sources' files instead.
+- **Android keeps one renderer per source** behind the document session,
+  which maps a page in the set to its source and page on the render
+  thread. The viewer, its layout, caches, prefetch, text selection and
+  search results already work with page numbers only.
+- `PdfDocument` and `PdfCache` keep taking one source: a document without
+  a view is opened per file, and a set is downloaded ahead with one call
+  per source.
+- **Base64 sources** can be among them. Their text stays out of the
+  sources' value key, as for one source: each is compared by its string
+  (`Object.is`, then content), so a set with a long base64 document does
+  not serialize it on every render.
+- **Measured** (Android 17 emulator, debug build, PSS, medians of 3;
+  not comparable with the release-build numbers in benchmarks.md, and
+  release builds were not measured):
+  twenty copies of the 100-page `medium` fixture as one 2,000-page set
+  take 265 MB once loaded and 287 MB after jumping to the last page,
+  the first and the last again, against 286 MB for one copy scrolled to
+  its last page: with at most three renderers open, the set costs what
+  one source costs.
+- **Tested:** `source.test.ts` and `PdfView.test.tsx` (a list and a
+  single source sending the same native sources, each source's password
+  or the prop's, value identity of lists, changed passwords, base64
+  sources in a list: their text kept out of the key, new text sent again);
+  `PdfDocument.test.ts` (a source's own password first); JVM tests for
+  where sources' pages are (`SourcePages`), links of a source in a set
+  (pages counted across it, FirstPage and LastPage meaning the set's,
+  NextPage and PrevPage crossing into the neighbouring sources but not
+  past the set's ends),
+  lists of sources compared for reloading, a session over several sources
+  (each page from its source's renderer, at most three renderers open, a
+  failed download, renderer or allocation named by its source's index) and
+  summed download progress (`SourcesProgress`). `viewer-sources` on both
+  platforms: `links`, `outline` and `mixed-sizes` as one 20-page document —
+  `onLoad`'s sources, a link within the first source, a paged swipe across
+  a source's end, the outline at its pages, search across sources, page
+  sizes and a page image read from the page's source, print rejected, a
+  404 source failing the set with its index, a locked source taking the
+  `password` prop and another opening with its own, a base64 source among
+  files with its own password (an equal set in new objects does not reload,
+  new base64 content does), and remote sources downloaded in parallel,
+  left mid-download and opened again. On the
+  Android 14 image without SDK extension 13 (`android-legacy/sources`):
+  links read from each source's file, and a protected source failing the
+  set with its index. Dark pages of the second source checked on an iOS
+  screenshot. After leaving mid-download, the fixture server's
+  connection closed within 4 s on Android (one run); no pinned copy was
+  left on iOS. Rebased on main of 2026-10-18 (base64 sources included),
+  the full suites pass on iOS and Android (35 flows each, the stress flows
+  included), and so do the three Android 14 flows and `viewer-links`
+  there.
 
 ## Open questions
 

@@ -30,7 +30,7 @@ import { OverlayRegistryContext, type OverlayRegistry } from './PdfPageOverlay';
 import { buildOutlineTree } from './outline';
 import { defaultPrintJobName } from './printJobName';
 import { toNativeSource } from './nativeSource';
-import { normalizeSource, sourceKey, type PdfSource } from './source';
+import { normalizeSources, sourcesKey, type PdfSource } from './source';
 import type {
   PdfViewMethods,
   PdfViewProps as NativeProps,
@@ -147,14 +147,15 @@ export interface PdfViewRef {
    * {@linkcode PdfViewProps.password}, the downloaded copy of a remote
    * source. Rejects before {@linkcode PdfViewProps.onLoad}, while a print
    * dialog of this view is open, when the device cannot print or the app is
-   * not in the foreground, and on iOS when the document does not permit
-   * printing.
+   * not in the foreground, on iOS when the document does not permit
+   * printing, and with several sources.
    */
   print(options?: PdfPrintOptions): Promise<PdfPrintResult>;
   /**
    * Every form (AcroForm) field with its current value, filled in by the
    * reader or `setFormFieldValues`, in the document's field order; `[]`
-   * without a form. Rejects before {@linkcode PdfViewProps.onLoad}.
+   * without a form. Rejects before {@linkcode PdfViewProps.onLoad} and with
+   * several sources.
    */
   getFormFields(): Promise<PdfFormField[]>;
   /**
@@ -163,8 +164,8 @@ export interface PdfViewRef {
    * field for an unknown or read-only field, a value its type does not
    * take or an option it does not have. Does not send
    * {@linkcode PdfViewProps.onFormChange}. Rejects before
-   * {@linkcode PdfViewProps.onLoad} and where filling is unsupported
-   * (Android below 15 without SDK extension 13).
+   * {@linkcode PdfViewProps.onLoad}, with several sources, and where
+   * filling is unsupported (Android below 15 without SDK extension 13).
    */
   setFormFieldValues(
     values: Readonly<Record<string, PdfFormFieldValue>>,
@@ -177,7 +178,7 @@ export interface PdfViewRef {
    * export, with the same permissions. On iOS a filled-in export gets an
    * owner password nobody knows, or, when the owner password opened the
    * document, opens with that password alone (see the forms guide). Rejects
-   * before {@linkcode PdfViewProps.onLoad}.
+   * before {@linkcode PdfViewProps.onLoad} and with several sources.
    */
   exportDocument(options?: PdfExportOptions): Promise<PdfExportResult>;
   /**
@@ -199,7 +200,19 @@ export interface PdfViewRef {
 }
 
 export interface PdfViewProps extends ViewProps {
-  source: PdfSource;
+  /**
+   * The document, or several shown as one: their pages follow in this
+   * order, and every page number (events, `initialPage`, `ref` methods)
+   * counts across all of them. {@linkcode PdfViewProps.onLoad} tells where
+   * each source's pages are. With several sources the view is for reading:
+   * forms cannot be filled in, and `print`, `exportDocument`,
+   * `getFormFields` and `setFormFieldValues` reject.
+   */
+  source: PdfSource | readonly PdfSource[];
+  /**
+   * Opens password-protected documents: every source without a `password`
+   * of its own, including bundled assets.
+   */
   password?: string;
   /**
    * Zero-based page shown when a document finishes loading, rounded to the
@@ -482,30 +495,34 @@ function useInitialPosition(
 }
 
 /**
- * Keeps the native source prop referentially stable while its value is
+ * Keeps the native sources prop referentially stable while its value is
  * unchanged. Nitro diffs props by JS identity, so without this an inline
  * `source={{ uri }}` would re-send the source to native on every render.
  */
-function useStableSource(source: PdfSource): NativePdfSource {
-  const normalized = normalizeSource(source, Image.resolveAssetSource);
-  const key = sourceKey(normalized);
+function useStableSources(
+  source: PdfSource | readonly PdfSource[],
+  password: string | undefined,
+): NativePdfSource[] {
+  const normalized = normalizeSources(
+    source,
+    password,
+    Image.resolveAssetSource,
+  );
+  const key = sourcesKey(normalized);
+  const base64 = normalized.map((item) => item.base64);
   const cached = useRef<{
     key: string;
-    base64: string | undefined;
-    value: NativePdfSource;
+    base64: (string | undefined)[];
+    value: NativePdfSource[];
   } | null>(null);
   // A ref rather than useMemo, which may drop its cache: a new object would
   // re-send the source. Reading it during render is the point.
   /* eslint-disable react-hooks/refs */
   if (
     cached.current?.key !== key ||
-    !Object.is(cached.current.base64, normalized.base64)
+    cached.current.base64.some((text, index) => !Object.is(text, base64[index]))
   ) {
-    cached.current = {
-      key,
-      base64: normalized.base64,
-      value: toNativeSource(normalized),
-    };
+    cached.current = { key, base64, value: normalized.map(toNativeSource) };
   }
   return cached.current.value;
   /* eslint-enable react-hooks/refs */
@@ -563,14 +580,14 @@ export function PdfView({
   children,
   ...viewProps
 }: PdfViewProps) {
-  const nativeSource = useStableSource(source);
+  const nativeSources = useStableSources(source, password);
   const nativeContentInset = useContentInset(contentInset);
   const { overlays, overlayRegistry } = useOverlays();
   const overlayLayerId = `pdf-overlays${useId()}`;
   // For print's default job name; read when called, like the handlers.
-  const latestSource = useRef(nativeSource);
+  const latestSources = useRef(nativeSources);
   useLayoutEffect(() => {
-    latestSource.current = nativeSource;
+    latestSources.current = nativeSources;
   });
   const initialPosition = useInitialPosition(
     initialPage,
@@ -684,8 +701,10 @@ export function PdfView({
         const native = nativeRef.current;
         if (native == null) throw new Error('The PDF view is not mounted');
         const jobName = options?.jobName?.trim() ?? '';
+        const [first] = latestSources.current;
+        if (jobName !== '') return native.print(jobName);
         return native.print(
-          jobName === '' ? defaultPrintJobName(latestSource.current) : jobName,
+          first == null ? 'Document' : defaultPrintJobName(first),
         );
       },
       async getFormFields() {
@@ -740,11 +759,9 @@ export function PdfView({
     <View {...viewProps} style={[styles.box, style]} collapsable={false}>
       <NativeBetterPdfView
         style={styles.fill}
-        source={nativeSource}
+        sources={nativeSources}
         // Every optional prop is sent as a concrete value: when a prop is
         // removed, Fabric sends `null`, which Nitro's optional converters reject.
-        // An empty password means "none" on both platforms.
-        password={password ?? ''}
         initialPosition={initialPosition}
         minScale={minScale ?? 1}
         maxScale={maxScale ?? 4}

@@ -20,8 +20,7 @@ namespace margelo::nitro::betterpdf::views {
                                                      const HybridBetterPdfViewProps& sourceProps,
                                                      const react::RawProps& rawProps):
     react::ViewProps(context, sourceProps, rawProps, filterObjectKeys),
-    source(nitro::ReactProp<std::optional<NativePdfSource>>::fromRawValue("BetterPdfView", "source", rawProps, sourceProps.source)),
-    password(nitro::ReactProp<std::optional<std::string>>::fromRawValue("BetterPdfView", "password", rawProps, sourceProps.password)),
+    sources(nitro::ReactProp<std::optional<std::vector<NativePdfSource>>>::fromRawValue("BetterPdfView", "sources", rawProps, sourceProps.sources)),
     initialPosition(nitro::ReactProp<std::optional<PdfInitialPosition>>::fromRawValue("BetterPdfView", "initialPosition", rawProps, sourceProps.initialPosition)),
     minScale(nitro::ReactProp<std::optional<double>>::fromRawValue("BetterPdfView", "minScale", rawProps, sourceProps.minScale)),
     maxScale(nitro::ReactProp<std::optional<double>>::fromRawValue("BetterPdfView", "maxScale", rawProps, sourceProps.maxScale)),
@@ -60,8 +59,7 @@ namespace margelo::nitro::betterpdf::views {
 
   bool HybridBetterPdfViewProps::filterObjectKeys(const std::string& propName) {
     switch (hashString(propName)) {
-      case hashString("source"): return true;
-      case hashString("password"): return true;
+      case hashString("sources"): return true;
       case hashString("initialPosition"): return true;
       case hashString("minScale"): return true;
       case hashString("maxScale"): return true;

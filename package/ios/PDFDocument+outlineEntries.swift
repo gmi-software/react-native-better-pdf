@@ -18,3 +18,12 @@ extension PDFDocument {
     return entries
   }
 }
+
+extension PdfOutlineEntry {
+  /// The entry of a source whose first page is `firstPage` of the view's
+  /// document.
+  func movedTo(firstPage: Int) -> PdfOutlineEntry {
+    guard firstPage != 0 else { return self }
+    return PdfOutlineEntry(title: title, page: page.map { $0 + Double(firstPage) }, depth: depth)
+  }
+}

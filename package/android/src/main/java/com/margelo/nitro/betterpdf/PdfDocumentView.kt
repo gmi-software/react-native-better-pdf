@@ -103,8 +103,11 @@ class PdfDocumentView(context: Context) :
   /** With [pendingInitialPage]: the page point to put at the top-left corner, instead of the page's top. */
   private var pendingInitialPoint: PagePoint? = null
   private val renderFailures = RenderFailures()
-  /** Set once [onDocumentLinks] arrived for the document. */
-  private var hasFileLinks = false
+  /**
+   * Pages whose links [onDocumentLinks] read from the file: a source's
+   * pages each, so a source the parser cannot read keeps the renderer's.
+   */
+  private val fileLinkPages = ArrayList<IntRange>()
 
   /** Form widgets of pages rendered so far that have any. */
   private val pageWidgets = HashMap<Int, List<FormWidget>>()
@@ -531,7 +534,7 @@ class PdfDocumentView(context: Context) :
     pageFormats.clear()
     plannedGrey = false
     pageLinks.clear()
-    hasFileLinks = false
+    fileLinkPages.clear()
     pageWidgets.clear()
     staleFormPages.clear()
     pageTexts.clear()
@@ -723,14 +726,17 @@ class PdfDocumentView(context: Context) :
   }
 
   fun onPageLinks(page: Int, links: List<PageLink>) {
-    if (!hasFileLinks) pageLinks[page] = links
+    if (fileLinkPages.none { page in it }) pageLinks[page] = links
   }
 
-  /** Links read from the file replace the renderer's, which miss some forms and need Android 15. */
-  fun onDocumentLinks(links: Map<Int, List<PageLink>>) {
-    pageLinks.clear()
+  /**
+   * Links of [pages] read from the file replace the renderer's, which miss
+   * some forms and need Android 15.
+   */
+  fun onDocumentLinks(pages: IntRange, links: Map<Int, List<PageLink>>) {
+    pageLinks.keys.removeAll { it in pages }
     pageLinks.putAll(links)
-    hasFileLinks = true
+    fileLinkPages.add(pages)
   }
 
   fun onPageFormWidgets(page: Int, widgets: List<FormWidget>) {

@@ -32,13 +32,7 @@ abstract class HybridBetterPdfViewSpec: HybridView() {
   @get:Keep
   @set:DoNotStrip
   @set:Keep
-  abstract var source: NativePdfSource?
-  
-  @get:DoNotStrip
-  @get:Keep
-  @set:DoNotStrip
-  @set:Keep
-  abstract var password: String?
+  abstract var sources: Array<NativePdfSource>?
   
   @get:DoNotStrip
   @get:Keep

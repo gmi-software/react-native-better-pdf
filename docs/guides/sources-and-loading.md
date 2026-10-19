@@ -4,17 +4,23 @@
 
 ```ts
 type PdfSource =
-  | PdfUriSource        // { uri, headers? } — https://, http://, file://, content:// (Android)
-  | { filePath: string } // absolute path
-  | PdfBase64Source      // { base64 } — the document's bytes as a base64 string
-  | number;              // require('./file.pdf')
+  | PdfUriSource    // { uri, headers?, password? } — https://, http://, file://, content:// (Android)
+  | PdfFileSource   // { filePath, password? } — absolute path
+  | PdfBase64Source // { base64, password? } — the document's bytes as a base64 string
+  | number;         // require('./file.pdf')
 ```
 
 Remote files are downloaded natively and reused for the rest of the app
 session — or kept for offline reading; see
 [Offline reading and caching](offline-and-caching.md). An inline
 `source={{ uri }}` object is fine: the source is compared by value, so
-re-renders never reload the document.
+re-renders never reload the document. A list of sources shows them as one
+document; see [Several documents as one](#several-documents-as-one).
+
+A protected document opens with the source's own `password`, or else with
+`PdfView`'s `password` prop, which applies to every source without one
+(bundled assets included). `PdfDocument.open` takes a source's own password
+before its `password` option.
 
 `headers` are sent with the download. Each name must be an HTTP token
 (letters, digits and ``!#$%&'*+-.^_`|~``) and no value may contain a line
@@ -96,6 +102,52 @@ returning the PDF itself and passing its URL with `headers`: it is then
 downloaded natively, with progress, caching and offline reading (see
 [Offline reading and caching](offline-and-caching.md)), and is a quarter
 smaller than its base64 form.
+
+## Several documents as one
+
+```tsx
+<PdfView
+  source={[
+    { uri: 'https://example.com/setlist/1.pdf' },
+    { uri: 'https://example.com/setlist/2.pdf', password: 'secret' },
+    require('./encore.pdf'),
+  ]}
+  horizontal
+  enablePaging
+  onLoad={({ pageCount, sources }) => setSongs(sources)}
+  onPageChange={({ page }) => setSong(songAt(page))}
+/>
+```
+
+- The sources' pages follow one another in source order, and every page
+  number counts across all of them: events, `initialPage`, `goToPage`,
+  `goToViewport`, overlays and the ref's page methods. Zoom, layouts and
+  paging work as with one file, also across the end of a source.
+- `onLoad`'s `sources` tells where each source's pages are: `sources[i]` is
+  `{ pageCount, firstPage, filePath?, isStale }`, and `pageCount` is their
+  sum. A single source is listed there too. With several sources the
+  top-level `filePath` is `undefined`, as no one file holds them.
+- Any source can be in the list, base64 included, each with its own
+  `password` or the prop's.
+- **All or nothing:** sources load in parallel, and if one fails, the view
+  shows none of them and `onError` reports `error.sourceIndex`. An empty
+  list is an `invalid-source` error. `onLoadProgress` sums the downloads.
+- **Reading only:** forms cannot be filled in, and `print`,
+  `exportDocument`, `getFormFields` and `setFormFieldValues` reject.
+  Printing and exporting need one file, and Android has no API that merges
+  PDF files.
+- Links within a source lead to its pages, and "next page" / "previous
+  page" links cross into the neighbouring source; the outline is the
+  sources' outlines in order; search runs across every source. Changing
+  any source reloads the whole set.
+- Each source is opened like a single one (downloaded and cached
+  natively). Android keeps at most three sources' renderers open at a
+  time, so a long set costs about what one source costs (see
+  [API design](../api-design.md#several-sources)). iOS keeps every source
+  open while the set is shown, and reads each page's links before showing
+  it (~0.2 ms a page).
+- `PdfDocument.open` and `PdfCache` take one source: open or download each
+  file on its own.
 
 ## Loading state
 

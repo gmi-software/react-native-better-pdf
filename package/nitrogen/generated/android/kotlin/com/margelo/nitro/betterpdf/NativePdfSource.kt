@@ -35,7 +35,10 @@ data class NativePdfSource(
   val maxAgeMs: Double?,
   @DoNotStrip
   @Keep
-  val cacheKey: String?
+  val cacheKey: String?,
+  @DoNotStrip
+  @Keep
+  val password: String?
 ) {
   /* primary constructor */
 
@@ -48,6 +51,7 @@ data class NativePdfSource(
       && Objects.deepEquals(this.cache, other.cache)
       && Objects.deepEquals(this.maxAgeMs, other.maxAgeMs)
       && Objects.deepEquals(this.cacheKey, other.cacheKey)
+      && Objects.deepEquals(this.password, other.password)
   }
 
   override fun hashCode(): Int {
@@ -57,7 +61,8 @@ data class NativePdfSource(
       headers,
       cache,
       maxAgeMs,
-      cacheKey
+      cacheKey,
+      password
     ).contentDeepHashCode()
   }
 
@@ -69,8 +74,8 @@ data class NativePdfSource(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(uri: String, base64: ArrayBuffer?, headers: Map<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?): NativePdfSource {
-      return NativePdfSource(uri, base64, headers, cache, maxAgeMs, cacheKey)
+    private fun fromCpp(uri: String, base64: ArrayBuffer?, headers: Map<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?, password: String?): NativePdfSource {
+      return NativePdfSource(uri, base64, headers, cache, maxAgeMs, cacheKey, password)
     }
   }
 }

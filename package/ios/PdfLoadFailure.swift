@@ -5,6 +5,8 @@ struct PdfLoadFailure: Error {
   let code: PdfErrorCode
   let message: String
   var page: Int? = nil
+  /// The view's source that failed to load.
+  var sourceIndex: Int? = nil
   var httpStatus: Int? = nil
   var nativeDescription: String? = nil
 
@@ -13,6 +15,7 @@ struct PdfLoadFailure: Error {
       code: code,
       message: message,
       page: page.map(Double.init),
+      sourceIndex: sourceIndex.map(Double.init),
       httpStatus: httpStatus.map(Double.init),
       nativeDescription: nativeDescription
     )

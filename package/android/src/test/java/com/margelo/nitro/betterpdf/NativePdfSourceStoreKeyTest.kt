@@ -13,7 +13,8 @@ class NativePdfSourceStoreKeyTest {
     cache: PdfCacheMode? = null,
     maxAgeMs: Double? = null,
     cacheKey: String? = null,
-  ) = NativePdfSource(uri, base64 = null, headers, cache, maxAgeMs, cacheKey)
+    password: String? = null,
+  ) = NativePdfSource(uri, base64 = null, headers, cache, maxAgeMs, cacheKey, password)
 
   @Test
   fun `the key ignores header order and cache options`() {
@@ -51,5 +52,24 @@ class NativePdfSourceStoreKeyTest {
   fun `cache options alone never reload`() {
     assertTrue(source().isSameSource(source(cache = PdfCacheMode.PERSISTENT, maxAgeMs = 0.0)))
     assertFalse(source().isSameSource(source(headers = mapOf("A" to "1"))))
+  }
+
+  @Test
+  fun `a changed password reloads, but is the same downloaded copy`() {
+    assertFalse(source(password = "a").isSameSource(source(password = "b")))
+    assertFalse(source(cacheKey = "doc").isSameSource(source(cacheKey = "doc", password = "a")))
+    assertTrue(source(password = "").isSameSource(source()))
+    assertEquals(source().storeKey(), source(password = "a").storeKey())
+  }
+
+  @Test
+  fun `lists of sources are the same when every source is, in order`() {
+    val a = source(uri = "https://x.test/a.pdf")
+    val b = source(uri = "https://x.test/b.pdf")
+    assertTrue(arrayOf(a, b).isSameSources(arrayOf(a, b.copy(maxAgeMs = 0.0))))
+    assertFalse(arrayOf(a, b).isSameSources(arrayOf(b, a)))
+    assertFalse(arrayOf(a, b).isSameSources(arrayOf(a)))
+    assertFalse(arrayOf(a).isSameSources(null))
+    assertTrue((null as Array<NativePdfSource>?).isSameSources(null))
   }
 }

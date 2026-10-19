@@ -24,6 +24,7 @@ PDFKit on iOS, the platform `PdfRenderer` on Android: no bundled PDFium, no WebV
 - **The OS's own PDF engines** — PDFKit on iOS, `PdfRenderer` on Android with a purpose-built native viewer. No bundled PDFium, no WebView, no `react-native-blob-util`.
 - **Memory bounded by the viewport** — page virtualization, render cache, prefetch and cancellation on Android; pixels released under memory pressure and while a screen is hidden.
 - **Any source** — local files, bundled assets (`require()`), `content://` URIs and remote documents with headers, downloaded natively.
+- **Several documents as one** — `source={[a, b, c]}` shows several files as one document, e.g. a setlist of songs: one page count, zoom, paging and search across all of them.
 - **Offline reading** — downloads kept for the session or across launches, revalidated with `ETag` / `Last-Modified`; `PdfCache` downloads ahead of time.
 - **Layouts** — vertical, horizontal, paged, single page and right to left; facing pages, translucent bars and dark pages.
 - **Reading position** — settled viewport events, restore on open or on demand, end-of-document detection.
@@ -94,7 +95,7 @@ all props and ref methods; the [guides](#guides) cover each feature.
 
 | Guide | Covers |
 | --- | --- |
-| [Sources and loading](docs/guides/sources-and-loading.md) | Remote, local and bundled files, request headers, base64 data, loading state |
+| [Sources and loading](docs/guides/sources-and-loading.md) | Remote, local and bundled files, request headers, base64 data, several files as one document, loading state |
 | [Navigation and reading position](docs/guides/navigation.md) | Links and page taps; saving and restoring where the reader left off |
 | [Offline reading and caching](docs/guides/offline-and-caching.md) | Cache modes, revalidation, offline fallback, `PdfCache` |
 | [Layout and appearance](docs/guides/layout-and-appearance.md) | Facing pages, translucent bars, dark pages |
@@ -133,6 +134,7 @@ PDF module updated through Google Play system updates; the library then uses
 | Capability | iOS | Android 15+, or 12–14 with SDK extension 13 | Other Android versions |
 | --- | --- | --- | --- |
 | Viewing, zoom, layouts, offline, overlays, dark pages | Supported | Supported | Supported |
+| Several sources as one document (reading only) | Supported | Supported | Supported |
 | Outline, page sizes, page images, printing, `PdfDocument` | Supported | Supported (password-protected documents: no outline or metadata) | Supported |
 | Links and page taps | Supported | Supported (password-protected documents: URL links and GoTo actions with an XYZ destination) | Supported |
 | Password-protected documents | Supported | Supported | Unsupported: `unsupported-pdf` |

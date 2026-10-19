@@ -58,8 +58,8 @@ class PdfLinkReaderTest {
         // NextPage, PrevPage, FirstPage, LastPage.
         PageLink.Goto(listOf(area(40, 302, 300, 342)), page = 2),
         PageLink.Goto(listOf(area(40, 362, 300, 402)), page = 0),
-        PageLink.Goto(listOf(area(40, 422, 300, 462)), page = 0),
-        PageLink.Goto(listOf(area(40, 482, 300, 522)), page = 4),
+        PageLink.Goto(listOf(area(40, 422, 300, 462)), page = 0, end = PageLink.DocumentEnd.FIRST),
+        PageLink.Goto(listOf(area(40, 482, 300, 522)), page = 4, end = PageLink.DocumentEnd.LAST),
         // The JavaScript action is left out; [4 /Fit] is the fifth page.
         PageLink.Goto(listOf(area(40, 602, 300, 642)), page = 4),
       ),
@@ -75,6 +75,22 @@ class PdfLinkReaderTest {
     assertEquals(listOf(PageLink.Goto(listOf(area(40, 102, 300, 142)), page = 2)), links[3])
     assertEquals(setOf(0, 1, 2, 3), links.keys)
     assertEquals(5, reader("links-all.pdf").pageCount)
+  }
+
+  @Test
+  fun `NextPage and PrevPage at the file's ends lead just past them`() {
+    val pdf = TestPdfWriter()
+    val (catalog, pages, page, previous, next) = List(5) { pdf.reserve() }
+    pdf.add(catalog, "<< /Type /Catalog /Pages $pages 0 R >>")
+    pdf.add(pages, "<< /Type /Pages /Kids [$page 0 R] /Count 1 >>")
+    pdf.add(page, "<< /Type /Page /Parent $pages 0 R /MediaBox [0 0 595 842] /Annots [$previous 0 R $next 0 R] >>")
+    pdf.add(previous, "<< /Type /Annot /Subtype /Link /Rect [0 0 595 421] /A << /S /Named /N /PrevPage >> >>")
+    pdf.add(next, "<< /Type /Annot /Subtype /Link /Rect [0 421 595 842] /A << /S /Named /N /NextPage >> >>")
+    val links = PdfLinkReader(PdfDocumentReader(ByteArraySource(pdf.build("/Root $catalog 0 R")))).read()
+    assertEquals(
+      mapOf(0 to listOf(PageLink.Goto(listOf(area(0, 421, 595, 842)), -1), PageLink.Goto(listOf(area(0, 0, 595, 421)), 1))),
+      links,
+    )
   }
 
   @Test

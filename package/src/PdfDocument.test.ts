@@ -148,6 +148,19 @@ describe('PdfDocument.open', () => {
     expect(lastNative().password).toBe('secret');
   });
 
+  test("a source's own password takes precedence over the option", async () => {
+    void PdfDocument.open(
+      { uri: '/docs/a.pdf', password: 'own' },
+      { password: 'option' },
+    );
+    expect(lastNative().password).toBe('own');
+    expect(lastNative().source).toEqual({ uri: '/docs/a.pdf' });
+    void PdfDocument.open({ filePath: '/docs/a.pdf', password: 'own' });
+    expect(lastNative().password).toBe('own');
+    void PdfDocument.open(42, { password: 'option' });
+    expect(lastNative().password).toBe('option');
+  });
+
   test('a failure rejects with a PdfOpenError and releases the native object', async () => {
     const promise = PdfDocument.open({ uri: '/docs/a.pdf' });
     lastNative().finishOpen({

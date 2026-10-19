@@ -56,6 +56,8 @@ namespace margelo::nitro::betterpdf { struct PdfLinkPressEvent; }
 namespace margelo::nitro::betterpdf { struct PdfLoadEvent; }
 // Forward declaration of `PdfLoadProgressEvent` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
+// Forward declaration of `PdfLoadedSource` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfLoadedSource; }
 // Forward declaration of `PdfOpenResult` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfOpenResult; }
 // Forward declaration of `PdfOpenedDocument` to properly resolve imports.
@@ -116,6 +118,7 @@ namespace margelo::nitro::betterpdf { struct PdfViewport; }
 #include "PdfLinkPressEvent.hpp"
 #include "PdfLoadEvent.hpp"
 #include "PdfLoadProgressEvent.hpp"
+#include "PdfLoadedSource.hpp"
 #include "PdfOpenResult.hpp"
 #include "PdfOpenedDocument.hpp"
 #include "PdfOutlineEntry.hpp"

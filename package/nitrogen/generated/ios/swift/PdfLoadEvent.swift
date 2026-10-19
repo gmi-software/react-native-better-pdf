@@ -18,14 +18,20 @@ public extension PdfLoadEvent {
   /**
    * Create a new instance of `PdfLoadEvent`.
    */
-  init(pageCount: Double, firstPageWidth: Double, firstPageHeight: Double, filePath: String?, isStale: Bool) {
+  init(pageCount: Double, firstPageWidth: Double, firstPageHeight: Double, filePath: String?, isStale: Bool, sources: [PdfLoadedSource]) {
     self.init(pageCount, firstPageWidth, firstPageHeight, { () -> bridge.std__optional_std__string_ in
       if let __unwrappedValue = filePath {
         return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
       } else {
         return .init()
       }
-    }(), isStale)
+    }(), isStale, { () -> bridge.std__vector_PdfLoadedSource_ in
+      var __vector = bridge.create_std__vector_PdfLoadedSource_(sources.count)
+      for __item in sources {
+        __vector.push_back(__item)
+      }
+      return __vector
+    }())
   }
 
   @inline(__always)
@@ -58,5 +64,10 @@ public extension PdfLoadEvent {
   @inline(__always)
   var isStale: Bool {
     return self.__isStale
+  }
+  
+  @inline(__always)
+  var sources: [PdfLoadedSource] {
+    return self.__sources.map({ __item in __item })
   }
 }

@@ -26,6 +26,9 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
   in by touch: iOS with PDFKit's own editing, Android with a text field
   over the form field (kept above the keyboard) and a list to pick
   choices from. `enableFormFilling={false}` leaves them as they are.
+- A view showing several sources has no form to fill in: fields are drawn
+  but not editable, and the form methods reject (see
+  [Several documents as one](sources-and-loading.md#several-documents-as-one)).
 - `onFormChange` reports the reader's changes only — at once for a toggle
   or choice, when editing ends for text, never per keystroke — not
   `setFormFieldValues`.

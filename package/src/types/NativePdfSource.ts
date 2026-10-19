@@ -26,4 +26,9 @@ export interface NativePdfSource {
   maxAgeMs?: number;
   /** Remote sources: identifies the downloaded copy instead of `uri` and `headers`. */
   cacheKey?: string;
+  /**
+   * The password the view opens the document with, `''` for none: the
+   * source's own, else `PdfView`'s `password` prop. Absent outside the view.
+   */
+  password?: string;
 }

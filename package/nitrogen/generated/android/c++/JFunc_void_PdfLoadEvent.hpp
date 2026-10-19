@@ -16,6 +16,9 @@
 #include "JPdfLoadEvent.hpp"
 #include <string>
 #include <optional>
+#include "PdfLoadedSource.hpp"
+#include <vector>
+#include "JPdfLoadedSource.hpp"
 
 namespace margelo::nitro::betterpdf {
 

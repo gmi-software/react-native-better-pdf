@@ -37,8 +37,8 @@ import type { PdfViewStats } from '../types/PdfViewStats';
  * which memoizes the source and keeps callbacks identity-stable.
  */
 export interface PdfViewProps extends HybridViewProps {
-  source?: NativePdfSource;
-  password?: string;
+  /** The documents shown, one after the other, each with its password ('' for none). */
+  sources?: NativePdfSource[];
   /** Position applied once a document finishes loading. */
   initialPosition?: PdfInitialPosition;
   /** Relative to the fitted page. Default 1. */

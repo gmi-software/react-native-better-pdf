@@ -71,15 +71,15 @@ namespace margelo::nitro::betterpdf { struct NativePdfFormValue; }
 namespace margelo::nitro::betterpdf { struct PdfExportResult; }
 
 #include "NativePdfSource.hpp"
+#include <vector>
 #include <optional>
-#include <string>
 #include "PdfInitialPosition.hpp"
 #include "PdfFitPolicy.hpp"
 #include "PdfSpreadMode.hpp"
 #include "PdfColorScheme.hpp"
 #include "NativeContentInset.hpp"
+#include <string>
 #include "PdfOverlayPlacement.hpp"
-#include <vector>
 #include "PdfLoadEvent.hpp"
 #include <functional>
 #include "PdfLoadProgressEvent.hpp"
@@ -131,10 +131,8 @@ namespace margelo::nitro::betterpdf {
 
     public:
       // Properties
-      virtual std::optional<NativePdfSource> getSource() = 0;
-      virtual void setSource(const std::optional<NativePdfSource>& source) = 0;
-      virtual std::optional<std::string> getPassword() = 0;
-      virtual void setPassword(const std::optional<std::string>& password) = 0;
+      virtual std::optional<std::vector<NativePdfSource>> getSources() = 0;
+      virtual void setSources(const std::optional<std::vector<NativePdfSource>>& sources) = 0;
       virtual std::optional<PdfInitialPosition> getInitialPosition() = 0;
       virtual void setInitialPosition(const std::optional<PdfInitialPosition>& initialPosition) = 0;
       virtual std::optional<double> getMinScale() = 0;

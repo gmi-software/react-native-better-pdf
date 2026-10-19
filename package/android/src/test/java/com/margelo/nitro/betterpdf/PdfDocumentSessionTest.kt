@@ -191,8 +191,78 @@ class PdfDocumentSessionTest {
     session.close()
   }
 
+  @Test
+  fun `pages of several sources open on their source's renderer at its own page`() {
+    val renderers = listOf(FakeRenderer(pageCount = 3), FakeRenderer(pageCount = 12), FakeRenderer(pageCount = 5))
+    val session = start(sources = 3, openRenderer = { _, password -> renderers[password!!.toInt()] })
+    runUntil("the document to open") { listener.opened }
+
+    val requests = listOf(4, 15).map { RenderRequest.Base(page = it, bitmapWidth = 100, bitmapHeight = 100, maxPixels = 10_000) }
+    session.submit(requests)
+
+    runUntil("the renders to run") { listener.renderResults.containsAll(requests) }
+    assertTrue(1 in renderers[1].openedPages)
+    assertTrue(0 in renderers[2].openedPages)
+    assertEquals(listOf(0), renderers[0].openedPages.toList())
+    session.close()
+  }
+
+  @Test
+  fun `at most three sources keep a renderer open`() {
+    val open = AtomicInteger()
+    val mostOpen = AtomicInteger()
+    val session = start(sources = 5, openRenderer = { _, _ ->
+      mostOpen.accumulateAndGet(open.incrementAndGet()) { most, now -> maxOf(most, now) }
+      FakeRenderer(pageCount = 1, onClose = { open.decrementAndGet() })
+    })
+    runUntil("the document to open") { listener.opened }
+
+    val requests = (0 until 5).map { RenderRequest.Base(page = it, bitmapWidth = 100, bitmapHeight = 100, maxPixels = 10_000) }
+    session.submit(requests)
+
+    runUntil("the renders to run") { listener.renderResults.containsAll(requests) }
+    assertEquals(DocumentSources.MAX_OPEN_RENDERERS, mostOpen.get())
+    session.close()
+  }
+
+  @Test
+  fun `a renderer that fails for one of several sources reports that source`() {
+    start(sources = 3, openRenderer = { _, password ->
+      if (password == "2") throw PdfFailure(PdfErrorCode.PASSWORD_REQUIRED, "Locked") else FakeRenderer()
+    })
+
+    runUntil("the failure") { listener.failures.isNotEmpty() }
+    assertEquals(PdfErrorCode.PASSWORD_REQUIRED, listener.failures.single().code)
+    assertEquals(2, listener.failures.single().sourceIndex)
+  }
+
+  @Test
+  fun `a source that cannot be resolved reports its index`() {
+    start(sources = 3, openSource = { source -> if (source.uri == "/1.pdf") throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "Missing") else null })
+
+    runUntil("the failure") { listener.failures.isNotEmpty() }
+    assertEquals(PdfErrorCode.FILE_NOT_FOUND, listener.failures.single().code)
+    assertEquals(1, listener.failures.single().sourceIndex)
+  }
+
+  @Test
+  fun `running out of memory resolving one of several sources reports that source`() {
+    start(sources = 3, openSource = { source -> if (source.uri == "/1.pdf") throw OutOfMemoryError("Resolving") else null })
+
+    runUntil("the failure") { listener.failures.isNotEmpty() }
+    assertEquals(PdfErrorCode.OUT_OF_MEMORY, listener.failures.single().code)
+    assertEquals(1, listener.failures.single().sourceIndex)
+  }
+
+  /**
+   * A session of [sources] files, `/0.pdf`, `/1.pdf` …, each with its index
+   * as password. [openSource] may throw for a source; it returns null to
+   * resolve it.
+   */
   private fun start(
+    sources: Int = 1,
     openRenderer: (ParcelFileDescriptor, String?) -> DocumentRenderer = { _, _ -> renderer },
+    openSource: (NativePdfSource) -> Unit? = { null },
     runOnMain: Executor = Executor { mainThread.add(it) },
   ): PdfDocumentSession {
     val context = object : ContextWrapper(null) {
@@ -208,12 +278,14 @@ class PdfDocumentSessionTest {
     }
     return PdfDocumentSession(
       context,
-      NativePdfSource("/document.pdf", base64 = null, headers = null, cache = null, maxAgeMs = null, cacheKey = null),
-      password = null,
+      List(sources) { NativePdfSource("/$it.pdf", base64 = null, headers = null, cache = null, maxAgeMs = null, cacheKey = null, password = "$it") },
       bitmapPool = BitmapPool(maxBytes = 0),
       listener = listener,
       mainThread = runOnMain,
-      openSource = { _, _ -> ResolvedSource(descriptor, file = null) },
+      openSource = { source, _ ->
+        openSource(source)
+        ResolvedSource(descriptor, file = null)
+      },
       openRenderer = openRenderer,
     ).also { it.start() }
   }
@@ -238,7 +310,7 @@ class PdfDocumentSessionTest {
     val pageTexts = mutableListOf<Pair<Int, String?>>()
     var afterRenderFailed: (RenderRequest) -> Unit = {}
 
-    override fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, filePath: String?, isStale: Boolean) {
+    override fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, sources: List<PdfDocumentSession.OpenedSource>) {
       opened = true
     }
 
@@ -268,7 +340,7 @@ class PdfDocumentSessionTest {
 
     override fun onPageLinks(page: Int, links: List<PageLink>) = Unit
 
-    override fun onDocumentLinks(links: Map<Int, List<PageLink>>) = Unit
+    override fun onDocumentLinks(pages: IntRange, links: Map<Int, List<PageLink>>) = Unit
 
     override fun onLoadProgress(loadedBytes: Long, totalBytes: Long?) = Unit
 
@@ -279,13 +351,12 @@ class PdfDocumentSessionTest {
     override fun onFormFieldChanged(field: FormFieldEntry) = Unit
   }
 
-  /** Three US Letter pages; set its hooks before [start]. They run on the render thread. */
-  private class FakeRenderer : DocumentRenderer {
+  /** US Letter pages; set its hooks before [start]. They run on the render thread. */
+  private class FakeRenderer(override val pageCount: Int = 3, private val onClose: () -> Unit = {}) : DocumentRenderer {
     var onOpenPage: (Int) -> Unit = {}
     var onSelectText: (TextSelectionQuery) -> PageTextSelection? = { null }
     val openedPages = ConcurrentLinkedQueue<Int>()
 
-    override val pageCount = 3
     override val canFillForm = false
 
     override fun openPage(index: Int): DocumentPage {
@@ -298,7 +369,7 @@ class PdfDocumentSessionTest {
 
     override fun writeProtected(destination: ParcelFileDescriptor) = Unit
 
-    override fun close() = Unit
+    override fun close() = onClose()
 
     private inner class FakePage(private val index: Int) : DocumentPage {
       override val width = 612

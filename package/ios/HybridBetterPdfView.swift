@@ -23,11 +23,8 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
 
   // MARK: Props
 
-  var source: NativePdfSource? {
-    didSet { if !source.isSameSource(as: oldValue) { needsReload = true } }
-  }
-  var password: String? {
-    didSet { if password != oldValue { needsReload = true } }
+  var sources: [NativePdfSource]? {
+    didSet { if !sources.isSameSources(as: oldValue) { needsReload = true } }
   }
   var initialPosition: PdfInitialPosition?
   var minScale: Double? {
@@ -135,11 +132,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private var needsLayoutModeUpdate = false
   private var pageChangeObserver: NSObjectProtocol?
   private var loadTask: PdfLoadTask?
-  /// The pin of the displayed downloaded copy, released with the document.
-  private var displayedPin: URL?
-  /// `onLoad`'s `filePath` of the displayed document: the downloaded copy
-  /// itself for a remote one, which displays its pin; nil for `{ base64 }`.
-  private var displayedFile: URL?
+  /// The displayed document's sources; their downloaded copies are pinned
+  /// until it is released.
+  private var displayed: DisplayedDocument?
   private var pendingInitialPage: Int?
   /// With `pendingInitialPage`: the page point to put at the top-left corner.
   private var pendingInitialPoint: CGPoint?
@@ -173,14 +168,14 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private var isRelayingOut = false
   /// The container size of the last layout; a change is a resize.
   private var lastLayoutSize: CGSize = .zero
-  /// `getOutline()` result for the displayed file (main thread).
-  private var outlineCache: (url: URL, entries: [PdfOutlineEntry])?
-  /// `getPageSizes()` result for the displayed file (main thread).
-  private var pageSizesCache: (url: URL, sizes: [PdfPageSize])?
+  /// `getOutline()` result for the displayed files (main thread).
+  private var outlineCache: (files: [SourceFile], values: [PdfOutlineEntry])?
+  /// `getPageSizes()` result for the displayed files (main thread).
+  private var pageSizesCache: (files: [SourceFile], values: [PdfPageSize])?
   /// The displayed document's form, read on first use, and the values
   /// changed in it (main thread).
   private var documentForm: DocumentForm?
-  /// Reads separate instances of the displayed file (outline, page sizes).
+  /// Reads separate instances of the displayed files (outline, page sizes).
   private static let readQueue = DispatchQueue(label: "com.betterpdf.read", qos: .userInitiated)
   /// Writes exports: seconds for long documents, so not on `readQueue`.
   private static let writeQueue = DispatchQueue(label: "com.betterpdf.write", qos: .userInitiated)
@@ -256,7 +251,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     // Release PDFKit's page views, tiles and the document now rather than
     // whenever JS garbage-collects its reference to this hybrid object.
     container.releasePdfView()
-    releaseDisplayedPin()
+    releaseDisplayed()
     scrollView = nil
     setStatsPageCount(0)
   }
@@ -340,63 +335,52 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
 
   func getOutline() throws -> Promise<[PdfOutlineEntry]> {
-    let promise = Promise<[PdfOutlineEntry]>()
-    DispatchQueue.main.async { [weak self] in
-      guard let self, let url = self.pdfView?.document?.documentURL else {
-        promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
-        return
-      }
-      if let cached = self.outlineCache, cached.url == url {
-        promise.resolve(withResult: cached.entries)
-        return
-      }
-      let password = self.password
-      // Resolving outline destinations is slow (measured ~130 ms for 1,000
-      // entries) and PDFKit objects are not thread-safe, while the view's
-      // document is in use by PDFView on the main thread. Read a separate
-      // instance of the same file off the main thread instead. Weak: the
-      // read must not keep the view alive, nor release it off the main thread.
-      Self.readQueue.async { [weak self] in
-        guard let document = PDFDocument(url: url) else {
-          promise.reject(withError: RuntimeError.error(withMessage: "The outline could not be read"))
-          return
-        }
-        if document.isLocked { _ = document.unlock(withPassword: password ?? "") }
-        let entries = document.outlineEntries()
-        DispatchQueue.main.async { [weak self] in
-          if self?.pdfView?.document?.documentURL == url { self?.outlineCache = (url, entries) }
-        }
-        promise.resolve(withResult: entries)
-      }
+    // Resolving outline destinations is slow (measured ~130 ms for 1,000
+    // entries); several sources' outlines follow each other, at their pages.
+    return readFiles(cache: \.outlineCache, failure: "The outline could not be read") { document, file in
+      document.outlineEntries().map { $0.movedTo(firstPage: file.firstPage) }
     }
-    return promise
   }
 
   func getPageSizes() throws -> Promise<[PdfPageSize]> {
-    let promise = Promise<[PdfPageSize]>()
+    return readFiles(cache: \.pageSizesCache, failure: "The page sizes could not be read") { document, _ in
+      document.pageSizes()
+    }
+  }
+
+  /// `read` of every displayed file in source order, joined, and kept in
+  /// `cache` for those files. PDFKit objects are not thread-safe, while the
+  /// view's document is in use by PDFView on the main thread: each read
+  /// opens a separate instance of a file, off the main thread. Weak: a read
+  /// must not keep the view alive, nor release it off the main thread.
+  private func readFiles<T>(
+    cache: ReferenceWritableKeyPath<HybridBetterPdfView, (files: [SourceFile], values: [T])?>,
+    failure: String,
+    read: @escaping (PDFDocument, SourceFile) -> [T]
+  ) -> Promise<[T]> {
+    let promise = Promise<[T]>()
     DispatchQueue.main.async { [weak self] in
-      guard let self, let url = self.pdfView?.document?.documentURL else {
+      guard let self, let files = self.displayed?.files else {
         promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
         return
       }
-      if let cached = self.pageSizesCache, cached.url == url {
-        promise.resolve(withResult: cached.sizes)
+      if let cached = self[keyPath: cache], cached.files == files {
+        promise.resolve(withResult: cached.values)
         return
       }
-      let password = self.password
-      // Like getOutline: a separate instance of the same file, off the main
-      // thread, so a long document does not stall the view's.
       Self.readQueue.async { [weak self] in
-        guard let document = PDFDocument(url: url) else {
-          promise.reject(withError: RuntimeError.error(withMessage: "The page sizes could not be read"))
-          return
+        var values: [T] = []
+        for file in files {
+          guard let document = Self.openCopy(of: file)?.document else {
+            promise.reject(withError: RuntimeError.error(withMessage: failure))
+            return
+          }
+          values += read(document, file)
         }
-        if document.isLocked { _ = document.unlock(withPassword: password ?? "") }
-        let sizes = document.pageSizes()
         DispatchQueue.main.async { [weak self] in
-          if self?.pdfView?.document?.documentURL == url { self?.pageSizesCache = (url, sizes) }
+          if self?.displayed?.files == files { self?[keyPath: cache] = (files, values) }
         }
-        promise.resolve(withResult: sizes)
+        promise.resolve(withResult: values)
       }
     }
     return promise
@@ -405,30 +389,33 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func renderPage(page: Double, options: PdfRenderPageOptions) throws -> Promise<PdfPageImage> {
     let promise = Promise<PdfPageImage>()
     DispatchQueue.main.async { [weak self] in
-      guard let self, let document = self.pdfView?.document, let url = document.documentURL else {
+      guard let self, let displayed = self.displayed else {
         promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
         return
       }
       let request: PageImageRequest
       do {
-        request = try PageImageRequest(page: page, pageCount: document.pageCount, options: options)
+        request = try PageImageRequest(page: page, pageCount: displayed.document.pageCount, options: options)
       } catch {
         promise.reject(withError: error)
         return
       }
-      let password = self.password
+      guard let located = displayed.file(ofPage: request.page) else {
+        promise.reject(withError: RuntimeError.error(withMessage: "Page \(request.page) could not be read"))
+        return
+      }
       // Commits text being typed, so the image shows it.
       self.container.endEditing(true)
       let filledForm = self.filledFormSnapshot()
-      // A separate instance of the file, like getOutline: PDFKit objects are
-      // not thread-safe and the view draws its own document on main. A
-      // filled-in form is copied over to it.
+      // A separate instance of the page's file, like getOutline: PDFKit
+      // objects are not thread-safe and the view draws its own document on
+      // main. A filled-in form is copied over to it.
       Self.readQueue.async {
         do {
-          guard let renderDocument = Self.openCopy(of: url, password: password, filledIn: filledForm)?.document else {
+          guard let renderDocument = Self.openCopy(of: located.file, filledIn: filledForm)?.document else {
             throw RuntimeError.error(withMessage: "The document could not be opened for rendering")
           }
-          promise.resolve(withResult: try request.render(from: renderDocument))
+          promise.resolve(withResult: try request.render(pageInFile: located.page, from: renderDocument))
         } catch {
           promise.reject(withError: error)
         }
@@ -440,10 +427,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func print(jobName: String) throws -> Promise<PdfPrintResult> {
     let promise = Promise<PdfPrintResult>()
     DispatchQueue.main.async { [weak self] in
-      guard let self, let document = self.pdfView?.document, let url = document.documentURL else {
-        promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
-        return
-      }
+      guard let self else { return promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded")) }
+      guard let source = self.oneSource(for: "Printing", rejecting: promise) else { return }
+      let document = source.loaded.document
       guard UIPrintInteractionController.isPrintingAvailable else {
         promise.reject(withError: RuntimeError.error(withMessage: "Printing is not available on this device"))
         return
@@ -461,16 +447,16 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       self.container.endEditing(true)
       let filledForm = self.filledFormSnapshot()
       guard document.isEncrypted || filledForm != nil else {
-        self.presentPrintDialog(printing: url, jobName: jobName, promise: promise)
+        self.presentPrintDialog(printing: source.file.url, jobName: jobName, promise: promise)
         return
       }
       // The print system opens files without a password: print an unlocked
       // copy, filled in like the displayed document, kept in memory.
       // Serialized off the main thread on a separate instance of the file,
       // like renderPage.
-      let password = self.password
+      let file = source.file
       Self.writeQueue.async { [weak self] in
-        let copy = Self.openCopy(of: url, password: password, filledIn: filledForm)?.document
+        let copy = Self.openCopy(of: file, filledIn: filledForm)?.document
         // Without options PDFKit keeps some ciphers' encryption (AES-128).
         let data = copy.flatMap { $0.dataRepresentation(options: $0.protectedWriteOptions(unlockPassword: nil)) }
         DispatchQueue.main.async { [weak self] in
@@ -495,14 +481,14 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func getFormFields() throws -> Promise<[NativePdfFormField]> {
     let promise = Promise<[NativePdfFormField]>()
     DispatchQueue.main.async { [weak self] in
-      guard let self, let pdfView = self.pdfView, let url = pdfView.document?.documentURL else {
+      guard let self, let pdfView = self.pdfView else {
         promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
         return
       }
+      guard let file = self.oneSource(for: "The form", rejecting: promise)?.file else { return }
       // Commits text being typed, so it is read too.
       self.container.endEditing(true)
       let box = pdfView.displayBox
-      let password = self.password
       let filledForm = self.filledFormSnapshot()
       // Reading every field loads every page with widgets (measured: 260–440 ms
       // for 1,000 pages on the simulator): a separate instance off the main
@@ -510,7 +496,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // renderPage. A ColorSchemeDocument, so its widgets are read as the
       // displayed document's are.
       Self.readQueue.async {
-        guard let copy = Self.openCopy(of: url, password: password, filledIn: filledForm, opening: ColorSchemeDocument.init(url:))?.document else {
+        guard let copy = Self.openCopy(of: file, filledIn: filledForm, opening: ColorSchemeDocument.init(url:))?.document else {
           promise.reject(withError: RuntimeError.error(withMessage: "The form could not be read"))
           return
         }
@@ -525,7 +511,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func setFormFieldValues(values: [NativePdfFormValue]) throws -> Promise<Void> {
     let promise = Promise<Void>()
     DispatchQueue.main.async { [weak self] in
-      guard let self, let document = self.pdfView?.document as? ColorSchemeDocument, let form = self.form() else {
+      guard let self else { return promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded")) }
+      guard self.oneSource(for: "The form", rejecting: promise) != nil else { return }
+      guard let document = self.pdfView?.document as? ColorSchemeDocument, let form = self.form() else {
         promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
         return
       }
@@ -544,16 +532,18 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func exportDocument(filePath: String) throws -> Promise<PdfExportResult> {
     let promise = Promise<PdfExportResult>()
     DispatchQueue.main.async { [weak self] in
-      guard let self, let document = self.pdfView?.document, let url = document.documentURL else {
-        promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
-        return
-      }
+      guard let self else { return promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded")) }
+      guard let source = self.oneSource(for: "Exporting", rejecting: promise) else { return }
+      let url = source.file.url
+      // `onLoad`'s `filePath`: a remote document's copy in the cache, which
+      // displays through its pin; nil for `{ base64 }`.
+      let displayedFile = source.loaded.filePath.map { URL(fileURLWithPath: $0) }
       // Ends text editing, so a field being typed in is written too.
       self.container.endEditing(true)
       let destination: URL
       do {
         destination = try filePath.isEmpty
-          ? Self.newExportFile(named: self.displayedFile != nil ? url : nil)
+          ? Self.newExportFile(named: displayedFile != nil ? url : nil)
           : Self.exportFile(at: filePath)
       } catch {
         promise.reject(withError: error)
@@ -563,7 +553,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // changed (an export over it would replace it). A remote document's
       // is the cache's copy, which displays through its pin.
       let resolvedDestination = destination.standardizedFileURL.resolvingSymlinksInPath()
-      if [url, self.displayedFile].compactMap({ $0 }).contains(where: {
+      if [url, displayedFile].compactMap({ $0 }).contains(where: {
         $0.standardizedFileURL.resolvingSymlinksInPath() == resolvedDestination
       }) {
         promise.reject(withError: RuntimeError.error(withMessage: "The export cannot replace the displayed document's file"))
@@ -575,13 +565,13 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
         promise.reject(withError: RuntimeError.error(withMessage: "The export path is in the cache of downloaded documents"))
         return
       }
-      let password = self.password
+      let file = source.file
       let filledForm = self.filledFormSnapshot()
       // Off the main thread: PDFKit writes a long document in seconds.
       Self.writeQueue.async {
         do {
           if let filledForm {
-            guard let copy = Self.openCopy(of: url, password: password, filledIn: filledForm) else {
+            guard let copy = Self.openCopy(of: file, filledIn: filledForm) else {
               throw RuntimeError.error(withMessage: "The document could not be opened for writing")
             }
             let options = copy.document.protectedWriteOptions(unlockPassword: copy.unlockPassword)
@@ -655,16 +645,30 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     documentForm.flatMap(FormSnapshot.init(changesOf:))
   }
 
-  /// A separate instance of the displayed file, unlocked and filled in like
+  /// The source whose file is the whole document, for `feature`; nil, with
+  /// `promise` rejected, when nothing is loaded or the document is made of
+  /// several sources, which have no one file: no form, print or export.
+  private func oneSource<T>(for feature: String, rejecting promise: Promise<T>) -> DisplayedSource? {
+    guard let displayed else {
+      promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
+      return nil
+    }
+    guard let source = displayed.single else {
+      promise.reject(withError: RuntimeError.error(withMessage: "\(feature) is not available with several sources"))
+      return nil
+    }
+    return source
+  }
+
+  /// A separate instance of a displayed file, unlocked and filled in like
   /// the displayed document; for the calling (background) thread only.
   private static func openCopy(
-    of url: URL,
-    password: String?,
-    filledIn form: FormSnapshot?,
+    of file: SourceFile,
+    filledIn form: FormSnapshot? = nil,
     opening open: (URL) -> PDFDocument? = PDFDocument.init(url:)
   ) -> (document: PDFDocument, unlockPassword: String?)? {
-    guard let copy = open(url) else { return nil }
-    let unlockPassword = copy.isLocked ? password ?? "" : nil
+    guard let copy = open(file.url) else { return nil }
+    let unlockPassword = copy.isLocked ? file.password : nil
     if let unlockPassword { _ = copy.unlock(withPassword: unlockPassword) }
     guard !copy.isLocked else { return nil }
     form?.apply(to: copy)
@@ -687,9 +691,14 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
 
   private func applyFormFilling() {
-    let isEnabled = enableFormFilling ?? true
+    let isEnabled = isFormFillingEnabled
     (pdfView?.document as? ColorSchemeDocument)?.isFormFillingEnabled = isEnabled
     if !isEnabled { container.endEditing(true) }
+  }
+
+  /// Forms are filled in only in a document of one source.
+  private var isFormFillingEnabled: Bool {
+    (enableFormFilling ?? true) && displayed?.isSet != true
   }
 
   /// Whether this view's print dialog is open (main thread).
@@ -771,18 +780,16 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     searchController.clear()
     documentForm = nil
     layoutOverlays()
-    releaseDisplayedPin()
-    displayedFile = nil
+    releaseDisplayed()
     container.resetSelection()
     fitScale = 0
     lastReportedPage = -1
     readingPage = -1
     setStatsPageCount(0)
-    guard let source else { return }
+    guard let sources else { return }
 
-    loadTask = PdfDocumentLoader.load(
-      source: source,
-      password: password,
+    loadTask = DocumentSetLoader.load(
+      sources: sources,
       progress: { [weak self] loadedBytes, totalBytes in
         self?.onLoadProgress?(PdfLoadProgressEvent(
           loadedBytes: Double(loadedBytes),
@@ -793,23 +800,24 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       guard let self else { return }
       self.loadTask = nil
       switch result {
-      case .success(let loaded):
-        self.present(loaded)
+      case .success(let displayed):
+        self.present(displayed)
       case .failure(let failure):
         self.onError?(failure.toPdfError())
       }
     }
   }
 
-  private func releaseDisplayedPin() {
-    if let displayedPin { DocumentCache.shared.store.unpin(displayedPin) }
-    displayedPin = nil
+  private func releaseDisplayed() {
+    for pin in displayed?.sources.compactMap(\.loaded.pin) ?? [] {
+      DocumentCache.shared.store.unpin(pin)
+    }
+    displayed = nil
   }
 
-  private func present(_ loaded: LoadedDocument) {
-    let document = loaded.document
-    displayedPin = loaded.pin
-    displayedFile = loaded.filePath.map { URL(fileURLWithPath: $0) }
+  private func present(_ displayed: DisplayedDocument) {
+    let document = displayed.document
+    self.displayed = displayed
     searchController.clear()
     lastReportedScale = nil
     lastReportedViewport = nil
@@ -829,7 +837,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     }
     if let document = document as? ColorSchemeDocument {
       document.isDark = colorScheme == .some(.dark)
-      document.isFormFillingEnabled = enableFormFilling ?? true
+      document.isFormFillingEnabled = isFormFillingEnabled
       document.widgetChanged = { [weak self] widget in self?.reportFormChange(widget) }
     }
     pdfView.document = document
@@ -844,8 +852,10 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       pageCount: Double(pageCount),
       firstPageWidth: Double(firstPage.width),
       firstPageHeight: Double(firstPage.height),
-      filePath: loaded.filePath,
-      isStale: loaded.isStale
+      // No one file holds a document of several sources.
+      filePath: displayed.single?.loaded.filePath,
+      isStale: displayed.sources.contains { $0.loaded.isStale },
+      sources: displayed.sources.map { $0.toLoadedSource() }
     ))
     layoutDidChange()
   }

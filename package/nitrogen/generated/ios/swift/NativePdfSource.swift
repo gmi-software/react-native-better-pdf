@@ -18,7 +18,7 @@ public extension NativePdfSource {
   /**
    * Create a new instance of `NativePdfSource`.
    */
-  init(uri: String, base64: ArrayBuffer?, headers: Dictionary<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?) {
+  init(uri: String, base64: ArrayBuffer?, headers: Dictionary<String, String>?, cache: PdfCacheMode?, maxAgeMs: Double?, cacheKey: String?, password: String?) {
     self.init(std.string(uri), { () -> bridge.std__optional_std__shared_ptr_ArrayBuffer__ in
       if let __unwrappedValue = base64 {
         return bridge.create_std__optional_std__shared_ptr_ArrayBuffer__(__unwrappedValue.getArrayBuffer())
@@ -51,6 +51,12 @@ public extension NativePdfSource {
       }
     }(), { () -> bridge.std__optional_std__string_ in
       if let __unwrappedValue = cacheKey {
+        return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
+      } else {
+        return .init()
+      }
+    }(), { () -> bridge.std__optional_std__string_ in
+      if let __unwrappedValue = password {
         return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
       } else {
         return .init()
@@ -117,6 +123,18 @@ public extension NativePdfSource {
     return { () -> String? in
       if bridge.has_value_std__optional_std__string_(self.__cacheKey) {
         let __unwrapped = bridge.get_std__optional_std__string_(self.__cacheKey)
+        return String(__unwrapped)
+      } else {
+        return nil
+      }
+    }()
+  }
+  
+  @inline(__always)
+  var password: String? {
+    return { () -> String? in
+      if bridge.has_value_std__optional_std__string_(self.__password) {
+        let __unwrapped = bridge.get_std__optional_std__string_(self.__password)
         return String(__unwrapped)
       } else {
         return nil

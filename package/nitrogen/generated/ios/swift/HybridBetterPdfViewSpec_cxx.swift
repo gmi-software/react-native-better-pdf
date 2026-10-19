@@ -121,12 +121,18 @@ open class HybridBetterPdfViewSpec_cxx {
   }
 
   // Properties
-  public final var source: bridge.std__optional_NativePdfSource_ {
+  public final var sources: bridge.std__optional_std__vector_NativePdfSource__ {
     @inline(__always)
     get {
-      return { () -> bridge.std__optional_NativePdfSource_ in
-        if let __unwrappedValue = self.__implementation.source {
-          return bridge.create_std__optional_NativePdfSource_(__unwrappedValue)
+      return { () -> bridge.std__optional_std__vector_NativePdfSource__ in
+        if let __unwrappedValue = self.__implementation.sources {
+          return bridge.create_std__optional_std__vector_NativePdfSource__({ () -> bridge.std__vector_NativePdfSource_ in
+            var __vector = bridge.create_std__vector_NativePdfSource_(__unwrappedValue.count)
+            for __item in __unwrappedValue {
+              __vector.push_back(__item)
+            }
+            return __vector
+          }())
         } else {
           return .init()
         }
@@ -134,27 +140,10 @@ open class HybridBetterPdfViewSpec_cxx {
     }
     @inline(__always)
     set {
-      self.__implementation.source = newValue.value
-    }
-  }
-  
-  public final var password: bridge.std__optional_std__string_ {
-    @inline(__always)
-    get {
-      return { () -> bridge.std__optional_std__string_ in
-        if let __unwrappedValue = self.__implementation.password {
-          return bridge.create_std__optional_std__string_(std.string(__unwrappedValue))
-        } else {
-          return .init()
-        }
-      }()
-    }
-    @inline(__always)
-    set {
-      self.__implementation.password = { () -> String? in
-        if bridge.has_value_std__optional_std__string_(newValue) {
-          let __unwrapped = bridge.get_std__optional_std__string_(newValue)
-          return String(__unwrapped)
+      self.__implementation.sources = { () -> [NativePdfSource]? in
+        if bridge.has_value_std__optional_std__vector_NativePdfSource__(newValue) {
+          let __unwrapped = bridge.get_std__optional_std__vector_NativePdfSource__(newValue)
+          return __unwrapped.map({ __item in __item })
         } else {
           return nil
         }

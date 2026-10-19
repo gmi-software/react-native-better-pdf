@@ -10,8 +10,11 @@
 #include <fbjni/fbjni.h>
 #include "PdfLoadEvent.hpp"
 
+#include "JPdfLoadedSource.hpp"
+#include "PdfLoadedSource.hpp"
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace margelo::nitro::betterpdf {
 
@@ -42,12 +45,24 @@ namespace margelo::nitro::betterpdf {
       jni::local_ref<jni::JString> filePath = this->getFieldValue(fieldFilePath);
       static const auto fieldIsStale = clazz->getField<jboolean>("isStale");
       jboolean isStale = this->getFieldValue(fieldIsStale);
+      static const auto fieldSources = clazz->getField<jni::JArrayClass<JPdfLoadedSource>>("sources");
+      jni::local_ref<jni::JArrayClass<JPdfLoadedSource>> sources = this->getFieldValue(fieldSources);
       return PdfLoadEvent(
         pageCount,
         firstPageWidth,
         firstPageHeight,
         filePath != nullptr ? std::make_optional(filePath->toStdString()) : std::nullopt,
-        static_cast<bool>(isStale)
+        static_cast<bool>(isStale),
+        [&](auto&& __input) {
+          size_t __size = __input->size();
+          std::vector<PdfLoadedSource> __vector;
+          __vector.reserve(__size);
+          for (size_t __i = 0; __i < __size; __i++) {
+            auto __element = __input->getElement(__i);
+            __vector.push_back(__element->toCpp());
+          }
+          return __vector;
+        }(sources)
       );
     }
 
@@ -57,7 +72,7 @@ namespace margelo::nitro::betterpdf {
      */
     [[maybe_unused]]
     static jni::local_ref<JPdfLoadEvent::javaobject> fromCpp(const PdfLoadEvent& value) {
-      using JSignature = JPdfLoadEvent(double, double, double, jni::alias_ref<jni::JString>, jboolean);
+      using JSignature = JPdfLoadEvent(double, double, double, jni::alias_ref<jni::JString>, jboolean, jni::alias_ref<jni::JArrayClass<JPdfLoadedSource>>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
@@ -66,7 +81,17 @@ namespace margelo::nitro::betterpdf {
         value.firstPageWidth,
         value.firstPageHeight,
         value.filePath.has_value() ? jni::make_jstring(value.filePath.value()) : nullptr,
-        value.isStale
+        value.isStale,
+        [&](auto&& __input) {
+          size_t __size = __input.size();
+          jni::local_ref<jni::JArrayClass<JPdfLoadedSource>> __array = jni::JArrayClass<JPdfLoadedSource>::newArray(__size);
+          for (size_t __i = 0; __i < __size; __i++) {
+            const auto& __element = __input[__i];
+            auto __elementJni = JPdfLoadedSource::fromCpp(__element);
+            __array->setElement(__i, *__elementJni);
+          }
+          return __array;
+        }(value.sources)
       );
     }
   };

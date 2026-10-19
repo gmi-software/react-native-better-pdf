@@ -20,6 +20,10 @@ For an overview of what each platform supports, see the
   and `exportDocument` copies the file); a choice's custom text cannot be
   typed by touch; a radio group that cannot be turned off cannot be
   cleared; screen readers do not reach form fields.
+- **Several sources** are shown for reading only: no form filling,
+  printing or export (see
+  [Several documents as one](guides/sources-and-loading.md#several-documents-as-one)).
+  Links from one source to another file are not followed.
 - **Page overlays** are not clipped to their page, and are not drawn in
   page images or printing. On iOS an overlay's drawing is scaled with the
   page, so its text can soften at high zoom (sharp at 2.5× in tests);

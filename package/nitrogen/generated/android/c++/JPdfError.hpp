@@ -40,6 +40,8 @@ namespace margelo::nitro::betterpdf {
       jni::local_ref<jni::JString> message = this->getFieldValue(fieldMessage);
       static const auto fieldPage = clazz->getField<jni::JDouble>("page");
       jni::local_ref<jni::JDouble> page = this->getFieldValue(fieldPage);
+      static const auto fieldSourceIndex = clazz->getField<jni::JDouble>("sourceIndex");
+      jni::local_ref<jni::JDouble> sourceIndex = this->getFieldValue(fieldSourceIndex);
       static const auto fieldHttpStatus = clazz->getField<jni::JDouble>("httpStatus");
       jni::local_ref<jni::JDouble> httpStatus = this->getFieldValue(fieldHttpStatus);
       static const auto fieldNativeDescription = clazz->getField<jni::JString>("nativeDescription");
@@ -48,6 +50,7 @@ namespace margelo::nitro::betterpdf {
         code->toCpp(),
         message->toStdString(),
         page != nullptr ? std::make_optional(page->value()) : std::nullopt,
+        sourceIndex != nullptr ? std::make_optional(sourceIndex->value()) : std::nullopt,
         httpStatus != nullptr ? std::make_optional(httpStatus->value()) : std::nullopt,
         nativeDescription != nullptr ? std::make_optional(nativeDescription->toStdString()) : std::nullopt
       );
@@ -59,7 +62,7 @@ namespace margelo::nitro::betterpdf {
      */
     [[maybe_unused]]
     static jni::local_ref<JPdfError::javaobject> fromCpp(const PdfError& value) {
-      using JSignature = JPdfError(jni::alias_ref<JPdfErrorCode>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JString>);
+      using JSignature = JPdfError(jni::alias_ref<JPdfErrorCode>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
@@ -67,6 +70,7 @@ namespace margelo::nitro::betterpdf {
         JPdfErrorCode::fromCpp(value.code),
         jni::make_jstring(value.message),
         value.page.has_value() ? jni::JDouble::valueOf(value.page.value()) : nullptr,
+        value.sourceIndex.has_value() ? jni::JDouble::valueOf(value.sourceIndex.value()) : nullptr,
         value.httpStatus.has_value() ? jni::JDouble::valueOf(value.httpStatus.value()) : nullptr,
         value.nativeDescription.has_value() ? jni::make_jstring(value.nativeDescription.value()) : nullptr
       );

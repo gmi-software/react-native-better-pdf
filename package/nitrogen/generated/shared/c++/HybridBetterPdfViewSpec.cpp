@@ -14,10 +14,8 @@ namespace margelo::nitro::betterpdf {
     HybridObject::loadHybridMethods();
     // load custom methods/properties
     registerHybrids(this, [](Prototype& prototype) {
-      prototype.registerHybridGetter("source", &HybridBetterPdfViewSpec::getSource);
-      prototype.registerHybridSetter("source", &HybridBetterPdfViewSpec::setSource);
-      prototype.registerHybridGetter("password", &HybridBetterPdfViewSpec::getPassword);
-      prototype.registerHybridSetter("password", &HybridBetterPdfViewSpec::setPassword);
+      prototype.registerHybridGetter("sources", &HybridBetterPdfViewSpec::getSources);
+      prototype.registerHybridSetter("sources", &HybridBetterPdfViewSpec::setSources);
       prototype.registerHybridGetter("initialPosition", &HybridBetterPdfViewSpec::getInitialPosition);
       prototype.registerHybridSetter("initialPosition", &HybridBetterPdfViewSpec::setInitialPosition);
       prototype.registerHybridGetter("minScale", &HybridBetterPdfViewSpec::getMinScale);

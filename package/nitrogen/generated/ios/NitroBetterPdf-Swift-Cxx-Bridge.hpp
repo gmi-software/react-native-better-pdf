@@ -58,6 +58,8 @@ namespace margelo::nitro::betterpdf { struct PdfLinkPressEvent; }
 namespace margelo::nitro::betterpdf { struct PdfLoadEvent; }
 // Forward declaration of `PdfLoadProgressEvent` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
+// Forward declaration of `PdfLoadedSource` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfLoadedSource; }
 // Forward declaration of `PdfOpenResult` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfOpenResult; }
 // Forward declaration of `PdfOpenedDocument` to properly resolve imports.
@@ -124,6 +126,7 @@ namespace NitroBetterPdf { class HybridBetterPdfViewSpec_cxx; }
 #include "PdfLinkPressEvent.hpp"
 #include "PdfLoadEvent.hpp"
 #include "PdfLoadProgressEvent.hpp"
+#include "PdfLoadedSource.hpp"
 #include "PdfOpenResult.hpp"
 #include "PdfOpenedDocument.hpp"
 #include "PdfOutlineEntry.hpp"
@@ -863,18 +866,29 @@ namespace margelo::nitro::betterpdf::bridge::swift {
     return Result<std::shared_ptr<Promise<PdfPageImage>>>::withError(error);
   }
   
-  // pragma MARK: std::optional<NativePdfSource>
+  // pragma MARK: std::vector<NativePdfSource>
   /**
-   * Specialized version of `std::optional<NativePdfSource>`.
+   * Specialized version of `std::vector<NativePdfSource>`.
    */
-  using std__optional_NativePdfSource_ = std::optional<NativePdfSource>;
-  inline std::optional<NativePdfSource> create_std__optional_NativePdfSource_(const NativePdfSource& value) noexcept {
-    return std::optional<NativePdfSource>(value);
+  using std__vector_NativePdfSource_ = std::vector<NativePdfSource>;
+  inline std::vector<NativePdfSource> create_std__vector_NativePdfSource_(size_t size) noexcept {
+    std::vector<NativePdfSource> vector;
+    vector.reserve(size);
+    return vector;
   }
-  inline bool has_value_std__optional_NativePdfSource_(const std::optional<NativePdfSource>& optional) noexcept {
+  
+  // pragma MARK: std::optional<std::vector<NativePdfSource>>
+  /**
+   * Specialized version of `std::optional<std::vector<NativePdfSource>>`.
+   */
+  using std__optional_std__vector_NativePdfSource__ = std::optional<std::vector<NativePdfSource>>;
+  inline std::optional<std::vector<NativePdfSource>> create_std__optional_std__vector_NativePdfSource__(const std::vector<NativePdfSource>& value) noexcept {
+    return std::optional<std::vector<NativePdfSource>>(value);
+  }
+  inline bool has_value_std__optional_std__vector_NativePdfSource__(const std::optional<std::vector<NativePdfSource>>& optional) noexcept {
     return optional.has_value();
   }
-  inline NativePdfSource get_std__optional_NativePdfSource_(const std::optional<NativePdfSource>& optional) noexcept {
+  inline std::vector<NativePdfSource> get_std__optional_std__vector_NativePdfSource__(const std::optional<std::vector<NativePdfSource>>& optional) noexcept {
     return optional.value();
   }
   
@@ -992,6 +1006,17 @@ namespace margelo::nitro::betterpdf::bridge::swift {
   }
   inline std::vector<PdfOverlayPlacement> get_std__optional_std__vector_PdfOverlayPlacement__(const std::optional<std::vector<PdfOverlayPlacement>>& optional) noexcept {
     return optional.value();
+  }
+  
+  // pragma MARK: std::vector<PdfLoadedSource>
+  /**
+   * Specialized version of `std::vector<PdfLoadedSource>`.
+   */
+  using std__vector_PdfLoadedSource_ = std::vector<PdfLoadedSource>;
+  inline std::vector<PdfLoadedSource> create_std__vector_PdfLoadedSource_(size_t size) noexcept {
+    std::vector<PdfLoadedSource> vector;
+    vector.reserve(size);
+    return vector;
   }
   
   // pragma MARK: std::function<void(const PdfLoadEvent& /* event */)>

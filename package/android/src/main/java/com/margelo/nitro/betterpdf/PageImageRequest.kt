@@ -5,14 +5,18 @@ import android.net.Uri
 
 /** A validated `renderPage` call, shared by the view and `PdfDocument`. */
 internal class PageImageRequest private constructor(
-  private val page: Int,
+  val page: Int,
   private val width: Int,
   private val format: PdfImageFormat,
   private val quality: Double,
 ) {
-  /** Renders the page with [reads] and writes the image file. Blocking. */
-  fun render(reads: DocumentReads, context: Context, formEdits: List<FormEdit> = emptyList()): PdfPageImage {
-    val bitmap = reads.renderPageImage(page, width, formEdits)
+  /**
+   * Renders the page with [reads] and writes the image file; [pageInFile]:
+   * the page in the file [reads] reads ([page] of a document of one
+   * source). Blocking.
+   */
+  fun render(reads: DocumentReads, context: Context, pageInFile: Int, formEdits: List<FormEdit> = emptyList()): PdfPageImage {
+    val bitmap = reads.renderPageImage(pageInFile, width, formEdits)
     try {
       val file = bitmap.writeToCache(context, format, quality)
       return PdfPageImage(Uri.fromFile(file).toString(), bitmap.width.toDouble(), bitmap.height.toDouble())

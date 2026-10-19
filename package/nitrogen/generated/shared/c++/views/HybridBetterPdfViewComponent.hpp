@@ -18,15 +18,15 @@
 #include <string>
 
 #include "NativePdfSource.hpp"
+#include <vector>
 #include <optional>
-#include <string>
 #include "PdfInitialPosition.hpp"
 #include "PdfFitPolicy.hpp"
 #include "PdfSpreadMode.hpp"
 #include "PdfColorScheme.hpp"
 #include "NativeContentInset.hpp"
+#include <string>
 #include "PdfOverlayPlacement.hpp"
-#include <vector>
 #include "PdfLoadEvent.hpp"
 #include <functional>
 #include "PdfLoadProgressEvent.hpp"
@@ -62,8 +62,7 @@ namespace margelo::nitro::betterpdf::views {
                              const react::RawProps& rawProps);
 
   public:
-    nitro::ReactProp<std::optional<NativePdfSource>> source;
-    nitro::ReactProp<std::optional<std::string>> password;
+    nitro::ReactProp<std::optional<std::vector<NativePdfSource>>> sources;
     nitro::ReactProp<std::optional<PdfInitialPosition>> initialPosition;
     nitro::ReactProp<std::optional<double>> minScale;
     nitro::ReactProp<std::optional<double>> maxScale;
@@ -102,8 +101,7 @@ namespace margelo::nitro::betterpdf::views {
 
     [[nodiscard]]
     bool hasSameProps(const HybridBetterPdfViewProps& other) const noexcept {
-      return source.hasSameValue(other.source) &&
-             password.hasSameValue(other.password) &&
+      return sources.hasSameValue(other.sources) &&
              initialPosition.hasSameValue(other.initialPosition) &&
              minScale.hasSameValue(other.minScale) &&
              maxScale.hasSameValue(other.maxScale) &&
@@ -143,8 +141,7 @@ namespace margelo::nitro::betterpdf::views {
 
     [[nodiscard]]
     bool hasAnyProvidedProps() const noexcept {
-      return source.isProvided() ||
-             password.isProvided() ||
+      return sources.isProvided() ||
              initialPosition.isProvided() ||
              minScale.isProvided() ||
              maxScale.isProvided() ||

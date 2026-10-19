@@ -59,6 +59,20 @@ export interface PdfUriSource {
    * reload when only their `uri` or `headers` differ.
    */
   cacheKey?: string;
+  /**
+   * Opens a password-protected document. Takes precedence over
+   * `PdfView`'s `password` prop and `PdfDocument.open`'s `password` option,
+   * so each of several sources can have its own. `PdfCache` ignores it.
+   */
+  password?: string;
+}
+
+/** A document at an absolute path on the device. */
+export interface PdfFileSource {
+  /** Absolute path of the file. */
+  filePath: string;
+  /** As {@linkcode PdfUriSource.password}. */
+  password?: string;
 }
 
 /**
@@ -68,6 +82,8 @@ export interface PdfUriSource {
 export interface PdfBase64Source {
   /** Standard base64 without a `data:` prefix; whitespace and missing padding are fine. */
   base64: string;
+  /** As {@linkcode PdfUriSource.password}. */
+  password?: string;
 }
 
 /**
@@ -75,13 +91,13 @@ export interface PdfBase64Source {
  *
  * - {@linkcode PdfUriSource} — `http(s)://` (downloaded natively into the
  *   app's cache), `file://`, or `content://` on Android.
- * - `{ filePath }` — an absolute path on the device.
+ * - {@linkcode PdfFileSource} — `{ filePath }`, an absolute path on the
+ *   device.
  * - {@linkcode PdfBase64Source} — the document's bytes as a base64 string.
  * - `number` — a bundled asset, i.e. `require('./document.pdf')`.
  *   `pdf` is one of Metro's default asset extensions, so no config is needed.
  */
-export type PdfSource =
-  PdfUriSource | { filePath: string } | PdfBase64Source | number;
+export type PdfSource = PdfUriSource | PdfFileSource | PdfBase64Source | number;
 
 /** Resolves `require()` asset ids. Injected so this module stays pure. */
 export type AssetResolver = (asset: number) => { uri: string } | null;
@@ -122,6 +138,35 @@ export function normalizeSource(
   return normalizeUriSource(source);
 }
 
+/** The source's own password, if it has one (bundled assets cannot). */
+export function sourcePassword(source: PdfSource): string | undefined {
+  return typeof source === 'number' ? undefined : source.password;
+}
+
+/**
+ * The native sources of `PdfView`'s `source`, one or several, each with its
+ * password: its own, else `password` (the prop), else `''` for none.
+ */
+export function normalizeSources(
+  source: PdfSource | readonly PdfSource[],
+  password: string | undefined,
+  resolveAsset: AssetResolver,
+): NormalizedSource[] {
+  const sources: readonly PdfSource[] = isSourceList(source)
+    ? source
+    : [source];
+  return sources.map((item) => ({
+    ...normalizeSource(item, resolveAsset),
+    password: sourcePassword(item) ?? password ?? '',
+  }));
+}
+
+function isSourceList(
+  source: PdfSource | readonly PdfSource[],
+): source is readonly PdfSource[] {
+  return Array.isArray(source);
+}
+
 /**
  * Value identity of a normalized source. Equal keys mean equal values, so
  * the native view never receives the same source twice. (Whether a changed
@@ -139,5 +184,11 @@ export function sourceKey(source: NormalizedSource): string {
     source.maxAgeMs ?? null,
     source.cacheKey ?? null,
     source.base64 !== undefined,
+    source.password ?? null,
   ]);
+}
+
+/** Value identity of several normalized sources, in order. */
+export function sourcesKey(sources: readonly NormalizedSource[]): string {
+  return JSON.stringify(sources.map(sourceKey));
 }

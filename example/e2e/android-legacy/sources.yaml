@@ -1,0 +1,43 @@
+# Several sources on Android devices without the renderer's newer API (the
+# API 34 emulator image, SDK extension 7): links come from each source's
+# file, every page number counts across the set, and a protected source
+# fails the load with its index. Devices with the newer API run
+# viewer-sources instead.
+#   maestro --device <id> test example/e2e/android-legacy/sources.yaml
+appId: software.gmi.betterpdf.example
+---
+- runFlow: ../_start.yaml
+- tapOn: "Viewer"
+- runFlow: { file: ../_open-list-entry.yaml, env: { ENTRY: "Several sources" } }
+- extendedWaitUntil: { visible: "1 / 20", timeout: 15000 }
+- assertVisible: "sources: p1\\+3 p4\\+12 p16\\+5"
+# The first source's link to its page 3, read from the file.
+- tapOn: { point: "25%, 72%" }
+- extendedWaitUntil: { visible: "3 / 20", timeout: 5000 }
+- tapOn: "Vertical"
+- extendedWaitUntil: { visible: "Horizontal", timeout: 5000 }
+- tapOn: "Horizontal"
+- extendedWaitUntil: { visible: "Paged", timeout: 5000 }
+- tapOn: "Paged"
+- extendedWaitUntil: { visible: "Paged H", timeout: 5000 }
+- waitForAnimationToEnd
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "90%, 50%", end: "10%, 50%", duration: 150 }
+      - extendedWaitUntil: { visible: "4 / 20", timeout: 5000 }
+- tapOn: "TOC"
+- extendedWaitUntil: { visible: "Contents \\(10\\)", timeout: 5000 }
+- tapOn: "Last page"
+- extendedWaitUntil: { visible: "15 / 20", timeout: 5000 }
+- tapOn: "Sizes"
+- extendedWaitUntil: { visible: "sizes 20: 595x842 595x842 595x842 595x842 .*", timeout: 5000 }
+- tapOn: "Image"
+- extendedWaitUntil: { visible: "image p15: 300x42[45] png.*", timeout: 10000 }
+- tapOn: { id: "page-image" }
+- tapOn: "‹ Back"
+# A protected source cannot be opened here: the set fails, naming it.
+- runFlow: { file: ../_open-list-entry.yaml, env: { ENTRY: "Several sources, one protected.*" } }
+- extendedWaitUntil: { visible: "unsupported-pdf", timeout: 15000 }
+- assertVisible: "source 2 of 2"
+- tapOn: "‹ Back"

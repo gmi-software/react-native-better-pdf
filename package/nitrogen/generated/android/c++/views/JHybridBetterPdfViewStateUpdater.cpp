@@ -54,14 +54,9 @@ void JHybridBetterPdfViewStateUpdater::updateViewProps(jni::alias_ref<jni::JClas
 
   // Update only props that differ from the previous State snapshot.
   if (oldProps == nullptr
-        ? newProps->source.isProvided()
-        : !newProps->source.hasSameValue(oldProps->source)) {
-    hybridView->setSource(newProps->source.get());
-  }
-  if (oldProps == nullptr
-        ? newProps->password.isProvided()
-        : !newProps->password.hasSameValue(oldProps->password)) {
-    hybridView->setPassword(newProps->password.get());
+        ? newProps->sources.isProvided()
+        : !newProps->sources.hasSameValue(oldProps->sources)) {
+    hybridView->setSources(newProps->sources.get());
   }
   if (oldProps == nullptr
         ? newProps->initialPosition.isProvided()

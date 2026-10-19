@@ -1,5 +1,10 @@
 import { describe, expect, test } from 'bun:test';
-import { normalizeSource, sourceKey } from './source';
+import {
+  normalizeSource,
+  normalizeSources,
+  sourceKey,
+  sourcesKey,
+} from './source';
 
 const resolveAsset = (asset: number) =>
   asset === 7 ? { uri: 'http://localhost:8081/assets/doc.pdf' } : null;
@@ -121,6 +126,76 @@ describe('sourceKey', () => {
   test('cannot be spoofed by a uri containing the separator', () => {
     expect(sourceKey({ uri: 'a\n[["A","1"]]' })).not.toBe(
       sourceKey({ uri: 'a', headers: { A: '1' } }),
+    );
+  });
+});
+
+describe('normalizeSources', () => {
+  test('a single source becomes a list of one, with its password', () => {
+    expect(
+      normalizeSources(
+        { uri: 'https://x.test/a.pdf' },
+        undefined,
+        resolveAsset,
+      ),
+    ).toEqual([{ uri: 'https://x.test/a.pdf', password: '' }]);
+  });
+
+  test("each source keeps its own password, else takes the prop's", () => {
+    expect(
+      normalizeSources(
+        [
+          { uri: 'a', password: 'own' },
+          { filePath: '/b', password: '' },
+          { uri: 'c' },
+          7,
+        ],
+        'prop',
+        resolveAsset,
+      ),
+    ).toEqual([
+      { uri: 'a', password: 'own' },
+      { uri: '/b', password: '' },
+      { uri: 'c', password: 'prop' },
+      { uri: 'http://localhost:8081/assets/doc.pdf', password: 'prop' },
+    ]);
+  });
+
+  test('a base64 source keeps its text and its own password', () => {
+    expect(
+      normalizeSources(
+        [
+          { base64: 'JVBERi0xLjQK', password: 'own' },
+          { base64: 'JVBERi0xLjcK' },
+        ],
+        'prop',
+        resolveAsset,
+      ),
+    ).toEqual([
+      { uri: '', base64: 'JVBERi0xLjQK', password: 'own' },
+      { uri: '', base64: 'JVBERi0xLjcK', password: 'prop' },
+    ]);
+  });
+
+  test('an empty list stays empty (native reports invalid-source)', () => {
+    expect(normalizeSources([], 'prop', resolveAsset)).toEqual([]);
+  });
+});
+
+describe('sourcesKey', () => {
+  test('leaves base64 text out', () => {
+    const key = sourcesKey([{ uri: '', base64: 'JVBERi0xLjQK' }]);
+    expect(key).not.toContain('JVBERi0xLjQK');
+    expect(sourcesKey([{ uri: '', base64: 'JVBERi0xLjcK' }])).toBe(key);
+  });
+
+  test('differs when the order, a source or a password differs', () => {
+    const base = sourcesKey([{ uri: 'a' }, { uri: 'b' }]);
+    expect(sourcesKey([{ uri: 'a' }, { uri: 'b' }])).toBe(base);
+    expect(sourcesKey([{ uri: 'b' }, { uri: 'a' }])).not.toBe(base);
+    expect(sourcesKey([{ uri: 'a' }])).not.toBe(base);
+    expect(sourcesKey([{ uri: 'a' }, { uri: 'b', password: 'p' }])).not.toBe(
+      base,
     );
   });
 });

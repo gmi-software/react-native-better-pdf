@@ -32,6 +32,8 @@ namespace margelo::nitro::betterpdf { struct NativeContentInset; }
 namespace margelo::nitro::betterpdf { struct PdfOverlayPlacement; }
 // Forward declaration of `PdfLoadEvent` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfLoadEvent; }
+// Forward declaration of `PdfLoadedSource` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfLoadedSource; }
 // Forward declaration of `PdfLoadProgressEvent` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
 // Forward declaration of `PdfError` to properly resolve imports.
@@ -82,6 +84,7 @@ namespace margelo::nitro::betterpdf { struct NativePdfFormValue; }
 namespace margelo::nitro::betterpdf { struct PdfExportResult; }
 
 #include "NativePdfSource.hpp"
+#include <vector>
 #include <optional>
 #include <string>
 #include <NitroModules/ArrayBuffer.hpp>
@@ -94,9 +97,9 @@ namespace margelo::nitro::betterpdf { struct PdfExportResult; }
 #include "PdfColorScheme.hpp"
 #include "NativeContentInset.hpp"
 #include "PdfOverlayPlacement.hpp"
-#include <vector>
 #include "PdfLoadEvent.hpp"
 #include <functional>
+#include "PdfLoadedSource.hpp"
 #include "PdfLoadProgressEvent.hpp"
 #include "PdfError.hpp"
 #include "PdfErrorCode.hpp"
@@ -169,19 +172,12 @@ namespace margelo::nitro::betterpdf {
 
   public:
     // Properties
-    inline std::optional<NativePdfSource> getSource() noexcept override {
-      auto __result = _swiftPart.getSource();
+    inline std::optional<std::vector<NativePdfSource>> getSources() noexcept override {
+      auto __result = _swiftPart.getSources();
       return __result;
     }
-    inline void setSource(const std::optional<NativePdfSource>& source) noexcept override {
-      _swiftPart.setSource(source);
-    }
-    inline std::optional<std::string> getPassword() noexcept override {
-      auto __result = _swiftPart.getPassword();
-      return __result;
-    }
-    inline void setPassword(const std::optional<std::string>& password) noexcept override {
-      _swiftPart.setPassword(password);
+    inline void setSources(const std::optional<std::vector<NativePdfSource>>& sources) noexcept override {
+      _swiftPart.setSources(sources);
     }
     inline std::optional<PdfInitialPosition> getInitialPosition() noexcept override {
       auto __result = _swiftPart.getInitialPosition();

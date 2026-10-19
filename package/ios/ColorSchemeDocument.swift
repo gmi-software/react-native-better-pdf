@@ -51,6 +51,15 @@ final class ColorSchemeDocument: PDFDocument, PDFDocumentDelegate {
     delegate = self
   }
 
+  /// An empty document, which the pages of several sources (each a
+  /// `ColorSchemeDocument`) are inserted into. An inserted page keeps its
+  /// class and reports this document as its `document`, so it reads this
+  /// document's settings.
+  override init() {
+    super.init()
+    delegate = self
+  }
+
   func classForPage() -> AnyClass {
     ColorSchemePage.self
   }

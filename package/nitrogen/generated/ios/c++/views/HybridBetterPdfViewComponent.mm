@@ -98,17 +98,11 @@ using namespace margelo::nitro::betterpdf::views;
   if (hasTransactionPropChanges) {
     swiftPart.beforeUpdate();
 
-    // source: optional
+    // sources: optional
     if (oldViewProps == nullptr
-          ? newViewProps.source.isProvided()
-          : !newViewProps.source.hasSameValue(oldViewProps->source)) {
-      swiftPart.setSource(newViewProps.source.get());
-    }
-    // password: optional
-    if (oldViewProps == nullptr
-          ? newViewProps.password.isProvided()
-          : !newViewProps.password.hasSameValue(oldViewProps->password)) {
-      swiftPart.setPassword(newViewProps.password.get());
+          ? newViewProps.sources.isProvided()
+          : !newViewProps.sources.hasSameValue(oldViewProps->sources)) {
+      swiftPart.setSources(newViewProps.sources.get());
     }
     // initialPosition: optional
     if (oldViewProps == nullptr

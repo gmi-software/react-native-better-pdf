@@ -4,8 +4,7 @@
   "bubblingEventTypes": {},
   "directEventTypes": {},
   "validAttributes": {
-    "source": true,
-    "password": true,
+    "sources": true,
     "initialPosition": true,
     "minScale": true,
     "maxScale": true,

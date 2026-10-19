@@ -1,5 +1,6 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { PdfView, type PdfSource } from 'react-native-better-pdf';
+import { PdfView } from 'react-native-better-pdf';
+import type { DocumentSource } from '../documents';
 import { colors } from '../ui';
 
 const MAX_THUMBNAILS = 12;
@@ -14,7 +15,7 @@ export function ThumbnailStrip({
   currentPage,
   onSelect,
 }: {
-  source: PdfSource;
+  source: DocumentSource;
   pageCount: number;
   currentPage: number;
   onSelect: (page: number) => void;

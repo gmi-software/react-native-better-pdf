@@ -49,6 +49,8 @@ namespace margelo::nitro::betterpdf {
       jni::local_ref<jni::JDouble> maxAgeMs = this->getFieldValue(fieldMaxAgeMs);
       static const auto fieldCacheKey = clazz->getField<jni::JString>("cacheKey");
       jni::local_ref<jni::JString> cacheKey = this->getFieldValue(fieldCacheKey);
+      static const auto fieldPassword = clazz->getField<jni::JString>("password");
+      jni::local_ref<jni::JString> password = this->getFieldValue(fieldPassword);
       return NativePdfSource(
         uri->toStdString(),
         base64 != nullptr ? std::make_optional(base64->cthis()->getArrayBuffer()) : std::nullopt,
@@ -62,7 +64,8 @@ namespace margelo::nitro::betterpdf {
         }()) : std::nullopt,
         cache != nullptr ? std::make_optional(cache->toCpp()) : std::nullopt,
         maxAgeMs != nullptr ? std::make_optional(maxAgeMs->value()) : std::nullopt,
-        cacheKey != nullptr ? std::make_optional(cacheKey->toStdString()) : std::nullopt
+        cacheKey != nullptr ? std::make_optional(cacheKey->toStdString()) : std::nullopt,
+        password != nullptr ? std::make_optional(password->toStdString()) : std::nullopt
       );
     }
 
@@ -72,7 +75,7 @@ namespace margelo::nitro::betterpdf {
      */
     [[maybe_unused]]
     static jni::local_ref<JNativePdfSource::javaobject> fromCpp(const NativePdfSource& value) {
-      using JSignature = JNativePdfSource(jni::alias_ref<jni::JString>, jni::alias_ref<JArrayBuffer::javaobject>, jni::alias_ref<jni::JMap<jni::JString, jni::JString>>, jni::alias_ref<JPdfCacheMode>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JString>);
+      using JSignature = JNativePdfSource(jni::alias_ref<jni::JString>, jni::alias_ref<JArrayBuffer::javaobject>, jni::alias_ref<jni::JMap<jni::JString, jni::JString>>, jni::alias_ref<JPdfCacheMode>, jni::alias_ref<jni::JDouble>, jni::alias_ref<jni::JString>, jni::alias_ref<jni::JString>);
       static const auto clazz = javaClassStatic();
       static const auto create = clazz->getStaticMethod<JSignature>("fromCpp");
       return create(
@@ -88,7 +91,8 @@ namespace margelo::nitro::betterpdf {
         }() : nullptr,
         value.cache.has_value() ? JPdfCacheMode::fromCpp(value.cache.value()) : nullptr,
         value.maxAgeMs.has_value() ? jni::JDouble::valueOf(value.maxAgeMs.value()) : nullptr,
-        value.cacheKey.has_value() ? jni::make_jstring(value.cacheKey.value()) : nullptr
+        value.cacheKey.has_value() ? jni::make_jstring(value.cacheKey.value()) : nullptr,
+        value.password.has_value() ? jni::make_jstring(value.password.value()) : nullptr
       );
     }
   };

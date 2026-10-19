@@ -60,12 +60,12 @@ class PdfLinkReader(private val document: PdfDocumentReader) {
         ?.let { PageLink.Url(bounds, it) }
       "GoTo" -> destinations.pageOf(action["D"])?.let { PageLink.Goto(bounds, it) }
       "Named" -> when ((action["N"] as? PdfObject.Name)?.value) {
-        "NextPage" -> pageIndex + 1
-        "PrevPage" -> pageIndex - 1
-        "FirstPage" -> 0
-        "LastPage" -> pageCount - 1
+        "NextPage" -> PageLink.Goto(bounds, pageIndex + 1)
+        "PrevPage" -> PageLink.Goto(bounds, pageIndex - 1)
+        "FirstPage" -> PageLink.Goto(bounds, 0, PageLink.DocumentEnd.FIRST)
+        "LastPage" -> PageLink.Goto(bounds, pageCount - 1, PageLink.DocumentEnd.LAST)
         else -> null
-      }?.takeIf { it in 0 until pageCount }?.let { PageLink.Goto(bounds, it) }
+      }
       else -> null
     }
   }

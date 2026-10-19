@@ -28,10 +28,13 @@
 #error NitroModules cannot be found! Are you sure you installed NitroModules properly?
 #endif
 
-
+// Forward declaration of `PdfLoadedSource` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfLoadedSource; }
 
 #include <string>
 #include <optional>
+#include "PdfLoadedSource.hpp"
+#include <vector>
 
 namespace margelo::nitro::betterpdf {
 
@@ -45,10 +48,11 @@ namespace margelo::nitro::betterpdf {
     double firstPageHeight     SWIFT_PRIVATE;
     std::optional<std::string> filePath     SWIFT_PRIVATE;
     bool isStale     SWIFT_PRIVATE;
+    std::vector<PdfLoadedSource> sources     SWIFT_PRIVATE;
 
   public:
     PdfLoadEvent() = default;
-    explicit PdfLoadEvent(double pageCount, double firstPageWidth, double firstPageHeight, std::optional<std::string> filePath, bool isStale): pageCount(pageCount), firstPageWidth(firstPageWidth), firstPageHeight(firstPageHeight), filePath(filePath), isStale(isStale) {}
+    explicit PdfLoadEvent(double pageCount, double firstPageWidth, double firstPageHeight, std::optional<std::string> filePath, bool isStale, std::vector<PdfLoadedSource> sources): pageCount(pageCount), firstPageWidth(firstPageWidth), firstPageHeight(firstPageHeight), filePath(filePath), isStale(isStale), sources(sources) {}
 
   public:
     friend bool operator==(const PdfLoadEvent& lhs, const PdfLoadEvent& rhs) = default;
@@ -68,7 +72,8 @@ namespace margelo::nitro {
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "firstPageWidth"))),
         JSIConverter<double>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "firstPageHeight"))),
         JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "filePath"))),
-        JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "isStale")))
+        JSIConverter<bool>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "isStale"))),
+        JSIConverter<std::vector<margelo::nitro::betterpdf::PdfLoadedSource>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "sources")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::betterpdf::PdfLoadEvent& arg) {
@@ -78,6 +83,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "firstPageHeight"), JSIConverter<double>::toJSI(runtime, arg.firstPageHeight));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "filePath"), JSIConverter<std::optional<std::string>>::toJSI(runtime, arg.filePath));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "isStale"), JSIConverter<bool>::toJSI(runtime, arg.isStale));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "sources"), JSIConverter<std::vector<margelo::nitro::betterpdf::PdfLoadedSource>>::toJSI(runtime, arg.sources));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -93,6 +99,7 @@ namespace margelo::nitro {
       if (!JSIConverter<double>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "firstPageHeight")))) return false;
       if (!JSIConverter<std::optional<std::string>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "filePath")))) return false;
       if (!JSIConverter<bool>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "isStale")))) return false;
+      if (!JSIConverter<std::vector<margelo::nitro::betterpdf::PdfLoadedSource>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "sources")))) return false;
       return true;
     }
   };

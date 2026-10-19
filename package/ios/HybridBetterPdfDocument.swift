@@ -124,7 +124,7 @@ final class HybridBetterPdfDocument: HybridBetterPdfDocumentSpec {
     } catch {
       return Promise.rejected(withError: error)
     }
-    return read { document in try request.render(from: document) }
+    return read { document in try request.render(pageInFile: request.page, from: document) }
   }
 
   func close() throws {

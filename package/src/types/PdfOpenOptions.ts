@@ -3,7 +3,7 @@ import type { PdfLoadProgressEvent } from './PdfLoadProgressEvent';
 
 /** Options of {@linkcode PdfDocument.open}. */
 export interface PdfOpenOptions {
-  /** Password of a protected document. */
+  /** Password of a protected document, unless the source has its own. */
   password?: string;
   /**
    * Download progress of a remote document, at most every 100 ms plus once

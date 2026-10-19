@@ -10,8 +10,7 @@ import NitroModules
 /// See ``HybridBetterPdfViewSpec``
 public protocol HybridBetterPdfViewSpec_protocol: HybridObject, HybridView {
   // Properties
-  var source: NativePdfSource? { get set }
-  var password: String? { get set }
+  var sources: [NativePdfSource]? { get set }
   var initialPosition: PdfInitialPosition? { get set }
   var minScale: Double? { get set }
   var maxScale: Double? { get set }

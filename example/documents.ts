@@ -1,5 +1,9 @@
 import { Directory, File, Paths } from 'expo-file-system';
-import type { PdfSource, PdfViewRef } from 'react-native-better-pdf';
+import type {
+  PdfBase64Source,
+  PdfSource,
+  PdfViewRef,
+} from 'react-native-better-pdf';
 
 /** Served by `node benchmarks/serve-fixtures.mjs` (Android: `adb reverse tcp:8090 tcp:8090`). */
 export const FIXTURE_SERVER = 'http://localhost:8090';
@@ -42,12 +46,15 @@ export const BENCHMARK_FIXTURES = [
   'extreme',
 ] as const satisfies readonly FixtureName[];
 
+/** What `PdfView` shows: one document, or several shown as one. */
+export type DocumentSource = PdfSource | readonly PdfSource[];
+
 export interface DocumentEntry {
   id: string;
   title: string;
   subtitle: string;
   /** Resolves the source; fixtures are copied onto the device first. */
-  resolve: () => Promise<PdfSource>;
+  resolve: () => Promise<DocumentSource>;
   initialPage?: number;
   initialScale?: number;
   /** Shows the example's PdfPageOverlays (pages 1 and 3). */
@@ -57,7 +64,7 @@ export interface DocumentEntry {
   /** Translucent bars over the viewer, which pages scroll under (`contentInset`). */
   contentInset?: { top: number; bottom: number };
   /** Another source for "Swap"; also shows "Same" and the onLoad count. */
-  alternate?: () => Promise<PdfSource>;
+  alternate?: () => Promise<DocumentSource>;
   /** Mounts the viewer at zero width, calls this from `onLoad`, then widens it. */
   onLoadAtZeroWidth?: (pdf: PdfViewRef) => void;
 }
@@ -76,7 +83,7 @@ export async function ensureFixture(name: FixtureName): Promise<File> {
   return File.downloadFileAsync(`${FIXTURE_SERVER}/${name}.pdf`, file);
 }
 
-async function base64Fixture(name: FixtureName): Promise<PdfSource> {
+async function base64Fixture(name: FixtureName): Promise<PdfBase64Source> {
   return { base64: await (await ensureFixture(name)).base64() };
 }
 
@@ -228,5 +235,77 @@ export const DOCUMENTS: DocumentEntry[] = [
     subtitle: 'zoomTo(2) from onLoad, then widened',
     resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
     onLoadAtZeroWidth: (pdf) => pdf.zoomTo(2, { animated: false }),
+  },
+  {
+    id: 'sources',
+    title: 'Several sources',
+    subtitle: 'links + outline + mixed-sizes as one document',
+    resolve: async () =>
+      Promise.all(
+        (['links', 'outline', 'mixed-sizes'] as const).map(async (name) => ({
+          uri: (await ensureFixture(name)).uri,
+        })),
+      ),
+  },
+  {
+    id: 'sources-many',
+    title: 'Twenty sources',
+    subtitle: 'The medium fixture 20 times: 2,000 pages',
+    resolve: async () => {
+      const { uri } = await ensureFixture('medium');
+      return Array.from({ length: 20 }, () => ({ uri }));
+    },
+  },
+  {
+    id: 'sources-remote',
+    title: 'Several sources (HTTP)',
+    subtitle: 'From the fixture server: medium + links, in parallel',
+    // A unique query per open bypasses the per-session download cache.
+    resolve: async () => [
+      {
+        uri: `${FIXTURE_SERVER}/medium.pdf?bytesPerSecond=4000000&open=${Date.now()}`,
+      },
+      { uri: `${FIXTURE_SERVER}/links.pdf?open=${Date.now()}` },
+    ],
+  },
+  {
+    id: 'sources-password',
+    title: 'Several sources, one protected',
+    subtitle: "links + encrypted with its own password: 'secret'",
+    resolve: async () => [
+      { uri: (await ensureFixture('links')).uri },
+      { uri: (await ensureFixture('encrypted')).uri, password: 'secret' },
+    ],
+  },
+  {
+    id: 'sources-locked',
+    title: 'Several sources, locked',
+    subtitle: 'links + encrypted: expect password-required, source 2',
+    resolve: async () => [
+      { uri: (await ensureFixture('links')).uri },
+      { uri: (await ensureFixture('encrypted')).uri },
+    ],
+  },
+  {
+    id: 'sources-base64',
+    title: 'Several sources, base64',
+    subtitle: "{ base64 } of encrypted ('secret') + links; Swap: outline",
+    resolve: async () => [
+      { ...(await base64Fixture('encrypted')), password: 'secret' },
+      { uri: (await ensureFixture('links')).uri },
+    ],
+    alternate: async () => [
+      await base64Fixture('outline'),
+      { uri: (await ensureFixture('links')).uri },
+    ],
+  },
+  {
+    id: 'sources-missing',
+    title: 'Several sources, one missing',
+    subtitle: 'links + a 404: expect http-error, source 2',
+    resolve: async () => [
+      { uri: (await ensureFixture('links')).uri },
+      { uri: `${FIXTURE_SERVER}/does-not-exist.pdf` },
+    ],
   },
 ];

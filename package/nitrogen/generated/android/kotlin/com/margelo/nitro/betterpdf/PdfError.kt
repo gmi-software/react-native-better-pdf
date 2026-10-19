@@ -29,6 +29,9 @@ data class PdfError(
   val page: Double?,
   @DoNotStrip
   @Keep
+  val sourceIndex: Double?,
+  @DoNotStrip
+  @Keep
   val httpStatus: Double?,
   @DoNotStrip
   @Keep
@@ -42,6 +45,7 @@ data class PdfError(
     return Objects.deepEquals(this.code, other.code)
       && Objects.deepEquals(this.message, other.message)
       && Objects.deepEquals(this.page, other.page)
+      && Objects.deepEquals(this.sourceIndex, other.sourceIndex)
       && Objects.deepEquals(this.httpStatus, other.httpStatus)
       && Objects.deepEquals(this.nativeDescription, other.nativeDescription)
   }
@@ -51,6 +55,7 @@ data class PdfError(
       code,
       message,
       page,
+      sourceIndex,
       httpStatus,
       nativeDescription
     ).contentDeepHashCode()
@@ -64,8 +69,8 @@ data class PdfError(
     @Keep
     @Suppress("unused")
     @JvmStatic
-    private fun fromCpp(code: PdfErrorCode, message: String, page: Double?, httpStatus: Double?, nativeDescription: String?): PdfError {
-      return PdfError(code, message, page, httpStatus, nativeDescription)
+    private fun fromCpp(code: PdfErrorCode, message: String, page: Double?, sourceIndex: Double?, httpStatus: Double?, nativeDescription: String?): PdfError {
+      return PdfError(code, message, page, sourceIndex, httpStatus, nativeDescription)
     }
   }
 }

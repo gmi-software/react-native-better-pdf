@@ -42,7 +42,7 @@ package/
     PdfView.tsx                    public component (wrapper over the host component)
     PdfCache.ts                    public cache API: AbortSignal, PdfDownloadError
     PdfDocument.ts                 public document API: open (AbortSignal, PdfOpenError), close
-    source.ts                      PdfSource union → native { uri, base64, headers, cache options }
+    source.ts                      PdfSource union (or a list) → native [{ uri, base64, headers, cache options, password }]
     nativeSource.ts                base64 text → native-owned ArrayBuffer (once per distinct text)
   test/base64/                     the C++ and Swift base64 decoders against shared cases, and each other
   nitrogen/generated/              Nitrogen output (committed; regenerate with `bun run specs`)
@@ -53,6 +53,8 @@ package/
     SettleDebouncer.swift          "viewport stopped moving" for scale and viewport events
     PdfDocumentLoader.swift        source resolution, cache fetch + pin, base64 → pin, PDFDocument open
     Base64Document.swift           base64 decoding by the library's rules (same as Android's C++)
+    DocumentSetLoader.swift        the view's sources in parallel; several assembled into one PDFDocument
+    DisplayedDocument.swift        the displayed document and its sources (files, passwords, first pages)
     PdfLoadFailure.swift           Swift error → PdfError
     DocumentCache.swift            fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.swift       copies on disk: session/persistent dirs, metadata, pins
@@ -63,7 +65,8 @@ package/
     PDFDocument+metadata.swift     information dictionary from CGPDFDocument, PdfDate
   android/src/main/java/com/margelo/nitro/betterpdf/
     HybridBetterPdfView.kt         props/methods/events, session lifecycle
-    PdfDocumentSession.kt          PdfRenderer + FD owner, render thread, renderer recycling
+    PdfDocumentSession.kt          renderer + FD per source, render thread, renderer recycling
+    SourcePages.kt                 pure: where each of several sources' pages are
     DocumentPage+renderPixels.kt   a page into ARGB, or grey coverage (1 byte/pixel) rendered in bands
     NativePageCoverage.kt          JNI entry: ARGB rows ↔ grey coverage
     PageFormats.kt                 pure: which pages rendered grey or in colour, a guess for the rest

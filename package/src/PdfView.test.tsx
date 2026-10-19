@@ -141,10 +141,10 @@ const lastBox = () => {
   return props;
 };
 
-/** The text of a native source's base64 buffer; checks the rest is `{ uri: '' }`. */
-function base64Text(source: unknown): string {
+/** The text of a native source's base64 buffer; checks the rest is `{ uri: '', password }`. */
+function base64Text(source: unknown, password = ''): string {
   const { base64, ...rest } = source as { base64: ArrayBuffer };
-  expect(rest).toEqual({ uri: '' });
+  expect(rest).toEqual({ uri: '', password });
   return new TextDecoder().decode(base64);
 }
 
@@ -153,6 +153,9 @@ const lastHost = () => {
   if (props == null) throw new Error('host not rendered');
   return props;
 };
+
+/** The native sources of the last render. */
+const lastSources = () => lastHost().sources as unknown[];
 
 function render(element: React.ReactElement): ReactTestRenderer {
   let renderer: ReactTestRenderer | undefined;
@@ -174,53 +177,132 @@ describe('PdfView', () => {
     const renderer = render(
       <PdfView source={{ uri: 'file:///a.pdf', headers: { A: '1' } }} />,
     );
-    const first = lastHost().source;
+    const first = lastHost().sources;
+    expect(first).toBeDefined();
     act(() =>
       renderer.update(
         <PdfView source={{ uri: 'file:///a.pdf', headers: { A: '1' } }} />,
       ),
     );
-    expect(lastHost().source).toBe(first);
+    expect(lastHost().sources).toBe(first);
   });
 
-  test('sends a new source object when the value changes', () => {
+  test('sends new sources when the value changes', () => {
     const renderer = render(<PdfView source={{ uri: 'file:///a.pdf' }} />);
-    const first = lastHost().source;
+    const first = lastHost().sources;
     act(() => renderer.update(<PdfView source={{ uri: 'file:///b.pdf' }} />));
-    expect(lastHost().source).not.toBe(first);
-    expect(lastHost().source).toEqual({ uri: 'file:///b.pdf' });
+    expect(lastHost().sources).not.toBe(first);
+    expect(lastHost().sources).toEqual([
+      { uri: 'file:///b.pdf', password: '' },
+    ]);
   });
 
   test('keeps the native source identity when the same base64 content is re-rendered', () => {
     const content = 'JVBERi0xLjQK';
     const renderer = render(<PdfView source={{ base64: content }} />);
-    const first = lastHost().source;
-    expect(base64Text(first)).toBe(content);
+    const first = lastHost().sources;
+    expect(base64Text(lastSources()[0])).toBe(content);
     act(() => renderer.update(<PdfView source={{ base64: content }} />));
-    expect(lastHost().source).toBe(first);
+    expect(lastHost().sources).toBe(first);
     // Equal content built anew, e.g. by a parent that re-encodes.
     const rebuilt = ['JVBERi0', 'xLjQK'].join('');
     act(() => renderer.update(<PdfView source={{ base64: rebuilt }} />));
-    expect(lastHost().source).toBe(first);
+    expect(lastHost().sources).toBe(first);
   });
 
-  test('sends a new source object when the base64 content changes', () => {
+  test('sends new sources when the base64 content changes', () => {
     const renderer = render(<PdfView source={{ base64: 'JVBERi0xLjQK' }} />);
-    const first = lastHost().source;
+    const first = lastHost().sources;
     act(() => renderer.update(<PdfView source={{ base64: 'JVBERi0xLjcK' }} />));
-    expect(lastHost().source).not.toBe(first);
-    expect(base64Text(lastHost().source)).toBe('JVBERi0xLjcK');
+    expect(lastHost().sources).not.toBe(first);
+    expect(base64Text(lastSources()[0])).toBe('JVBERi0xLjcK');
   });
 
-  test('sends a new source object when a base64 source becomes a uri source', () => {
+  test('sends new sources when a base64 source becomes a uri source', () => {
     const renderer = render(<PdfView source={{ base64: 'JVBERi0xLjQK' }} />);
     act(() => renderer.update(<PdfView source={{ uri: '' }} />));
-    expect(lastHost().source).toEqual({ uri: '' });
+    expect(lastHost().sources).toEqual([{ uri: '', password: '' }]);
+  });
+
+  test('sends base64 sources among several, each with its password', () => {
+    const renderer = render(
+      <PdfView
+        source={[
+          { uri: 'file:///a.pdf' },
+          { base64: 'JVBERi0xLjQK', password: 'b' },
+        ]}
+        password="p"
+      />,
+    );
+    const first = lastSources();
+    expect(first[0]).toEqual({ uri: 'file:///a.pdf', password: 'p' });
+    expect(base64Text(first[1], 'b')).toBe('JVBERi0xLjQK');
+    act(() =>
+      renderer.update(
+        <PdfView
+          source={[
+            { uri: 'file:///a.pdf' },
+            { base64: 'JVBERi0xLjcK', password: 'b' },
+          ]}
+          password="p"
+        />,
+      ),
+    );
+    expect(lastHost().sources).not.toBe(first);
+    expect(base64Text(lastSources()[1], 'b')).toBe('JVBERi0xLjcK');
   });
 
   test('resolves require() assets', () => {
     render(<PdfView source={12} />);
-    expect(lastHost().source).toEqual({ uri: 'asset://12' });
+    expect(lastHost().sources).toEqual([{ uri: 'asset://12', password: '' }]);
+  });
+
+  test('sends several sources in order, each with its password', () => {
+    render(
+      <PdfView
+        source={[
+          { uri: 'https://x.test/1.pdf' },
+          { uri: 'https://x.test/2.pdf', password: 'own' },
+          { filePath: '/data/3.pdf', password: '' },
+          12,
+        ]}
+        password="shared"
+      />,
+    );
+    expect(lastHost().sources).toEqual([
+      { uri: 'https://x.test/1.pdf', password: 'shared' },
+      { uri: 'https://x.test/2.pdf', password: 'own' },
+      // An empty password of its own means "none", not "the prop's".
+      { uri: '/data/3.pdf', password: '' },
+      { uri: 'asset://12', password: 'shared' },
+    ]);
+  });
+
+  test('keeps several sources identical while their values are, and not when one changes', () => {
+    const sources = (second: string) => [
+      { uri: 'file:///a.pdf' },
+      { uri: second, cacheKey: 'b' },
+    ];
+    const renderer = render(<PdfView source={sources('file:///b.pdf')} />);
+    const first = lastHost().sources;
+    act(() => renderer.update(<PdfView source={sources('file:///b.pdf')} />));
+    expect(lastHost().sources).toBe(first);
+    act(() => renderer.update(<PdfView source={sources('file:///c.pdf')} />));
+    expect(lastHost().sources).not.toBe(first);
+    const second = lastHost().sources;
+    act(() =>
+      renderer.update(
+        <PdfView source={sources('file:///c.pdf')} password="p" />,
+      ),
+    );
+    expect(lastHost().sources).not.toBe(second);
+  });
+
+  test('a single source and a list of it send the same sources', () => {
+    const renderer = render(<PdfView source={{ uri: 'file:///a.pdf' }} />);
+    const single = lastHost().sources;
+    act(() => renderer.update(<PdfView source={[{ uri: 'file:///a.pdf' }]} />));
+    expect(lastHost().sources).toBe(single);
   });
 
   test('forwards link presses and page taps to the latest handlers through stable callbacks', () => {
@@ -368,7 +450,7 @@ describe('PdfView', () => {
     const tap = lastHost().onPageTap as { f: (event: unknown) => void };
     act(() => renderer.update(<PdfView source={{ uri: 'x' }} />));
     expect(lastHost()).toMatchObject({
-      password: '',
+      sources: [{ uri: 'x', password: '' }],
       initialPosition: { page: 0, scale: 1 },
       minScale: 1,
       maxScale: 4,
@@ -453,7 +535,7 @@ describe('PdfView', () => {
       enablePaging: true,
       fitPolicy: 'height',
       spreadMode: 'book',
-      password: 'p',
+      sources: [{ uri: 'x', password: 'p' }],
       enableTextSelection: false,
     });
   });

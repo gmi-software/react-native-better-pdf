@@ -29,7 +29,7 @@ class SearchControllerTest {
   private var canStart = true
   private val startSearch: SearchStart = { query, pageCount, startPage, pages, listener ->
     if (canStart) {
-      PdfSearchTask(ParcelFileDescriptor(null), null, pageCount, startPage, pages, query, listener)
+      PdfSearchTask(listOf(PdfSearchTask.Source(ParcelFileDescriptor(null), null)), SourcePages(listOf(pageCount)), startPage, pages, query, listener)
         .also { started += Started(it, startPage, pages) }
     } else {
       null

@@ -3,7 +3,6 @@ package com.margelo.nitro.betterpdf
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Matrix
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -21,45 +20,45 @@ import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
 /**
- * One open document: resolves the source, owns the [DocumentRenderer] and its file
- * descriptor, and renders pages (and resolves text selections) on a single
- * dedicated thread.
+ * One open document, made of one or more [nativeSources] whose pages follow
+ * one another (see "Several sources" in docs/api-design.md): resolves the
+ * sources into their files ([DocumentSources]), and renders pages (and
+ * resolves text selections) on a single dedicated thread. Pages are the
+ * document's everywhere outside this class; a source's renderer gets its own
+ * page ([SourcePages.locate]), here, on the worker thread.
  *
  * Why a single thread: `PdfRenderer` allows only one open page at a time, so
- * parallel rendering of one document is impossible. Why a replaceable queue
- * instead of an executor: once `Page.render` starts it cannot be interrupted,
- * so the only effective cancellation is to drop work *before* it starts. The
- * UI thread re-submits the full wanted list on every viewport change and
- * anything no longer wanted is discarded.
+ * parallel rendering of one document is impossible (and PDFium's lock is
+ * process-wide, so neither is rendering several). Why a replaceable queue
+ * instead of an executor: once `Page.render` starts it cannot be
+ * interrupted, so the only effective cancellation is to drop work *before*
+ * it starts. The UI thread re-submits the full wanted list on every viewport
+ * change and anything no longer wanted is discarded.
  *
  * Lifecycle: every native resource (renderer, FD, open page) is created and
- * closed on the worker thread. [close] only signals; the worker finishes the
- * render in progress (bounded by viewport-sized bitmaps), then closes the
- * renderer, which closes the FD. Listener callbacks are delivered on the main
- * thread and never after [close].
+ * closed on the worker thread (sources are resolved on threads of their own
+ * while it waits). [close] only signals; the worker finishes the render in
+ * progress (bounded by viewport-sized bitmaps), then closes the renderers,
+ * which close their FDs. Listener callbacks are delivered on the main thread
+ * and never after [close].
  */
 class PdfDocumentSession internal constructor(
   context: Context,
-  private val source: NativePdfSource,
-  private val password: String?,
+  nativeSources: List<NativePdfSource>,
   private val bitmapPool: BitmapPool,
   private val listener: Listener,
   // What needs a device; JVM tests (PdfDocumentSessionTest) pass their own.
   private val mainThread: Executor = Handler(Looper.getMainLooper()).let { handler -> Executor { handler.post(it) } },
-  private val openSource: PdfSourceResolver.(NativePdfSource, (Long, Long?, Boolean) -> Unit) -> ResolvedSource = PdfSourceResolver::open,
-  private val openRenderer: (ParcelFileDescriptor, String?) -> DocumentRenderer = DocumentRenderer::openOrFail,
+  openSource: PdfSourceResolver.(NativePdfSource, (Long, Long?, Boolean) -> Unit) -> ResolvedSource = PdfSourceResolver::open,
+  openRenderer: (ParcelFileDescriptor, String?) -> DocumentRenderer = DocumentRenderer::openOrFail,
 ) {
   interface Listener {
     /**
-     * [pageSizes] holds the real size of page 0 and an estimate (page 0's
-     * size) for every other page; see [onPageMeasured].
+     * [pageSizes] holds the real size of each source's first page and, for
+     * its other pages, that size as an estimate; see [onPageMeasured].
+     * [sources]: where each source's pages are, and its file.
      */
-    /**
-     * [filePath]: the local file being displayed, when there is one.
-     * [isStale]: a remote document's outdated copy, shown because the server
-     * could not be reached.
-     */
-    fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, filePath: String?, isStale: Boolean)
+    fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, sources: List<OpenedSource>)
 
     /** A page was opened for the first time and its size differs from the estimate. */
     fun onPageMeasured(page: Int, size: PdfDocumentLayout.PageSize)
@@ -67,12 +66,12 @@ class PdfDocumentSession internal constructor(
     /** A page was opened for the first time and has links (the renderer's, until [onDocumentLinks]). */
     fun onPageLinks(page: Int, links: List<PageLink>)
 
-    /** Every page's links, read from the file; they replace the renderer's. */
-    fun onDocumentLinks(links: Map<Int, List<PageLink>>)
+    /** Every page's links of [pages] (one source's), read from the file; they replace the renderer's. */
+    fun onDocumentLinks(pages: IntRange, links: Map<Int, List<PageLink>>)
 
     fun onFailed(failure: PdfFailure)
 
-    /** Download progress of a remote source, throttled by [ProgressThrottle]. */
+    /** Download progress of the remote sources together, throttled by [ProgressThrottle]. */
     fun onLoadProgress(loadedBytes: Long, totalBytes: Long?)
     fun onRendered(request: RenderRequest, bitmap: Bitmap)
     fun onRenderFailed(request: RenderRequest, failure: PdfFailure)
@@ -93,7 +92,13 @@ class PdfDocumentSession internal constructor(
     fun onFormFieldChanged(field: FormFieldEntry)
   }
 
-  private val resolver = PdfSourceResolver(context.applicationContext)
+  /**
+   * A source as opened: its pages' place in the document, the local file
+   * behind it when there is one, and whether it is a remote document's
+   * outdated copy, shown because the server could not be reached.
+   */
+  class OpenedSource(val pageCount: Int, val firstPage: Int, val filePath: String?, val isStale: Boolean)
+
   private val cacheDirectory: File = context.applicationContext.cacheDir
   private val queue = RenderQueue<DocumentWork>()
   private val closed: Boolean get() = queue.isClosed
@@ -108,6 +113,11 @@ class PdfDocumentSession internal constructor(
       val count = pagesRendered.get()
       return if (count == 0L) -1.0 else renderNanos.get() / count / 1_000_000.0
     }
+
+  private val sources = DocumentSources(nativeSources, context, openSource, openRenderer, { form.edits }, rendererRecycles)
+
+  /** Several sources: a document for reading, whose form cannot be filled in, printed or exported. */
+  val isSet: Boolean get() = sources.single == null
 
   private val thread = Thread(::run, "BetterPdf-render").apply { isDaemon = true }
 
@@ -148,8 +158,34 @@ class PdfDocumentSession internal constructor(
     if (closed) work.fail(IllegalStateException("The document is closed")) else queue.submitInOrder(work)
   }
 
-  /** Outline, metadata, page sizes and page images, each on its own duplicate of the descriptor. */
-  internal val reads = DocumentReads(password, ::duplicateDescriptor)
+  /** Where each source's pages are; set by the worker before [Listener.onOpened]. */
+  @Volatile private var sourcePages: SourcePages? = null
+
+  private fun openedPages(): SourcePages = sourcePages ?: throw IllegalStateException("The document is not open")
+
+  /**
+   * The outline: the sources' outlines in source order, at their pages in
+   * the document. Blocking: call off the main thread.
+   */
+  fun readOutlineEntries(): Array<PdfOutlineEntry> {
+    val sourcePages = openedPages()
+    return sources.segments.flatMap { segment ->
+      val firstPage = sourcePages.firstPage(segment.index)
+      segment.reads.readOutlineEntries().map { it.copy(page = it.page?.plus(firstPage)) }
+    }.toTypedArray()
+  }
+
+  /** Every page's displayed size, sources in order. Blocking: call off the main thread. */
+  fun readPageSizes(): Array<PdfPageSize> {
+    val sourcePages = openedPages()
+    return sources.segments.flatMap { it.reads.readPdfPageSizes(sourcePages.pageCount(it.index)).asList() }.toTypedArray()
+  }
+
+  /** Renders [request]'s page with its source's reads. Blocking: call off the main thread. */
+  internal fun renderPageImage(request: PageImageRequest, context: Context): PdfPageImage {
+    val at = openedPages().locate(request.page)
+    return request.render(sources.segments[at.source].reads, context, at.page, formEdits)
+  }
 
   private val readWorker = SerialWorker("BetterPdf-read")
   private val writeWorker = SerialWorker("BetterPdf-write")
@@ -174,41 +210,47 @@ class PdfDocumentSession internal constructor(
    * disk. Devices that cannot open protected documents opened this one
    * without the password, so the file as it is prints. Positional reads
    * leave the shared file offset alone. Blocking: call off the main
-   * thread. Does not close [destination].
+   * thread. Does not close [destination]. A document of one source only.
    */
   fun writeForPrinting(destination: ParcelFileDescriptor) {
+    val segment = onlySource()
     val edits = formEdits
     // A filled-in form prints as shown: the edits applied to a new renderer.
-    if ((!password.isNullOrEmpty() || edits.isNotEmpty()) && DocumentRenderer.supportsPasswords) {
-      DocumentRenderer.open(duplicateDescriptor(), password).use {
+    if ((!segment.password.isNullOrEmpty() || edits.isNotEmpty()) && DocumentRenderer.supportsPasswords) {
+      DocumentRenderer.open(sources.duplicate(segment), segment.password).use {
         it.applyEdits(edits)
         it.writeUnprotected(destination)
       }
       return
     }
-    copyFile(destination)
+    copyFile(segment, destination)
   }
 
   /**
    * Writes the document as shown — its form filled in, its password
    * protection kept — to [destination], with a renderer of its own; devices
    * that cannot write documents (or fill forms in) copy the file. Blocking:
-   * call off the main thread. Does not close [destination].
+   * call off the main thread. Does not close [destination]. A document of
+   * one source only.
    */
   fun writeDocument(destination: ParcelFileDescriptor) {
+    val segment = onlySource()
     if (!DocumentRenderer.supportsForms) {
-      copyFile(destination)
+      copyFile(segment, destination)
       return
     }
-    DocumentRenderer.open(duplicateDescriptor(), password).use {
+    DocumentRenderer.open(sources.duplicate(segment), segment.password).use {
       it.applyEdits(formEdits)
       it.writeProtected(destination)
     }
   }
 
+  /** The view rejects writes of several sources before they get here. */
+  private fun onlySource(): DocumentSources.Segment = checkNotNull(sources.single) { "A document of several sources has no one file" }
+
   /** The file as it is, by positional reads (the shared file offset stays). */
-  private fun copyFile(destination: ParcelFileDescriptor) {
-    ParcelFileDescriptor.AutoCloseInputStream(duplicateDescriptor()).channel.use { source ->
+  private fun copyFile(segment: DocumentSources.Segment, destination: ParcelFileDescriptor) {
+    ParcelFileDescriptor.AutoCloseInputStream(sources.duplicate(segment)).channel.use { source ->
       val target = Channels.newChannel(FileOutputStream(destination.fileDescriptor))
       val size = source.size()
       var position = 0L
@@ -221,25 +263,14 @@ class PdfDocumentSession internal constructor(
   }
 
   /**
-   * A duplicate of the open document's descriptor, ours to close. Taken
-   * under the lock so the worker cannot close (and the OS reuse) the
-   * descriptor number in between.
-   */
-  private fun duplicateDescriptor(): ParcelFileDescriptor =
-    synchronized(descriptorLock) { master?.dup() } ?: throw IllegalStateException("The document is not open")
-
-  /**
    * Starts searching the open document on its own thread (see
    * [PdfSearchTask]); null when the document is not open. Main thread.
    */
   internal fun startSearch(query: String, pageCount: Int, startPage: Int, pages: Int, listener: PdfSearchTask.Listener): PdfSearchTask? {
-    // On the main thread: a failed dup (descriptors exhausted) must not throw.
-    val descriptor = try {
-      synchronized(descriptorLock) { master?.dup() }
-    } catch (_: IOException) {
-      null
-    } ?: return null
-    return PdfSearchTask(descriptor, password, pageCount, startPage, pages, query, listener).also { it.start() }
+    // The view's page count, from before a reload, starts nothing.
+    val sourcePages = sourcePages?.takeIf { it.pageCount == pageCount } ?: return null
+    val files = sources.duplicateAll() ?: return null
+    return PdfSearchTask(files, sourcePages, startPage, pages, query, listener).also { it.start() }
   }
 
   fun close() {
@@ -248,7 +279,7 @@ class PdfDocumentSession internal constructor(
     // Reads and writes in progress finish on their own duplicate of the descriptor.
     readWorker.close()
     writeWorker.close()
-    resolver.cancel()
+    sources.cancel()
     // Posts already queued stay: `post` drops listener calls once closed and
     // releases their bitmaps, and form work's results still settle promises.
     dropped.forEach { (it as? FormWork)?.fail(IllegalStateException("The document was closed")) }
@@ -257,24 +288,10 @@ class PdfDocumentSession internal constructor(
   // region Worker thread
 
   /*
-   * Worker-thread state. PDFium keeps every object it parsed for a page (for
-   * scanned documents: the compressed image data) for the lifetime of the
-   * document, even after the page is closed. Measured: opening all pages of a
-   * 395 MB, 1000-page scan retained 400 MB of native heap. Hence:
-   * - page sizes are not measured up front; each page is measured when it is
-   *   first opened for rendering, and
-   * - the renderer is re-created from a duplicate of the original file
-   *   descriptor every [RECYCLE_AFTER_PAGES] page opens, which releases
-   *   everything PDFium cached. Creating a renderer is cheap (measured 3–27 ms,
-   *   no retained memory) because it does not touch pages.
+   * Worker-thread state. Page sizes are not measured up front (PDFium keeps
+   * what it parsed, see [DocumentSources]): each page is measured when it is
+   * first opened for rendering.
    */
-  private var master: ParcelFileDescriptor? = null
-  /** Guards [master] against [reads] duplicating it while it closes. */
-  private val descriptorLock = Any()
-  private var renderer: DocumentRenderer? = null
-  private var pagesOpenedByRenderer = 0
-  private var filePath: String? = null
-  private var isStale = false
   private lateinit var knownSizes: Array<PdfDocumentLayout.PageSize>
   private lateinit var measured: BooleanArray
   private lateinit var linksRead: BooleanArray
@@ -283,42 +300,37 @@ class PdfDocumentSession internal constructor(
   private lateinit var colourPages: BooleanArray
   private lateinit var greyPages: BooleanArray
   private var lastNewPageHadColour = false
-  /** The renderer can show and edit a form here (decided at open). */
+  /** The renderer can show and edit a form here (decided at open; one source only). */
   private var canFillForm = false
-  private val form = DocumentForm { reads.readFormFields(cacheDirectory) }
+  private val form = DocumentForm { onlySource().reads.readFormFields(cacheDirectory) }
 
   private fun run() {
     try {
       Trace.beginSection("BetterPdf#open")
-      val firstPage = try {
+      val sizes = try {
         open()
       } finally {
         Trace.endSection()
       }
       if (closed) return
-      val sizes = List(knownSizes.size) { firstPage }
-      val path = filePath
-      val stale = isStale
-      post { listener.onOpened(sizes, path, stale) }
-      readLinksFromFile(sizes.size)
+      val sourcePages = openedPages()
+      val opened = sources.segments.map {
+        OpenedSource(sourcePages.pageCount(it.index), sourcePages.firstPage(it.index), it.filePath, it.isStale)
+      }
+      post { listener.onOpened(sizes, opened) }
+      readLinksFromFiles(sourcePages)
       renderLoop()
     } catch (_: InterruptedException) {
-      // Closed while resolving the source.
+      // Closed while resolving the sources.
     } catch (failure: PdfFailure) {
+      // A source's own failures name it (see DocumentSources).
       post { listener.onFailed(failure) }
     } catch (error: OutOfMemoryError) {
-      post { listener.onFailed(PdfFailure(PdfErrorCode.OUT_OF_MEMORY, "Out of memory while opening the PDF", cause = error)) }
+      post { listener.onFailed(PdfFailure(PdfErrorCode.OUT_OF_MEMORY, "Out of memory while opening the PDF", cause = error, sourceIndex = 0)) }
     } catch (error: Exception) {
-      // Malformed documents can surface as arbitrary runtime exceptions from
-      // the platform renderer, and copying a source can fail with I/O errors
-      // (Kotlin does not make anyone catch those); never let them crash the app.
-      post { listener.onFailed(PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF could not be opened", cause = error)) }
+      post { listener.onFailed(PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF could not be opened", cause = error, sourceIndex = 0)) }
     } finally {
-      closeRenderer()
-      synchronized(descriptorLock) {
-        master?.closeQuietly()
-        master = null
-      }
+      sources.closeAll()
       // When this thread stops on its own (the document did not open), close
       // as the owner would, so queued form work fails instead of waiting for
       // good. Posted, so what this thread posted arrives first; a no-op once
@@ -327,69 +339,31 @@ class PdfDocumentSession internal constructor(
     }
   }
 
-  /** Opens the document and returns the size of page 0. */
-  private fun open(): PdfDocumentLayout.PageSize {
-    val progressThrottle = ProgressThrottle()
-    val resolved = resolver.openSource(source) { loadedBytes, totalBytes, isComplete ->
-      if (progressThrottle.shouldEmit(SystemClock.uptimeMillis(), loadedBytes, isComplete)) {
-        post { listener.onLoadProgress(loadedBytes, totalBytes) }
-      }
-    }
-    val descriptor = resolved.descriptor
-    filePath = resolved.file?.path
-    isStale = resolved.isStale
-    synchronized(descriptorLock) { master = descriptor }
+  /** Opens every source and returns every page's size, estimated where not yet measured. */
+  private fun open(): List<PdfDocumentLayout.PageSize> {
+    sources.resolveAll(SourcesProgress(sources.segments.size, emit = { loadedBytes, totalBytes -> post { listener.onLoadProgress(loadedBytes, totalBytes) } }))
     if (closed) throw InterruptedException()
-    val renderer = createRenderer(descriptor.dup())
-    this.renderer = renderer
+    val firstPages = sources.openFirstPages()
+    val sourcePages = SourcePages(firstPages.map { it.first })
+    knownSizes = Array(sourcePages.pageCount) { firstPages[sourcePages.sourceOf(it)].second }
+    measured = BooleanArray(sourcePages.pageCount).also { measured ->
+      sources.segments.forEach { measured[sourcePages.firstPage(it.index)] = true }
+    }
+    linksRead = BooleanArray(sourcePages.pageCount)
+    formWidgetsRead = BooleanArray(sourcePages.pageCount)
+    colourPages = BooleanArray(sourcePages.pageCount)
+    greyPages = BooleanArray(sourcePages.pageCount)
     canFillForm = try {
-      renderer.canFillForm
+      sources.single?.renderer?.canFillForm == true
     } catch (_: RuntimeException) {
       false
     }
-    val pageCount = renderer.pageCount
-    if (pageCount <= 0) throw PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF has no pages")
-    val firstPage = renderer.openPage(0).use { page -> PdfDocumentLayout.PageSize(page.width.toFloat(), page.height.toFloat()) }
-    pagesOpenedByRenderer = 1
-    knownSizes = Array(pageCount) { firstPage }
-    measured = BooleanArray(pageCount).also { it[0] = true }
-    linksRead = BooleanArray(pageCount)
-    formWidgetsRead = BooleanArray(pageCount)
-    colourPages = BooleanArray(pageCount)
-    greyPages = BooleanArray(pageCount)
-    return firstPage
+    this.sourcePages = sourcePages
+    return knownSizes.toList()
   }
 
-  private fun createRenderer(descriptor: ParcelFileDescriptor): DocumentRenderer =
-    openRenderer(descriptor, password)
-
-  /** The renderer to open the next page with, re-created when PDFium's cache has grown. */
-  private fun rendererForNextPage(): DocumentRenderer {
-    val current = renderer
-    if (current != null && pagesOpenedByRenderer < RECYCLE_AFTER_PAGES) return current
-    Trace.beginSection("BetterPdf#recycleRenderer")
-    try {
-      closeRenderer()
-      val descriptor = master ?: throw IllegalStateException("Document closed")
-      return createRenderer(descriptor.dup()).also {
-        renderer = it
-        pagesOpenedByRenderer = 0
-        rendererRecycles.incrementAndGet()
-        // It starts from the file: every page's form as filled in, before it renders.
-        it.applyEdits(form.edits)
-      }
-    } finally {
-      Trace.endSection()
-    }
-  }
-
-  private fun closeRenderer() {
-    try {
-      renderer?.close()
-    } catch (_: RuntimeException) {
-    }
-    renderer = null
-  }
+  /** Opens [page] of the document with its source's renderer; [counted] page opens count towards re-creating it. */
+  private fun openPage(page: Int, counted: Boolean = false): DocumentPage = sources.openPage(openedPages().locate(page), counted)
 
   private fun renderLoop() {
     while (true) {
@@ -429,10 +403,11 @@ class PdfDocumentSession internal constructor(
     val selection = try {
       // Not counted towards RECYCLE_AFTER_PAGES: a handle drag re-opens the
       // same, already parsed page for every move (~100 per second).
-      val page = rendererForNextPage().openPage(query.page)
+      val page = openPage(query.page)
       page.use {
         recordSize(query.page, PdfDocumentLayout.PageSize(page.width.toFloat(), page.height.toFloat()))
         recordLinks(query.page, page)
+        // Points are the page's own; the result is labelled with the query's page.
         page.selectText(query)
       }
     } catch (_: Exception) {
@@ -447,7 +422,7 @@ class PdfDocumentSession internal constructor(
 
   private fun readPageText(query: PageTextQuery) {
     val text = try {
-      rendererForNextPage().openPage(query.page).use { page ->
+      openPage(query.page).use { page ->
         recordSize(query.page, PdfDocumentLayout.PageSize(page.width.toFloat(), page.height.toFloat()))
         page.readText()
       }
@@ -463,8 +438,7 @@ class PdfDocumentSession internal constructor(
     var bitmap: Bitmap? = null
     Trace.beginSection("BetterPdf#renderPage")
     try {
-      val page = rendererForNextPage().openPage(request.page)
-      pagesOpenedByRenderer++
+      val page = openPage(request.page, counted = true)
       page.use {
         val size = PdfDocumentLayout.PageSize(page.width.toFloat(), page.height.toFloat())
         recordSize(request.page, size)
@@ -503,7 +477,7 @@ class PdfDocumentSession internal constructor(
     } catch (error: OutOfMemoryError) {
       postRenderFailed(request, PdfFailure(PdfErrorCode.OUT_OF_MEMORY, "Out of memory rendering page ${request.page}", page = request.page, cause = error))
     } catch (error: Exception) {
-      // Also a renderer that could not be re-created (see rendererForNextPage):
+      // Also a renderer that could not be re-created (see DocumentSources):
       // this page fails, the next work creates one again.
       postRenderFailed(request, PdfFailure(PdfErrorCode.PAGE_RENDER_FAILED, "Rendering page ${request.page} failed", page = request.page, cause = error))
     } finally {
@@ -526,25 +500,29 @@ class PdfDocumentSession internal constructor(
     post { listener.onPageMeasured(page, size) }
   }
 
-  /** Set once the file's links are read: the renderer's are not read then. */
-  @Volatile private var hasFileLinks = false
-
   /**
-   * Reads every page's links from the file, on a thread of its own (its own
-   * duplicate of the descriptor) so the first pages render meanwhile. A file
-   * the parser cannot read (encrypted, malformed) keeps the renderer's links.
+   * Reads every source's links from its file, one source after another on a
+   * thread of their own (each read on its own duplicate of the descriptor)
+   * so the first pages render meanwhile. A file the parser cannot read
+   * (encrypted, malformed) keeps the renderer's links.
    */
-  private fun readLinksFromFile(pageCount: Int) {
+  private fun readLinksFromFiles(sourcePages: SourcePages) {
     Thread({
-      val links = try {
-        reads.readLinks(pageCount)
-      } catch (_: Exception) {
-        return@Thread
-      } catch (_: OutOfMemoryError) {
-        return@Thread
+      for (segment in sources.segments) {
+        if (closed) return@Thread
+        val links = try {
+          segment.reads.readLinks(sourcePages.pageCount(segment.index))
+        } catch (_: Exception) {
+          continue
+        } catch (_: OutOfMemoryError) {
+          return@Thread
+        }
+        val inDocument = links.entries.associate { (page, pageLinks) ->
+          sourcePages.documentPage(segment.index, page) to pageLinks.mapNotNull { it.inDocument(sourcePages, segment.index) }
+        }.filterValues { it.isNotEmpty() }
+        segment.hasFileLinks = true
+        post { listener.onDocumentLinks(sourcePages.pagesOf(segment.index), inDocument) }
       }
-      hasFileLinks = true
-      post { listener.onDocumentLinks(links) }
     }, "BetterPdf-links").apply { isDaemon = true }.start()
   }
 
@@ -555,10 +533,12 @@ class PdfDocumentSession internal constructor(
    * reported as page taps).
    */
   private fun recordLinks(page: Int, openPage: DocumentPage) {
-    if (linksRead[page] || hasFileLinks) return
+    val sourcePages = openedPages()
+    val source = sourcePages.sourceOf(page)
+    if (linksRead[page] || sources.segments[source].hasFileLinks) return
     linksRead[page] = true
     val links = try {
-      openPage.readLinks()
+      openPage.readLinks().mapNotNull { it.inDocument(sourcePages, source) }
     } catch (_: RuntimeException) {
       emptyList()
     }
@@ -642,12 +622,16 @@ class PdfDocumentSession internal constructor(
     applyEdits(edits)
   }
 
-  /** Applies [edits] in order, keeps them, and reads the changed pages again. */
+  /**
+   * Applies [edits] in order, keeps them, and reads the changed pages again.
+   * A document of one source only: an edit's page reaches the renderer as
+   * it is.
+   */
   private fun applyEdits(edits: List<FormEdit>) {
     var index = 0
     while (index < edits.size) {
       val pageIndex = edits[index].page
-      rendererForNextPage().openPage(pageIndex).use { page ->
+      openPage(pageIndex).use { page ->
         while (index < edits.size && edits[index].page == pageIndex) {
           page.applyFormEdit(edits[index])
           form.record(edits[index])
@@ -665,7 +649,7 @@ class PdfDocumentSession internal constructor(
   }
 
   private fun readFormWidgets(pageIndex: Int) {
-    val widgets = rendererForNextPage().openPage(pageIndex).use { it.formWidgets() }
+    val widgets = openPage(pageIndex).use { it.formWidgets() }
     form.updatePage(pageIndex, widgets)
     formWidgetsRead[pageIndex] = true
     if (widgets.isNotEmpty()) post { listener.onPageFormWidgets(pageIndex, widgets) }

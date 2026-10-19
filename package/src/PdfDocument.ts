@@ -4,7 +4,7 @@ import { abortable, abortReason, untilAborted } from './abort';
 import { buildOutlineTree } from './outline';
 import { toNativeSource } from './nativeSource';
 import { PdfOpenError } from './PdfOpenError';
-import { normalizeSource, type PdfSource } from './source';
+import { normalizeSource, sourcePassword, type PdfSource } from './source';
 import type { BetterPdfDocument } from './specs/BetterPdfDocument.nitro';
 import type { PdfDocumentMetadata } from './types/PdfDocumentMetadata';
 import type { PdfOpenOptions } from './types/PdfOpenOptions';
@@ -60,7 +60,7 @@ export class PdfDocument {
   }
 
   /**
-   * Opens `source` — anything `PdfView` accepts — off the JS thread,
+   * Opens `source` — any one source `PdfView` accepts — off the JS thread,
    * downloading a remote document (or using its stored copy) like the view.
    *
    * @throws {PdfOpenError} when the document cannot be opened; match on
@@ -78,7 +78,7 @@ export class PdfDocument {
     const result = (async () =>
       native.open(
         toNativeSource(normalizeSource(source, Image.resolveAssetSource)),
-        password,
+        sourcePassword(source) ?? password,
         untilAborted(onProgress, signal),
       ))();
     const settle = (value: PdfOpenResult): PdfDocument => {

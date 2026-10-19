@@ -129,7 +129,7 @@ class HybridBetterPdfDocument : HybridBetterPdfDocumentSpec() {
       return Promise.rejected(error)
     }
     val context = context
-    return read { request.render(it.reads, context) }
+    return read { request.render(it.reads, context, request.page) }
   }
 
   override fun close() {

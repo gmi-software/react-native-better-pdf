@@ -70,14 +70,9 @@ class HybridBetterPdfView(
 
   // region Props
 
-  override var source: NativePdfSource? = null
+  override var sources: Array<NativePdfSource>? = null
     set(value) {
-      if (!value.isSameSource(field)) needsReload = true
-      field = value
-    }
-  override var password: String? = null
-    set(value) {
-      if (value != field) needsReload = true
+      if (!value.isSameSources(field)) needsReload = true
       field = value
     }
   override var initialPosition: PdfInitialPosition? = null
@@ -322,43 +317,50 @@ class HybridBetterPdfView(
     mainHandler.post { searchController.clear() }
   }
 
-  override fun getFormFields(): Promise<Array<NativePdfFormField>> {
-    val session = loaded?.session ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+  /**
+   * Runs [block] with the loaded document unless there is none, or it is made
+   * of several sources: those have no one file, so no form, print or export.
+   */
+  private inline fun <T> withOneSource(feature: String, block: (LoadedDocument) -> Promise<T>): Promise<T> {
+    val document = loaded ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+    if (document.session.isSet) return Promise.rejected(UnsupportedOperationException("$feature is not available with several sources"))
+    return block(document)
+  }
+
+  override fun getFormFields(): Promise<Array<NativePdfFormField>> = withOneSource("The form") { document ->
     val promise = Promise<Array<NativePdfFormField>>()
     mainHandler.post {
       // Text being typed is read too.
       formFiller.commit()
-      session.readFormFields { result ->
+      document.session.readFormFields { result ->
         result.fold({ fields -> promise.resolve(fields.map { it.toNative() }.toTypedArray()) }, promise::reject)
       }
     }
-    return promise
+    promise
   }
 
-  override fun setFormFieldValues(values: Array<NativePdfFormValue>): Promise<Unit> {
-    val session = loaded?.session ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+  override fun setFormFieldValues(values: Array<NativePdfFormValue>): Promise<Unit> = withOneSource("The form") { document ->
     val promise = Promise<Unit>()
     mainHandler.post {
       // Text being typed goes first, so it does not overwrite these values.
       formFiller.commit()
-      session.setFormValues(values.toList()) { error -> if (error == null) promise.resolve() else promise.reject(error) }
+      document.session.setFormValues(values.toList()) { error -> if (error == null) promise.resolve() else promise.reject(error) }
     }
-    return promise
+    promise
   }
 
-  override fun exportDocument(filePath: String): Promise<PdfExportResult> {
-    val document = loaded ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+  override fun exportDocument(filePath: String): Promise<PdfExportResult> = withOneSource("Exporting") export@{ document ->
     val session = document.session
     val target = if (filePath.isEmpty()) null else File(filePath)
     // As on iOS, where replacing a directory would delete everything in it.
     if (target != null && (filePath.endsWith("/") || target.isDirectory)) {
-      return Promise.rejected(IllegalArgumentException("The export path is a directory, not a file: $filePath"))
+      return@export Promise.rejected(IllegalArgumentException("The export path is a directory, not a file: $filePath"))
     }
     // The displayed file is read while the copy is written, and is never changed.
     if (target != null && document.file != null && target.canonicalFile == document.file.canonicalFile) {
-      return Promise.rejected(IllegalArgumentException("The export cannot replace the displayed document's file"))
+      return@export Promise.rejected(IllegalArgumentException("The export cannot replace the displayed document's file"))
     }
-    return afterFormSettles(session, session::write, commitTyping = true) {
+    afterFormSettles(session, session::write, commitTyping = true) {
       // Nor any downloaded copy: the cache would serve the export as the
       // server's document, with the server's ETag.
       if (target != null && DocumentCache.shared(context).contains(target)) {
@@ -413,13 +415,12 @@ class HybridBetterPdfView(
 
   override fun getOutline(): Promise<Array<PdfOutlineEntry>> {
     val session = loaded?.session ?: return Promise.rejected(IllegalStateException("No document is loaded"))
-    return afterFormSettles(session, session::read, commitTyping = false) { session.reads.readOutlineEntries() }
+    return afterFormSettles(session, session::read, commitTyping = false) { session.readOutlineEntries() }
   }
 
   override fun getPageSizes(): Promise<Array<PdfPageSize>> {
-    val document = loaded ?: return Promise.rejected(IllegalStateException("No document is loaded"))
-    val session = document.session
-    return afterFormSettles(session, session::read, commitTyping = false) { session.reads.readPdfPageSizes(document.pageCount) }
+    val session = loaded?.session ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+    return afterFormSettles(session, session::read, commitTyping = false) { session.readPageSizes() }
   }
 
   override fun renderPage(page: Double, options: PdfRenderPageOptions): Promise<PdfPageImage> {
@@ -430,11 +431,10 @@ class HybridBetterPdfView(
     } catch (error: IllegalArgumentException) {
       return Promise.rejected(error)
     }
-    return afterFormSettles(session, session::read, commitTyping = true) { request.render(session.reads, context, session.formEdits) }
+    return afterFormSettles(session, session::read, commitTyping = true) { session.renderPageImage(request, context) }
   }
 
-  override fun print(jobName: String): Promise<PdfPrintResult> {
-    val document = loaded ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+  override fun print(jobName: String): Promise<PdfPrintResult> = withOneSource("Printing") { document ->
     val promise = Promise<PdfPrintResult>()
     mainHandler.post {
       // A form prints as filled in, text being typed included.
@@ -448,7 +448,7 @@ class HybridBetterPdfView(
         }
       }
     }
-    return promise
+    promise
   }
 
   private fun openPrintDialog(session: PdfDocumentSession, jobName: String, pageCount: Int, promise: Promise<PdfPrintResult>) {
@@ -520,8 +520,8 @@ class HybridBetterPdfView(
 
   private fun reload() {
     closeSession()
-    val source = source ?: return
-    session = PdfDocumentSession(context, source, password, documentView.bitmapPool, this).also { it.start() }
+    val sources = sources ?: return
+    session = PdfDocumentSession(context, sources.toList(), documentView.bitmapPool, this).also { it.start() }
   }
 
   private fun closeSession() {
@@ -537,10 +537,12 @@ class HybridBetterPdfView(
 
   // region PdfDocumentSession.Listener (UI thread)
 
-  override fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, filePath: String?, isStale: Boolean) {
+  override fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, sources: List<PdfDocumentSession.OpenedSource>) {
     val session = session ?: return
     val initial = ResolvedInitialPosition.of(initialPosition, pageSizes.size)
     documentView.setDocument(session, pageSizes, initial.page, initial.scale, initial.point)
+    // No one file holds a document of several sources.
+    val filePath = sources.singleOrNull()?.filePath
     loaded = LoadedDocument(session, pageSizes.size, filePath?.let(::File))
     searchController.onDocumentChanged(session::startSearch)
     val first = pageSizes.first()
@@ -550,7 +552,10 @@ class HybridBetterPdfView(
         firstPageWidth = first.widthPoints.toDouble(),
         firstPageHeight = first.heightPoints.toDouble(),
         filePath = filePath,
-        isStale = isStale,
+        isStale = sources.any { it.isStale },
+        sources = sources.map {
+          PdfLoadedSource(it.pageCount.toDouble(), it.firstPage.toDouble(), it.filePath, it.isStale)
+        }.toTypedArray(),
       ),
     )
   }
@@ -571,8 +576,8 @@ class HybridBetterPdfView(
     documentView.onPageText(page, text)
   }
 
-  override fun onDocumentLinks(links: Map<Int, List<PageLink>>) {
-    documentView.onDocumentLinks(links)
+  override fun onDocumentLinks(pages: IntRange, links: Map<Int, List<PageLink>>) {
+    documentView.onDocumentLinks(pages, links)
   }
 
   override fun onPageFormWidgets(page: Int, widgets: List<FormWidget>) {

@@ -25,6 +25,8 @@ namespace margelo::nitro::betterpdf { struct NativeContentInset; }
 namespace margelo::nitro::betterpdf { struct PdfOverlayPlacement; }
 // Forward declaration of `PdfLoadEvent` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfLoadEvent; }
+// Forward declaration of `PdfLoadedSource` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfLoadedSource; }
 // Forward declaration of `PdfLoadProgressEvent` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
 // Forward declaration of `PdfError` to properly resolve imports.
@@ -75,6 +77,7 @@ namespace margelo::nitro::betterpdf { enum class PdfImageFormat; }
 namespace margelo::nitro::betterpdf { struct NativePdfFormValue; }
 
 #include "NativePdfSource.hpp"
+#include <vector>
 #include <optional>
 #include "JNativePdfSource.hpp"
 #include <string>
@@ -94,13 +97,14 @@ namespace margelo::nitro::betterpdf { struct NativePdfFormValue; }
 #include "NativeContentInset.hpp"
 #include "JNativeContentInset.hpp"
 #include "PdfOverlayPlacement.hpp"
-#include <vector>
 #include "JPdfOverlayPlacement.hpp"
 #include "PdfLoadEvent.hpp"
 #include <functional>
 #include "JFunc_void_PdfLoadEvent.hpp"
 #include <NitroModules/JNICallable.hpp>
 #include "JPdfLoadEvent.hpp"
+#include "PdfLoadedSource.hpp"
+#include "JPdfLoadedSource.hpp"
 #include "PdfLoadProgressEvent.hpp"
 #include "JFunc_void_PdfLoadProgressEvent.hpp"
 #include "JPdfLoadProgressEvent.hpp"
@@ -193,23 +197,32 @@ namespace margelo::nitro::betterpdf {
   }
 
   // Properties
-  std::optional<NativePdfSource> JHybridBetterPdfViewSpec::getSource() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JNativePdfSource>()>("getSource");
+  std::optional<std::vector<NativePdfSource>> JHybridBetterPdfViewSpec::getSources() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JArrayClass<JNativePdfSource>>()>("getSources");
     auto __result = method(_javaPart);
-    return __result != nullptr ? std::make_optional(__result->toCpp()) : std::nullopt;
+    return __result != nullptr ? std::make_optional([&](auto&& __input) {
+      size_t __size = __input->size();
+      std::vector<NativePdfSource> __vector;
+      __vector.reserve(__size);
+      for (size_t __i = 0; __i < __size; __i++) {
+        auto __element = __input->getElement(__i);
+        __vector.push_back(__element->toCpp());
+      }
+      return __vector;
+    }(__result)) : std::nullopt;
   }
-  void JHybridBetterPdfViewSpec::setSource(const std::optional<NativePdfSource>& source) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<JNativePdfSource> /* source */)>("setSource");
-    method(_javaPart, source.has_value() ? JNativePdfSource::fromCpp(source.value()) : nullptr);
-  }
-  std::optional<std::string> JHybridBetterPdfViewSpec::getPassword() {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<jni::JString>()>("getPassword");
-    auto __result = method(_javaPart);
-    return __result != nullptr ? std::make_optional(__result->toStdString()) : std::nullopt;
-  }
-  void JHybridBetterPdfViewSpec::setPassword(const std::optional<std::string>& password) {
-    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JString> /* password */)>("setPassword");
-    method(_javaPart, password.has_value() ? jni::make_jstring(password.value()) : nullptr);
+  void JHybridBetterPdfViewSpec::setSources(const std::optional<std::vector<NativePdfSource>>& sources) {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<void(jni::alias_ref<jni::JArrayClass<JNativePdfSource>> /* sources */)>("setSources");
+    method(_javaPart, sources.has_value() ? [&](auto&& __input) {
+      size_t __size = __input.size();
+      jni::local_ref<jni::JArrayClass<JNativePdfSource>> __array = jni::JArrayClass<JNativePdfSource>::newArray(__size);
+      for (size_t __i = 0; __i < __size; __i++) {
+        const auto& __element = __input[__i];
+        auto __elementJni = JNativePdfSource::fromCpp(__element);
+        __array->setElement(__i, *__elementJni);
+      }
+      return __array;
+    }(sources.value()) : nullptr);
   }
   std::optional<PdfInitialPosition> JHybridBetterPdfViewSpec::getInitialPosition() {
     static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPdfInitialPosition>()>("getInitialPosition");

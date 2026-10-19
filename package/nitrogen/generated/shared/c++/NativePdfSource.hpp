@@ -50,10 +50,11 @@ namespace margelo::nitro::betterpdf {
     std::optional<PdfCacheMode> cache     SWIFT_PRIVATE;
     std::optional<double> maxAgeMs     SWIFT_PRIVATE;
     std::optional<std::string> cacheKey     SWIFT_PRIVATE;
+    std::optional<std::string> password     SWIFT_PRIVATE;
 
   public:
     NativePdfSource() = default;
-    explicit NativePdfSource(std::string uri, std::optional<std::shared_ptr<ArrayBuffer>> base64, std::optional<std::unordered_map<std::string, std::string>> headers, std::optional<PdfCacheMode> cache, std::optional<double> maxAgeMs, std::optional<std::string> cacheKey): uri(uri), base64(base64), headers(headers), cache(cache), maxAgeMs(maxAgeMs), cacheKey(cacheKey) {}
+    explicit NativePdfSource(std::string uri, std::optional<std::shared_ptr<ArrayBuffer>> base64, std::optional<std::unordered_map<std::string, std::string>> headers, std::optional<PdfCacheMode> cache, std::optional<double> maxAgeMs, std::optional<std::string> cacheKey, std::optional<std::string> password): uri(uri), base64(base64), headers(headers), cache(cache), maxAgeMs(maxAgeMs), cacheKey(cacheKey), password(password) {}
 
   public:
     friend bool operator==(const NativePdfSource& lhs, const NativePdfSource& rhs) = default;
@@ -74,7 +75,8 @@ namespace margelo::nitro {
         JSIConverter<std::optional<std::unordered_map<std::string, std::string>>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "headers"))),
         JSIConverter<std::optional<margelo::nitro::betterpdf::PdfCacheMode>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "cache"))),
         JSIConverter<std::optional<double>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "maxAgeMs"))),
-        JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "cacheKey")))
+        JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "cacheKey"))),
+        JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "password")))
       );
     }
     static inline jsi::Value toJSI(jsi::Runtime& runtime, const margelo::nitro::betterpdf::NativePdfSource& arg) {
@@ -85,6 +87,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "cache"), JSIConverter<std::optional<margelo::nitro::betterpdf::PdfCacheMode>>::toJSI(runtime, arg.cache));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "maxAgeMs"), JSIConverter<std::optional<double>>::toJSI(runtime, arg.maxAgeMs));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "cacheKey"), JSIConverter<std::optional<std::string>>::toJSI(runtime, arg.cacheKey));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "password"), JSIConverter<std::optional<std::string>>::toJSI(runtime, arg.password));
       return obj;
     }
     static inline bool canConvert(jsi::Runtime& runtime, const jsi::Value& value) {
@@ -101,6 +104,7 @@ namespace margelo::nitro {
       if (!JSIConverter<std::optional<margelo::nitro::betterpdf::PdfCacheMode>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "cache")))) return false;
       if (!JSIConverter<std::optional<double>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "maxAgeMs")))) return false;
       if (!JSIConverter<std::optional<std::string>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "cacheKey")))) return false;
+      if (!JSIConverter<std::optional<std::string>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "password")))) return false;
       return true;
     }
   };

@@ -23,9 +23,10 @@ struct PageImageRequest {
     quality = CGFloat(options.quality.flatMap { $0.isFinite ? min(max($0, 0), 1) : nil } ?? 0.9)
   }
 
-  /// Renders the page of `document` and writes the image file. Call on the
-  /// thread that owns `document`.
-  func render(from document: PDFDocument) throws -> PdfPageImage {
+  /// Renders `page` of `document` and writes the image file: the requested
+  /// page's index in `document`'s file (`self.page` for a document of one
+  /// source). Call on the thread that owns `document`.
+  func render(pageInFile page: Int, from document: PDFDocument) throws -> PdfPageImage {
     guard let pdfPage = document.page(at: page) else {
       throw RuntimeError.error(withMessage: "Page \(page) could not be read")
     }

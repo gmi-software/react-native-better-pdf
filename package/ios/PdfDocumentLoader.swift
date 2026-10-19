@@ -58,7 +58,9 @@ final class PdfDocumentLoader {
               if let pin = file.pin { DocumentCache.shared.store.unpin(pin) }
               finish(.failure(failure))
             case .success(let document):
-              finish(.success(LoadedDocument(document: document, filePath: file.filePath, isStale: file.isStale, pin: file.pin)))
+              finish(.success(LoadedDocument(
+                document: document, url: file.url, filePath: file.filePath, isStale: file.isStale, pin: file.pin
+              )))
             }
           }
         }
@@ -102,7 +104,7 @@ final class PdfDocumentLoader {
         },
         onFailed: { completion(.failure($0)) }
       ))
-      if !task.attach(subscription) { subscription.cancel() }
+      if !task.attach(subscription.cancel) { subscription.cancel() }
     default:
       completion(.failure(.invalidSource(uri)))
     }

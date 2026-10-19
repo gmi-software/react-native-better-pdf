@@ -45,12 +45,13 @@ namespace margelo::nitro::betterpdf {
     PdfErrorCode code     SWIFT_PRIVATE;
     std::string message     SWIFT_PRIVATE;
     std::optional<double> page     SWIFT_PRIVATE;
+    std::optional<double> sourceIndex     SWIFT_PRIVATE;
     std::optional<double> httpStatus     SWIFT_PRIVATE;
     std::optional<std::string> nativeDescription     SWIFT_PRIVATE;
 
   public:
     PdfError() = default;
-    explicit PdfError(PdfErrorCode code, std::string message, std::optional<double> page, std::optional<double> httpStatus, std::optional<std::string> nativeDescription): code(code), message(message), page(page), httpStatus(httpStatus), nativeDescription(nativeDescription) {}
+    explicit PdfError(PdfErrorCode code, std::string message, std::optional<double> page, std::optional<double> sourceIndex, std::optional<double> httpStatus, std::optional<std::string> nativeDescription): code(code), message(message), page(page), sourceIndex(sourceIndex), httpStatus(httpStatus), nativeDescription(nativeDescription) {}
 
   public:
     friend bool operator==(const PdfError& lhs, const PdfError& rhs) = default;
@@ -69,6 +70,7 @@ namespace margelo::nitro {
         JSIConverter<margelo::nitro::betterpdf::PdfErrorCode>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "code"))),
         JSIConverter<std::string>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "message"))),
         JSIConverter<std::optional<double>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "page"))),
+        JSIConverter<std::optional<double>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "sourceIndex"))),
         JSIConverter<std::optional<double>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "httpStatus"))),
         JSIConverter<std::optional<std::string>>::fromJSI(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "nativeDescription")))
       );
@@ -78,6 +80,7 @@ namespace margelo::nitro {
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "code"), JSIConverter<margelo::nitro::betterpdf::PdfErrorCode>::toJSI(runtime, arg.code));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "message"), JSIConverter<std::string>::toJSI(runtime, arg.message));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "page"), JSIConverter<std::optional<double>>::toJSI(runtime, arg.page));
+      obj.setProperty(runtime, PropNameIDCache::get(runtime, "sourceIndex"), JSIConverter<std::optional<double>>::toJSI(runtime, arg.sourceIndex));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "httpStatus"), JSIConverter<std::optional<double>>::toJSI(runtime, arg.httpStatus));
       obj.setProperty(runtime, PropNameIDCache::get(runtime, "nativeDescription"), JSIConverter<std::optional<std::string>>::toJSI(runtime, arg.nativeDescription));
       return obj;
@@ -93,6 +96,7 @@ namespace margelo::nitro {
       if (!JSIConverter<margelo::nitro::betterpdf::PdfErrorCode>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "code")))) return false;
       if (!JSIConverter<std::string>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "message")))) return false;
       if (!JSIConverter<std::optional<double>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "page")))) return false;
+      if (!JSIConverter<std::optional<double>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "sourceIndex")))) return false;
       if (!JSIConverter<std::optional<double>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "httpStatus")))) return false;
       if (!JSIConverter<std::optional<std::string>>::canConvert(runtime, obj.getProperty(runtime, PropNameIDCache::get(runtime, "nativeDescription")))) return false;
       return true;

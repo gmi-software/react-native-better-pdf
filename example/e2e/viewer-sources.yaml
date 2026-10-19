@@ -1,0 +1,120 @@
+# Several sources shown as one document (see docs/api-design.md "Several
+# sources"): `links` (3 pages), `outline` (12) and `mixed-sizes` (5) are
+# pages 1–3, 4–15 and 16–20. Every page number counts across the set.
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+- tapOn: "Viewer"
+# iOS labels the entry "Several sources, links + …".
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Several sources(, links.*)?" } }
+- extendedWaitUntil: { visible: "1 / 20", timeout: 15000 }
+# onLoad's sources: where each one's pages start.
+- assertVisible: "sources: p1\\+3 p4\\+12 p16\\+5"
+- takeScreenshot: sources-first
+
+# A link within the first source leads to its page 3.
+- tapOn: { point: "25%, 72%" }
+- extendedWaitUntil: { visible: "3 / 20", timeout: 5000 }
+# Paged H, page kept: one swipe crosses into the second source.
+- tapOn: "Vertical"
+- extendedWaitUntil: { visible: "Horizontal", timeout: 5000 }
+- tapOn: "Horizontal"
+- extendedWaitUntil: { visible: "Paged", timeout: 5000 }
+- tapOn: "Paged"
+- extendedWaitUntil: { visible: "Paged H", timeout: 5000 }
+- waitForAnimationToEnd
+- assertVisible: "3 / 20"
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "90%, 50%", end: "10%, 50%", duration: 150 }
+      - extendedWaitUntil: { visible: "4 / 20", timeout: 5000 }
+- takeScreenshot: sources-boundary
+- tapOn: "Last"
+- extendedWaitUntil: { visible: "20 / 20", timeout: 5000 }
+- tapOn: "First"
+- extendedWaitUntil: { visible: "1 / 20", timeout: 5000 }
+
+# The outline is the second source's, at its pages in the set.
+- tapOn: "TOC"
+- extendedWaitUntil: { visible: "Contents \\(10\\)", timeout: 5000 }
+- tapOn: "Last page"
+- extendedWaitUntil: { visible: "15 / 20", timeout: 5000 }
+
+# Search runs across every source: "Page 7" is only on the second
+# source's page 7.
+- tapOn: "Find"
+- tapOn: { id: "search-input" }
+- inputText: "Page 7"
+- extendedWaitUntil: { visible: { id: "search-status", text: "1 / 1" }, timeout: 15000 }
+- extendedWaitUntil: { visible: "10 / 20", timeout: 5000 }
+- tapOn: "Find"
+
+# Page sizes of every source in order; a page image of the current page,
+# read from its source's file (A4 at 300 px wide: 424 or 425 px high).
+- tapOn: "Sizes"
+- extendedWaitUntil: { visible: "sizes 20: 595x842 595x842 595x842 595x842 .*", timeout: 5000 }
+- tapOn: "Image"
+- extendedWaitUntil: { visible: "image p10: 300x42[45] png.*", timeout: 10000 }
+- tapOn: { id: "page-image" }
+
+# Viewing only: printing a set is rejected.
+- tapOn: "Print"
+- extendedWaitUntil: { visible: "print: .*several sources.*", timeout: 5000 }
+- tapOn: "‹ Back"
+
+# All or nothing: a failing source fails the load and is named.
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Several sources, one missing.*" } }
+- extendedWaitUntil: { visible: "http-error", timeout: 15000 }
+- assertVisible: "source 2 of 2"
+- tapOn: "‹ Back"
+
+# A source without a password of its own takes the password prop.
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Several sources, locked.*" } }
+- extendedWaitUntil: { visible: "password-required", timeout: 15000 }
+- assertVisible: "source 2 of 2"
+- tapOn: "Try fixture"
+- extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
+- tapOn: "‹ Back"
+
+# A source's own password opens it without the prop.
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Several sources, one protected.*" } }
+- extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
+- tapOn: "Last"
+- extendedWaitUntil: { visible: "5 / 5", timeout: 5000 }
+- tapOn: "‹ Back"
+
+# A base64 source among files, with its own password: equal sources in new
+# objects ("Same") do not reload, new base64 content ("Swap") does.
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Several sources, base64.*" } }
+- extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
+- assertVisible: "sources: p1\\+2 p3\\+3"
+- assertVisible: "loads: 1"
+- tapOn: "Same"
+- tapOn: "Same"
+- tapOn: "Last"
+- extendedWaitUntil: { visible: "5 / 5", timeout: 5000 }
+- assertVisible: "loads: 1"
+- tapOn: "Swap"
+- extendedWaitUntil: { visible: "loads: 2", timeout: 15000 }
+- extendedWaitUntil: { visible: "1 / 15", timeout: 5000 }
+- assertVisible: "sources: p1\\+12 p13\\+3"
+- tapOn: "‹ Back"
+
+# Remote sources download in parallel with their progress summed; leaving
+# mid-download cancels every download, and opening again loads the set
+# (`medium` throttled to 4 MB/s: 100 pages, then `links`). Taps do not wait
+# for the screen to settle: the progress changes every 100 ms. The entry is
+# opened as _open-list-entry.yaml does, without its scroll to the top.
+- scrollUntilVisible: { element: "Several sources \\(HTTP\\).*", timeout: 60000 }
+- waitForAnimationToEnd
+- tapOn: { text: "Several sources \\(HTTP\\).*", point: "50%, 25%", waitToSettleTimeoutMs: 500 }
+- extendedWaitUntil: { visible: "Downloading .*", timeout: 30000 }
+- tapOn: { text: "‹ Back", waitToSettleTimeoutMs: 500 }
+- scrollUntilVisible: { element: "Several sources \\(HTTP\\).*", timeout: 60000 }
+- waitForAnimationToEnd
+- tapOn: { text: "Several sources \\(HTTP\\).*", point: "50%, 25%", waitToSettleTimeoutMs: 500 }
+- extendedWaitUntil: { visible: "Downloading .*", timeout: 30000 }
+- extendedWaitUntil: { visible: "1 / 103", timeout: 120000 }
+- assertVisible: "sources: p1\\+100 p101\\+3"
+- tapOn: "‹ Back"

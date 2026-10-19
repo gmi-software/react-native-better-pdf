@@ -18,9 +18,15 @@ public extension PdfError {
   /**
    * Create a new instance of `PdfError`.
    */
-  init(code: PdfErrorCode, message: String, page: Double?, httpStatus: Double?, nativeDescription: String?) {
+  init(code: PdfErrorCode, message: String, page: Double?, sourceIndex: Double?, httpStatus: Double?, nativeDescription: String?) {
     self.init(code, std.string(message), { () -> bridge.std__optional_double_ in
       if let __unwrappedValue = page {
+        return bridge.create_std__optional_double_(__unwrappedValue)
+      } else {
+        return .init()
+      }
+    }(), { () -> bridge.std__optional_double_ in
+      if let __unwrappedValue = sourceIndex {
         return bridge.create_std__optional_double_(__unwrappedValue)
       } else {
         return .init()
@@ -55,6 +61,18 @@ public extension PdfError {
     return { () -> Double? in
       if bridge.has_value_std__optional_double_(self.__page) {
         let __unwrapped = bridge.get_std__optional_double_(self.__page)
+        return __unwrapped
+      } else {
+        return nil
+      }
+    }()
+  }
+  
+  @inline(__always)
+  var sourceIndex: Double? {
+    return { () -> Double? in
+      if bridge.has_value_std__optional_double_(self.__sourceIndex) {
+        let __unwrapped = bridge.get_std__optional_double_(self.__sourceIndex)
         return __unwrapped
       } else {
         return nil

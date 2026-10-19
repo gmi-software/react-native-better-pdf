@@ -50,10 +50,8 @@ namespace margelo::nitro::betterpdf {
 
   public:
     // Properties
-    std::optional<NativePdfSource> getSource() override;
-    void setSource(const std::optional<NativePdfSource>& source) override;
-    std::optional<std::string> getPassword() override;
-    void setPassword(const std::optional<std::string>& password) override;
+    std::optional<std::vector<NativePdfSource>> getSources() override;
+    void setSources(const std::optional<std::vector<NativePdfSource>>& sources) override;
     std::optional<PdfInitialPosition> getInitialPosition() override;
     void setInitialPosition(const std::optional<PdfInitialPosition>& initialPosition) override;
     std::optional<double> getMinScale() override;

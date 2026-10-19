@@ -23,7 +23,11 @@ import {
   type PdfViewRef,
   type PdfViewStats,
 } from 'react-native-better-pdf';
-import { DOCUMENTS, type DocumentEntry } from '../documents';
+import {
+  DOCUMENTS,
+  type DocumentEntry,
+  type DocumentSource,
+} from '../documents';
 import { describeField, FormBar } from './FormBar';
 import { OutlinePanel } from './OutlinePanel';
 import { SearchBar } from './SearchBar';
@@ -68,9 +72,9 @@ const BURST_IMAGES = 200;
 type LoadState =
   | { kind: 'idle' }
   | { kind: 'resolving' }
-  | { kind: 'loading'; source: PdfSource }
-  | { kind: 'loaded'; source: PdfSource; pageCount: number }
-  | { kind: 'failed'; source: PdfSource | null; error: PdfError | string };
+  | { kind: 'loading'; source: DocumentSource }
+  | { kind: 'loaded'; source: DocumentSource; pageCount: number }
+  | { kind: 'failed'; source: DocumentSource | null; error: PdfError | string };
 
 export function ViewerScreen() {
   const ref = useRef<PdfViewRef>(null);
@@ -435,8 +439,8 @@ export function ViewerScreen() {
             // An equal source in a new object: PdfView must not reload.
             onPress={() =>
               setState((current) =>
-                current.kind === 'loaded' && typeof current.source === 'object'
-                  ? { ...current, source: { ...current.source } }
+                current.kind === 'loaded'
+                  ? { ...current, source: copySource(current.source) }
                   : current,
               )
             }
@@ -509,9 +513,12 @@ export function ViewerScreen() {
               setState({ kind: 'loaded', source, pageCount: event.pageCount });
               setLoadCount((count) => count + 1);
               setLoadedFilePath(event.filePath);
-              // The local file behind the document, e.g. for sharing.
+              // The local file behind the document, e.g. for sharing; with
+              // several sources, where each one's pages start.
               setLastEvent(
-                `file: ${event.filePath?.split('/').slice(-2).join('/') ?? 'none'}`,
+                event.sources.length > 1
+                  ? `sources: ${event.sources.map((item) => `p${item.firstPage + 1}+${item.pageCount}`).join(' ')}`
+                  : `file: ${event.filePath?.split('/').slice(-2).join('/') ?? 'none'}`,
               );
               if (entry.onLoadAtZeroWidth != null) {
                 if (ref.current != null) entry.onLoadAtZeroWidth(ref.current);
@@ -609,6 +616,11 @@ export function ViewerScreen() {
               ) : (
                 <>
                   <Text style={styles.errorCode}>{error.code}</Text>
+                  {Array.isArray(source) && error.sourceIndex != null && (
+                    <Text style={styles.errorText}>
+                      {`source ${error.sourceIndex + 1} of ${source.length}`}
+                    </Text>
+                  )}
                   <Text style={styles.errorText}>{error.message}</Text>
                   {error.nativeDescription != null && (
                     <Text style={styles.errorNative}>
@@ -691,6 +703,13 @@ export function ViewerScreen() {
       </View>
     </View>
   );
+}
+
+/** An equal source in new objects (bundled assets are numbers). */
+function copySource(source: DocumentSource): DocumentSource {
+  const copy = (item: PdfSource) =>
+    typeof item === 'object' ? { ...item } : item;
+  return Array.isArray(source) ? source.map(copy) : copy(source as PdfSource);
 }
 
 /** "p 3 · y 120 · 1.00x", plus "· end" once the end is on screen. */
