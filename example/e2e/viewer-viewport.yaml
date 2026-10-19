@@ -4,11 +4,9 @@
 # position must reproduce it exactly.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "outline(, .*)?", centerElement: true }
-- tapOn: "outline(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "outline(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
 # One event after loading: the top of page 1 (y ≤ 0, the margin above it).
 - extendedWaitUntil:
@@ -68,8 +66,7 @@ appId: software.gmi.betterpdf.example
 
 # initialViewport: reopening with "Resume" starts where the reader left off.
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "Resume p\\. 1[12]", centerElement: true }
-- tapOn: "Resume p\\. 1[12]"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Resume p\\. 1[12]" } }
 - extendedWaitUntil: { visible: "12 / 12", timeout: 15000 }
 - extendedWaitUntil:
     visible: { id: "viewport-status", text: "${maestro.copiedText}" }

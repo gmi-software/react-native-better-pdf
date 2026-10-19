@@ -2,11 +2,9 @@
 # "loads" counts onLoad.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "Base64, .*", timeout: 60000 }
-- tapOn: "Base64, .*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Base64, .*" } }
 - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
 - assertVisible: "loads: 1"
 - assertVisible: "file: none"
@@ -40,8 +38,7 @@ appId: software.gmi.betterpdf.example
 - assertVisible: "loads: 3"
 - tapOn: "‹ Back"
 
-- scrollUntilVisible: { element: "Base64 encrypted, .*", timeout: 60000 }
-- tapOn: "Base64 encrypted, .*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Base64 encrypted, .*" } }
 - extendedWaitUntil: { visible: "password-required", timeout: 15000 }
 - tapOn: "Try wrong"
 - extendedWaitUntil: { visible: "invalid-password", timeout: 15000 }
@@ -49,8 +46,7 @@ appId: software.gmi.betterpdf.example
 - extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
 - tapOn: "‹ Back"
 
-- scrollUntilVisible: { element: "Base64 form, .*", timeout: 60000 }
-- tapOn: "Base64 form, .*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Base64 form, .*" } }
 - extendedWaitUntil: { visible: "1 / .*", timeout: 15000 }
 - tapOn: "Export"
 - extendedWaitUntil: { visible: "export: document.pdf", timeout: 10000 }

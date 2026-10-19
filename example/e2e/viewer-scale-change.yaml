@@ -2,11 +2,9 @@
 # to the fitted page; no events during animations or for unchanged values.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "medium.*", centerElement: true }
-- tapOn: "medium.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
 - assertNotVisible: "scale: .*"
 
@@ -40,17 +38,28 @@ appId: software.gmi.betterpdf.example
 
 # Paging through pages of different sizes is not a zoom change (PDFKit's
 # page view controller fits each page on its own).
-- scrollUntilVisible: { element: "mixed-sizes.*", centerElement: true }
-- tapOn: "mixed-sizes.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "mixed-sizes.*" } }
 - extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
 - tapOn: "Vertical"
 - tapOn: "Horizontal"
 - extendedWaitUntil: { visible: "Paged", timeout: 5000 }
-- repeat:
-    times: 3
+# A swipe Maestro drops on a slow emulator is sent again (retry).
+- retry:
+    maxRetries: 2
     commands:
       - swipe: { start: "50%, 80%", end: "50%, 30%", duration: 200 }
-      - waitForAnimationToEnd
+      - extendedWaitUntil: { visible: "2 / 5", timeout: 5000 }
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "50%, 80%", end: "50%, 30%", duration: 200 }
+      - extendedWaitUntil: { visible: "3 / 5", timeout: 5000 }
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "50%, 80%", end: "50%, 30%", duration: 200 }
+      - extendedWaitUntil: { visible: "4 / 5", timeout: 5000 }
+- waitForAnimationToEnd
 - assertVisible: "4 / 5"
 - assertNotVisible: "scale: .*"
 - tapOn: "‹ Back"

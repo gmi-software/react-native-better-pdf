@@ -7,11 +7,9 @@
 # end (p 100 · y 592) until the page was realigned with a bottom inset alone.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "Inset, last page.*" }
-- tapOn: "Inset, last page.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Inset, last page.*" } }
 - extendedWaitUntil: { visible: "100 / 100", timeout: 15000 }
 - waitForAnimationToEnd
 - extendedWaitUntil:
@@ -20,8 +18,7 @@ appId: software.gmi.betterpdf.example
 - takeScreenshot: inset-last-page
 - tapOn: "‹ Back"
 
-- scrollUntilVisible: { element: "Inset tall, last page.*" }
-- tapOn: "Inset tall, last page.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Inset tall, last page.*" } }
 - extendedWaitUntil: { visible: "100 / 100", timeout: 15000 }
 - waitForAnimationToEnd
 - extendedWaitUntil:
@@ -29,13 +26,16 @@ appId: software.gmi.betterpdf.example
     timeout: 5000
 - takeScreenshot: inset-tall-last-page
 # The rest of the page scrolls up until its bottom sits on the bar.
-- repeat:
-    times: 3
+- retry:
+    maxRetries: 2
     commands:
-      - swipe: { start: "50%, 45%", end: "50%, 25%", duration: 400 }
-- waitForAnimationToEnd
-- extendedWaitUntil:
-    visible: { id: "viewport-status", text: "p 100 · .* · end" }
-    timeout: 5000
+      - repeat:
+          times: 3
+          commands:
+            - swipe: { start: "50%, 45%", end: "50%, 25%", duration: 400 }
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: { id: "viewport-status", text: "p 100 · .* · end" }
+          timeout: 5000
 - takeScreenshot: inset-tall-last-page-end
 - tapOn: "‹ Back"

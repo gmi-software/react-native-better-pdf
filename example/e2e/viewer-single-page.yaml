@@ -3,11 +3,9 @@
 # them), and taps navigate the main viewer.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "medium.*" }
-- tapOn: "medium.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
 - tapOn: "Thumbs off"
 - extendedWaitUntil: { visible: { id: "thumb-5" }, timeout: 10000 }

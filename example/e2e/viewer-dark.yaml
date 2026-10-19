@@ -3,7 +3,7 @@
 # colours; the screenshot is for review (black paper, white text).
 appId: software.gmi.betterpdf.example
 ---
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Embedded"
 - extendedWaitUntil: { visible: { id: "embedded-pdf" }, timeout: 15000 }
 - tapOn: "Dark off"

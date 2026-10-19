@@ -1,7 +1,7 @@
 # Every failure mode surfaces a stable error code instead of crashing.
 appId: software.gmi.betterpdf.example
 ---
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
 - tapOn: "Missing file.*"
 - extendedWaitUntil: { visible: "file-not-found", timeout: 10000 }
@@ -9,40 +9,31 @@ appId: software.gmi.betterpdf.example
 - tapOn: "Remote 404.*"
 - extendedWaitUntil: { visible: "http-error", timeout: 15000 }
 - tapOn: "‹ Back"
-# Not centred: the malformed fixtures end the list, which may not scroll
-# far enough to centre them.
-- scrollUntilVisible: { element: "malformed-not-a-pdf.*" }
-- tapOn: "malformed-not-a-pdf.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "malformed-not-a-pdf.*" } }
 - extendedWaitUntil: { visible: "invalid-pdf", timeout: 15000 }
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "malformed-empty.*" }
-- tapOn: "malformed-empty.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "malformed-empty.*" } }
 - extendedWaitUntil: { visible: "invalid-pdf", timeout: 15000 }
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "malformed-truncated.*" }
-- tapOn: "malformed-truncated.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "malformed-truncated.*" } }
 # Truncated files are either rejected or partially recovered, never a crash.
 - extendedWaitUntil:
     visible: "invalid-pdf|1 / .*"
     timeout: 15000
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "malformed-garbage-xref.*" }
-- tapOn: "malformed-garbage-xref.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "malformed-garbage-xref.*" } }
 - extendedWaitUntil:
     visible: "invalid-pdf|1 / 3"
     timeout: 15000
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "Base64 not base64.*", timeout: 60000 }
-- tapOn: "Base64 not base64.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Base64 not base64.*" } }
 - extendedWaitUntil: { visible: "invalid-source", timeout: 10000 }
 - assertVisible: "The base64 source is not valid base64: unexpected character at index 12"
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "Base64 data: URI.*", timeout: 60000 }
-- tapOn: "Base64 data: URI.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Base64 data: URI.*" } }
 - extendedWaitUntil: { visible: "invalid-source", timeout: 10000 }
 - assertVisible: "The base64 source is a data: URI; pass only the part after \"base64,\""
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "Base64 not a PDF.*", timeout: 60000 }
-- tapOn: "Base64 not a PDF.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Base64 not a PDF.*" } }
 - extendedWaitUntil: { visible: "invalid-pdf", timeout: 10000 }
 - tapOn: "‹ Back"

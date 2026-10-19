@@ -7,11 +7,9 @@
 appId: software.gmi.betterpdf.example
 ---
 # Fresh state: the toolbar's layout mode lasts while the app runs.
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "medium.*" }
-- tapOn: "medium.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 15000 }
 # The layout button cycles to Pairs after the six single-page modes.
 - tapOn: "Vertical"

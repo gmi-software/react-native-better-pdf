@@ -5,12 +5,10 @@
 # (BetterPdf_API34) too.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
 # Not "links-all". iOS labels the entry "links, Fixture copied to the device".
-- scrollUntilVisible: { element: "links(, .*)?" }
-- tapOn: "links(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "links(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 3", timeout: 15000 }
 # Plain page tap, reported in page points from the top-left corner. 85% of a
 # fit-width A4 page is ~505 pt on every device; pixels or view points would
@@ -43,8 +41,7 @@ appId: software.gmi.betterpdf.example
 # name tree (to page 4), upper-right = a JavaScript action. Android's
 # PdfRenderer reports no /Dest arrays (see docs/api-design.md "Links and
 # taps"); the library reads both from the file.
-- scrollUntilVisible: { element: "links-all.*", centerElement: true }
-- tapOn: "links-all.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "links-all.*" } }
 - extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
 # An action the viewer does not perform: a page tap, inside its area
 # (x 357–595, upper half). Page 3 is landscape, so iOS fits the pages

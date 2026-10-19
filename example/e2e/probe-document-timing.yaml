@@ -5,8 +5,7 @@
 # Maestro log ("timing …" lines).
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Docs"
 - repeat:
     times: 3

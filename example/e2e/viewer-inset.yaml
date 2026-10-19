@@ -5,11 +5,9 @@
 # of 0 (the page margin).
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "Inset.*" }
-- tapOn: "Inset.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Inset.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 15000 }
 - waitForAnimationToEnd
 # The first page starts below the header.
@@ -34,14 +32,17 @@ appId: software.gmi.betterpdf.example
 # The end is the last page's bottom above the toolbar.
 - tapOn: "Last"
 - extendedWaitUntil: { visible: "100 / 100", timeout: 5000 }
-- repeat:
-    times: 3
+- retry:
+    maxRetries: 2
     commands:
-      - swipe: { start: "50%, 75%", end: "50%, 45%", duration: 400 }
-- waitForAnimationToEnd
-- extendedWaitUntil:
-    visible: { id: "viewport-status", text: "p 100 · .* · end" }
-    timeout: 5000
+      - repeat:
+          times: 3
+          commands:
+            - swipe: { start: "50%, 75%", end: "50%, 45%", duration: 400 }
+      - waitForAnimationToEnd
+      - extendedWaitUntil:
+          visible: { id: "viewport-status", text: "p 100 · .* · end" }
+          timeout: 5000
 - takeScreenshot: inset-end
 
 # Facing pages scroll under the bars the same way.

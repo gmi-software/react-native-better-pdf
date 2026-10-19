@@ -3,7 +3,7 @@
 # loads.
 appId: software.gmi.betterpdf.example
 ---
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
 - tapOn: "Remote \\(slow\\).*"
 - extendedWaitUntil:

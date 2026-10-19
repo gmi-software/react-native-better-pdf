@@ -3,11 +3,9 @@
 # the drag scrolls the parent instead.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "medium.*", centerElement: true }
-- tapOn: "medium.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
 - tapOn: "Drag on"
 - extendedWaitUntil: { visible: "Drag off", timeout: 5000 }
@@ -31,12 +29,15 @@ appId: software.gmi.betterpdf.example
 - waitForAnimationToEnd
 - assertVisible: "11 / 100"
 
-# Back on: dragging scrolls again.
+# Back on: dragging scrolls again. Only the drags that must move the
+# document are sent again when Maestro drops them on a slow emulator.
 - tapOn: "Drag off"
 - extendedWaitUntil: { visible: "Drag on", timeout: 5000 }
-- swipe: { start: "50%, 80%", end: "50%, 20%", duration: 150 }
-- waitForAnimationToEnd
-- assertVisible: "12 / 100"
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "50%, 80%", end: "50%, 20%", duration: 150 }
+      - extendedWaitUntil: { visible: "12 / 100", timeout: 5000 }
 - tapOn: "‹ Back"
 
 # Embedded in a ScrollView: the drag on the document scrolls the form.
@@ -48,10 +49,13 @@ appId: software.gmi.betterpdf.example
 # Control: with inner scrolling on, the same drag scrolls the document.
 - tapOn: "Inner scroll off"
 - extendedWaitUntil: { visible: "Inner scroll on", timeout: 5000 }
-- swipe: { from: { id: "embedded-pdf" }, direction: UP, duration: 600 }
-- waitForAnimationToEnd
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { from: { id: "embedded-pdf" }, direction: UP, duration: 600 }
+      - waitForAnimationToEnd
+      - assertNotVisible: "Document page 1"
 - assertNotVisible: "End of form"
-- assertNotVisible: "Document page 1"
 - tapOn: "Inner scroll on"
 - extendedWaitUntil: { visible: "Inner scroll off", timeout: 5000 }
 - swipe: { from: { id: "embedded-pdf" }, direction: UP, duration: 600 }

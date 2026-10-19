@@ -4,11 +4,9 @@
 # "1.2" uses a PDF 1.1 named destination, which PDFKit leaves unresolved.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "outline(, .*)?" }
-- tapOn: "outline(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "outline(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
 
 - tapOn: "TOC"
@@ -49,9 +47,7 @@ appId: software.gmi.betterpdf.example
 - tapOn: "‹ Back"
 
 # Object streams + xref stream: same result.
-# Mid-list, centred: a row cut off at the screen's edge takes no tap.
-- scrollUntilVisible: { element: "outline-compressed.*", centerElement: true }
-- tapOn: "outline-compressed.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "outline-compressed.*" } }
 - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
 - tapOn: "TOC"
 - extendedWaitUntil: { visible: "Contents \\(10\\)", timeout: 5000 }

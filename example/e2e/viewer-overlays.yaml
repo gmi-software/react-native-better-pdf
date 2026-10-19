@@ -7,11 +7,9 @@
 appId: software.gmi.betterpdf.example
 ---
 # Fresh state: the toolbar's layout mode lasts while the app runs.
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "Overlays.*" }
-- tapOn: "Overlays.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Overlays.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 15000 }
 - waitForAnimationToEnd
 

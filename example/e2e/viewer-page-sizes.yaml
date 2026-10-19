@@ -6,18 +6,15 @@ appId: software.gmi.betterpdf.example
 env:
   SIZES: "sizes 7: 612x792 842x595 500x600 792x400 300x400 595x842 500x300 \\(.*"
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "page-boxes(, .*)?", centerElement: true }
-- tapOn: "page-boxes(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "page-boxes(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 7", timeout: 15000 }
 - tapOn: "Sizes"
 - extendedWaitUntil: { visible: "${SIZES}", timeout: 10000 }
 - tapOn: "‹ Back"
 
-- scrollUntilVisible: { element: "page-boxes-encrypted(, .*)?", centerElement: true }
-- tapOn: "page-boxes-encrypted(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "page-boxes-encrypted(, .*)?" } }
 - tapOn: "Try fixture"
 - extendedWaitUntil: { visible: "1 / 7", timeout: 15000 }
 - tapOn: "Sizes"

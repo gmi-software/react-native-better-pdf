@@ -2,9 +2,12 @@
 # the top of the list, so it comes in from below, and tapped in its upper
 # part. iOS reports an entry scrolled under the tab bar, or cut off at the
 # bottom edge, as visible, and a tap at its centre then misses it;
-# centring it could carry it under the tab bar.
+# centring it could carry it under the tab bar. Each scroll step takes 4–5 s
+# on a slow emulator (software rendering), so 20 s reach only a few rows.
 appId: software.gmi.betterpdf.example
 ---
-- scrollUntilVisible: { element: "Bundled sample.*", direction: UP }
-- scrollUntilVisible: { element: "${ENTRY}" }
+- scrollUntilVisible: { element: "Bundled sample.*", direction: UP, timeout: 60000 }
+- scrollUntilVisible: { element: "${ENTRY}", timeout: 60000 }
+# A tap on a list still slowing down only stops it (iOS).
+- waitForAnimationToEnd
 - tapOn: { text: "${ENTRY}", point: "50%, 25%" }

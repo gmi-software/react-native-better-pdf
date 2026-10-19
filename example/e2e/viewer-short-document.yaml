@@ -5,11 +5,10 @@
 appId: software.gmi.betterpdf.example
 ---
 # Fresh state: the toolbar's layout mode lasts while the app runs.
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
 # Slow: a fast scroll flings past the row.
-- scrollUntilVisible: { element: "single-page.*", speed: 10 }
+- scrollUntilVisible: { element: "single-page.*", speed: 10, timeout: 60000 }
 - tapOn: "single-page.*"
 - extendedWaitUntil: { visible: "1 / 1", timeout: 15000 }
 # The view's top edge is half the page spacing above the page: 4 dp / pt at

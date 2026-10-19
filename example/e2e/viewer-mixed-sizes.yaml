@@ -3,10 +3,9 @@
 # their real aspect ratio, with navigation landing on the right page.
 appId: software.gmi.betterpdf.example
 ---
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "mixed-sizes.*" }
-- tapOn: "mixed-sizes.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "mixed-sizes.*" } }
 - extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
 - swipe: { start: "50%, 80%", end: "50%, 30%", duration: 400 }
 - waitForAnimationToEnd

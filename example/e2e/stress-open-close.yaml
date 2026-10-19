@@ -7,14 +7,12 @@ appId: software.gmi.betterpdf.example
 - repeat:
     times: 10
     commands:
-      - scrollUntilVisible: { element: "extreme.*" }
-      - tapOn: "extreme.*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "extreme.*" } }
       - extendedWaitUntil: { visible: "1 / 1000", timeout: 120000 }
       - swipe: { start: "50%, 80%", end: "50%, 10%", duration: 100 }
       - tapOn: "+10"
       - tapOn: "‹ Back"
-      - scrollUntilVisible: { element: "large.*" }
-      - tapOn: "large.*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "large.*" } }
       - extendedWaitUntil: { visible: "1 / 500", timeout: 120000 }
       - tapOn: "Last"
       - tapOn: "‹ Back"

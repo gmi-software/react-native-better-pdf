@@ -3,11 +3,9 @@
 appId: software.gmi.betterpdf.example
 ---
 # Starts fresh: the layout mode is screen state.
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "medium.*" }
-- tapOn: "medium.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
 
 # Vertical → Horizontal (continuous): a slow drag of 80% of the width.
@@ -24,22 +22,35 @@ appId: software.gmi.betterpdf.example
 - extendedWaitUntil: { visible: "Paged", timeout: 5000 }
 - waitForAnimationToEnd
 - assertVisible: "2 / 100"
-- swipe: { start: "50%, 80%", end: "50%, 20%", duration: 150 }
-- waitForAnimationToEnd
-- assertVisible: "3 / 100"
+# A swipe Maestro drops on a slow emulator is sent again (retry); one
+# that turns two pages still fails.
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "50%, 80%", end: "50%, 20%", duration: 150 }
+      - extendedWaitUntil: { visible: "3 / 100", timeout: 5000 }
 - takeScreenshot: layout-paged
 
-# Paged → Paged H: three fast swipes = exactly three pages.
+# Paged → Paged H: each fast swipe is exactly one page.
 - tapOn: "Paged"
 - extendedWaitUntil: { visible: "Paged H", timeout: 5000 }
 - waitForAnimationToEnd
 - assertVisible: "3 / 100"
-- repeat:
-    times: 3
+- retry:
+    maxRetries: 2
     commands:
       - swipe: { start: "90%, 50%", end: "10%, 50%", duration: 150 }
-      - waitForAnimationToEnd
-- assertVisible: "6 / 100"
+      - extendedWaitUntil: { visible: "4 / 100", timeout: 5000 }
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "90%, 50%", end: "10%, 50%", duration: 150 }
+      - extendedWaitUntil: { visible: "5 / 100", timeout: 5000 }
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "90%, 50%", end: "10%, 50%", duration: 150 }
+      - extendedWaitUntil: { visible: "6 / 100", timeout: 5000 }
 - takeScreenshot: layout-paged-horizontal
 
 # Back to vertical continuous (through the RTL modes): page kept.

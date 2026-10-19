@@ -1,22 +1,23 @@
 # Native scroll changes pages; zoom and navigation while zoomed do not crash.
 appId: software.gmi.betterpdf.example
 ---
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible:
-    element: "medium.*"
-- tapOn: "medium.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
 - extendedWaitUntil:
     visible: "1 / 100"
     timeout: 60000
-- repeat:
-    times: 6
+- retry:
+    maxRetries: 2
     commands:
-      - swipe:
-          start: 50%, 80%
-          end: 50%, 15%
-          duration: 150
-- assertNotVisible: "1 / 100"
+      - repeat:
+          times: 6
+          commands:
+            - swipe:
+                start: 50%, 80%
+                end: 50%, 15%
+                duration: 150
+      - assertNotVisible: "1 / 100"
 - tapOn: "2.5×"
 - swipe:
     start: 70%, 50%

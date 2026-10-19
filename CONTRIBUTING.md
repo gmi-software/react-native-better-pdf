@@ -80,7 +80,18 @@ example/e2e/run.sh <device> stress-open-close stress-rapid        # stress flows
 | `probe-render-burst` | diagnostic: 200 `renderPage` calls at once on 500 pages, with `getPageSizes` after the first, resolve in call order; on Android run with the thread and memory samplers |
 
 On iOS, `Pressable` rows expose one combined accessibility label, so flows
-match list rows as `"title.*"`.
+match list rows as `"title.*"`. Each flow starts the app afresh with
+`_start.yaml` (the example keeps its layout and toggles while it runs),
+opens list rows with `_open-list-entry.yaml`, and wraps swipes that must
+turn a page or move the document in `retry` with the exact page they
+expect, so a swipe Maestro drops is sent again while a page skipped still
+fails. Maestro reads swipe coordinates when it loads a flow, so they
+cannot come from a subflow's `env`.
+
+Run one emulator per host where you can. Short of memory, the emulator
+falls back to software rendering (its log says "Software GL rendering" and
+its renderer is SwiftShader): every list scroll step then takes seconds and
+Maestro drops swipes, so failures there say little about the library.
 
 While a stress flow runs, `benchmarks/sample-android-memory.sh` records
 memory once per second, and `benchmarks/sample-android-threads.sh` the

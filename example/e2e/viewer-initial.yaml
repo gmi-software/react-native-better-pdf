@@ -4,11 +4,9 @@
 # 595 / 2 ≈ 401 pt (unzoomed it would be ≈ 505).
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "Start at page 5.*", centerElement: true }
-- tapOn: "Start at page 5.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Start at page 5.*" } }
 - extendedWaitUntil: { visible: "5 / 100", timeout: 60000 }
 - assertVisible: "file: fixtures/medium.pdf"
 # The initial zoom is not reported as a change.
@@ -21,34 +19,28 @@ appId: software.gmi.betterpdf.example
 - tapOn: "‹ Back"
 
 # filePath for a downloaded document (session copy) and a bundled asset.
-- scrollUntilVisible: { element: "Remote \\(HTTP\\).*", centerElement: true }
-- tapOn: "Remote \\(HTTP\\).*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Remote \\(HTTP\\).*" } }
 - extendedWaitUntil: { visible: "file: session/[0-9a-f]+\\.pdf", timeout: 60000 }
 - tapOn: "‹ Back"
-# The list's first entry cannot be centred.
-- scrollUntilVisible: { element: "Bundled sample.*", direction: UP }
-- tapOn: "Bundled sample.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Bundled sample.*" } }
 - extendedWaitUntil: { visible: "file: .*\\.pdf", timeout: 15000 }
 - tapOn: "‹ Back"
 
 # Navigation from onLoad while the viewer has zero width.
-- scrollUntilVisible: { element: "Zero width, goToPage.*", timeout: 60000 }
-- tapOn: "Zero width, goToPage.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Zero width, goToPage.*" } }
 - extendedWaitUntil: { visible: "11 / 100", timeout: 60000 }
 - extendedWaitUntil:
     visible: { id: "viewport-status", text: "p 11 · y (0|-[0-9]+) · 1\\.00x" }
     timeout: 5000
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "Zero width, goToViewport.*", timeout: 60000 }
-- tapOn: "Zero width, goToViewport.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Zero width, goToViewport.*" } }
 - extendedWaitUntil:
     visible: { id: "viewport-status", text: "p 11 · y (9[89]|10[0-2]) · 2\\.00x" }
     timeout: 60000
 - assertVisible: "11 / 100"
 - extendedWaitUntil: { visible: "scale: 2\\.00 \\(#1\\)", timeout: 5000 }
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "Zero width, zoomTo.*", timeout: 60000 }
-- tapOn: "Zero width, zoomTo.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Zero width, zoomTo.*" } }
 - extendedWaitUntil:
     visible: { id: "viewport-status", text: "p 1 · y (0|-[0-9]+) · 2\\.00x" }
     timeout: 60000

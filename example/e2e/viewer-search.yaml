@@ -3,11 +3,9 @@
 # so "Page 1" matches exactly pages 1, 10, 11 and 12, and "Page 7" only 7.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "outline(, .*)?", centerElement: true }
-- tapOn: "outline(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "outline(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
 - tapOn: "Find"
 - tapOn: { id: "search-input" }
@@ -49,8 +47,7 @@ appId: software.gmi.betterpdf.example
 - tapOn: "‹ Back"
 
 # A stopped search leaves the reader on the last page.
-- scrollUntilVisible: { element: "outline-large.*", centerElement: true }
-- tapOn: "outline-large.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "outline-large.*" } }
 - extendedWaitUntil: { visible: "1 / 1000", timeout: 60000 }
 - tapOn: "Last"
 - extendedWaitUntil: { visible: "1000 / 1000", timeout: 10000 }

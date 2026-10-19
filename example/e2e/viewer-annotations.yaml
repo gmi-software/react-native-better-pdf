@@ -3,11 +3,9 @@
 # kinds render is a pixel question Maestro cannot assert.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "annotations.*", centerElement: true }
-- tapOn: "annotations.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "annotations.*" } }
 - extendedWaitUntil: { visible: "1 / 1", timeout: 15000 }
 - waitForAnimationToEnd
 - takeScreenshot: annotations

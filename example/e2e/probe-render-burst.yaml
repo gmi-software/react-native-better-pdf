@@ -6,11 +6,9 @@
 # and the memory sampler. The time goes to the Maestro log ("timing …").
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "large.*", centerElement: true }
-- tapOn: "large.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "large.*" } }
 - extendedWaitUntil: { visible: "1 / 500", timeout: 120000 }
 - longPressOn: "Image"
 - extendedWaitUntil: { visible: "burst 200: rendering", timeout: 5000 }

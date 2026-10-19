@@ -3,8 +3,7 @@ appId: software.gmi.betterpdf.example
 ---
 - runFlow: _dismiss-dev-menu.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "extreme.*" }
-- tapOn: "extreme.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "extreme.*" } }
 - extendedWaitUntil: { visible: "1 / 1000", timeout: 120000 }
 - repeat:
     times: 15

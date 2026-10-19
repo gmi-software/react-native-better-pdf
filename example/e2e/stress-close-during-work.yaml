@@ -7,8 +7,7 @@
 # crash logs while it runs (see CONTRIBUTING).
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
 - repeat:
     times: 5
@@ -51,7 +50,7 @@ appId: software.gmi.betterpdf.example
 - repeat:
     times: 3
     commands:
-      - scrollUntilVisible: { element: "extreme", direction: UP }
+      - scrollUntilVisible: { element: "extreme", direction: UP, timeout: 60000 }
       - tapOn: "extreme"
       - extendedWaitUntil: { visible: "opened in .* ms", timeout: 120000 }
       - tapOn: "Thumbnails"
@@ -60,6 +59,5 @@ appId: software.gmi.betterpdf.example
       - scrollUntilVisible: { element: "after close: The document is closed", timeout: 30000 }
 # Still alive.
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "Bundled sample.*", direction: UP }
-- tapOn: "Bundled sample.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Bundled sample.*" } }
 - extendedWaitUntil: { visible: "1 / 3", timeout: 15000 }

@@ -8,7 +8,7 @@ env:
   # The word "Page" in the heading.
   WORD: "${maestro.platform == 'ios' ? '11%, 33%' : '10%, 32%'}"
 ---
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
 - tapOn: "Bundled sample.*"
 - extendedWaitUntil: { visible: "1 / 3", timeout: 15000 }

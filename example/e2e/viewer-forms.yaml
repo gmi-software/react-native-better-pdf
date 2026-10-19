@@ -11,11 +11,9 @@ env:
   COUNTRY: "50%, 61%"
   POSTCODE: "44%, 91%"
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "forms(, .*)?", centerElement: true }
-- tapOn: "forms(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "forms(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
 - waitForAnimationToEnd
 
@@ -118,8 +116,7 @@ env:
 # A downloaded form: onLoad's filePath is the cache's copy. Exports over it,
 # or beside it where another document's copy would be, are rejected, so the
 # filled-in form never reaches the cache: reopened, it is as served.
-- scrollUntilVisible: { element: "Remote form(, .*)?", direction: UP, centerElement: true }
-- tapOn: "Remote form(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Remote form(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
 - waitForAnimationToEnd
 - tapOn: "Fill"
@@ -127,8 +124,7 @@ env:
 - tapOn: "Bad"
 - extendedWaitUntil: { visible: "bad: .*read-only.* \\| .*cannot replace the displayed.* \\| .*export path is a directory.* \\| .*in the cache of downloaded documents.*; keep.txt kept", timeout: 10000 }
 - tapOn: "‹ Back"
-- scrollUntilVisible: { element: "Remote form(, .*)?", direction: UP, centerElement: true }
-- tapOn: "Remote form(, .*)?"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Remote form(, .*)?" } }
 - extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
 - waitForAnimationToEnd
 - tapOn: "Fields"

@@ -6,7 +6,7 @@
 # which resolves isSubmitted: true. A simulator has no printer to submit to.
 appId: software.gmi.betterpdf.example
 ---
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
 - tapOn: "Bundled sample.*"
 - extendedWaitUntil: { visible: "1 / 3", timeout: 15000 }
@@ -23,8 +23,7 @@ appId: software.gmi.betterpdf.example
 - extendedWaitUntil: { visible: "print: cancelled", timeout: 5000 }
 - tapOn: "‹ Back"
 
-- scrollUntilVisible: { element: "encrypted.*" }
-- tapOn: "encrypted.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "encrypted.*" } }
 - extendedWaitUntil: { visible: "password-required", timeout: 15000 }
 - tapOn: "Try fixture"
 - extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
@@ -49,8 +48,7 @@ appId: software.gmi.betterpdf.example
 - tapOn: "‹ Back"
 
 # The same document encrypted with AES-128.
-- scrollUntilVisible: { element: "aes-encrypted.*" }
-- tapOn: "aes-encrypted.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "aes-encrypted.*" } }
 - extendedWaitUntil: { visible: "password-required", timeout: 15000 }
 - tapOn: "Try fixture"
 - extendedWaitUntil: { visible: "1 / 2", timeout: 15000 }
@@ -71,8 +69,7 @@ appId: software.gmi.betterpdf.example
 - runFlow:
     when: { platform: iOS }
     commands:
-      - scrollUntilVisible: { element: "scanned-encrypted.*", centerElement: true }
-      - tapOn: "scanned-encrypted.*"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "scanned-encrypted.*" } }
       - extendedWaitUntil: { visible: "password-required", timeout: 60000 }
       - tapOn: "Try fixture"
       - extendedWaitUntil: { visible: "1 / 500", timeout: 60000 }

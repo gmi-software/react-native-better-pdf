@@ -5,11 +5,9 @@
 #   maestro --device <id> test example/e2e/android-legacy/encrypted-unsupported.yaml
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: ../_dismiss-dev-menu.yaml
+- runFlow: ../_start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "encrypted.*", centerElement: true }
-- tapOn: "encrypted.*"
+- runFlow: { file: ../_open-list-entry.yaml, env: { ENTRY: "encrypted.*" } }
 - extendedWaitUntil: { visible: "unsupported-pdf", timeout: 15000 }
 - assertVisible: "Password-protected PDFs require Android 15, or Android 12–14 with the updated PDF module \\(SDK extension 13\\)"
 - tapOn: "‹ Back"

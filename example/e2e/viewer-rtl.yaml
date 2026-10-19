@@ -4,11 +4,9 @@
 # ignores displaysRTL in continuous layouts, so that part is Android-only.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "medium.*" }
-- tapOn: "medium.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
 - extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
 - tapOn: "Vertical"
 - tapOn: "Horizontal"
@@ -30,21 +28,34 @@ appId: software.gmi.betterpdf.example
       - waitForAnimationToEnd
       - assertVisible: "1 / 100"
 
-# Paged: page kept; three fast swipes to the right = three pages forward.
+# Paged: page kept; each fast swipe to the right is one page forward. A
+# swipe Maestro drops on a slow emulator is sent again (retry); one that
+# turns two pages still fails, as the page asked for never shows.
 - tapOn: "RTL"
 - extendedWaitUntil: { visible: "Paged RTL", timeout: 5000 }
 - waitForAnimationToEnd
 - assertVisible: "1 / 100"
-- repeat:
-    times: 3
+- retry:
+    maxRetries: 2
     commands:
       - swipe: { start: "10%, 50%", end: "90%, 50%", duration: 150 }
-      - waitForAnimationToEnd
-- assertVisible: "4 / 100"
+      - extendedWaitUntil: { visible: "2 / 100", timeout: 5000 }
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "10%, 50%", end: "90%, 50%", duration: 150 }
+      - extendedWaitUntil: { visible: "3 / 100", timeout: 5000 }
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "10%, 50%", end: "90%, 50%", duration: 150 }
+      - extendedWaitUntil: { visible: "4 / 100", timeout: 5000 }
 - takeScreenshot: rtl-paged-page-4
-- swipe: { start: "90%, 50%", end: "10%, 50%", duration: 150 }
-- waitForAnimationToEnd
-- assertVisible: "3 / 100"
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "90%, 50%", end: "10%, 50%", duration: 150 }
+      - extendedWaitUntil: { visible: "3 / 100", timeout: 5000 }
 
 # Navigation and the last page work mirrored too.
 - tapOn: "+10"

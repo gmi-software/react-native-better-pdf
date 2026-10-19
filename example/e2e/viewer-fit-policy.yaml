@@ -6,11 +6,9 @@
 #   turns the page instead; that step is Android-only.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "mixed-sizes.*" }
-- tapOn: "mixed-sizes.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "mixed-sizes.*" } }
 - extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
 
 # Vertical paging, default fit ('page').
@@ -18,12 +16,19 @@ appId: software.gmi.betterpdf.example
 - tapOn: "Horizontal"
 - extendedWaitUntil: { visible: "Paged", timeout: 5000 }
 - waitForAnimationToEnd
-- repeat:
-    times: 2
+# A swipe Maestro drops on a slow emulator is sent again (retry); one
+# that turns two pages still fails.
+- retry:
+    maxRetries: 2
     commands:
       - swipe: { start: "50%, 80%", end: "50%, 30%", duration: 200 }
-      - waitForAnimationToEnd
-- assertVisible: "3 / 5"
+      - extendedWaitUntil: { visible: "2 / 5", timeout: 5000 }
+- retry:
+    maxRetries: 2
+    commands:
+      - swipe: { start: "50%, 80%", end: "50%, 30%", duration: 200 }
+      - extendedWaitUntil: { visible: "3 / 5", timeout: 5000 }
+- waitForAnimationToEnd
 - tapOn: { point: "10%, 55%" }
 - waitForAnimationToEnd
 - assertNotVisible: "tap:.*"

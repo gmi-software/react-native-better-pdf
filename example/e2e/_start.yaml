@@ -1,0 +1,8 @@
+# Starts the app afresh, so no flow depends on what an earlier one left (the
+# example keeps its layout and toggles while it runs), and dismisses the
+# dev-client UI. Flows that must keep the process (samplers attach to its
+# pid) run _dismiss-dev-menu.yaml alone.
+appId: software.gmi.betterpdf.example
+---
+- launchApp: { stopApp: true }
+- runFlow: _dismiss-dev-menu.yaml

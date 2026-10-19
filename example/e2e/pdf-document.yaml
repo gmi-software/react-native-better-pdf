@@ -9,8 +9,7 @@
 # is not a PDF. Screenshots show the cover and thumbnails.
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Docs"
 - tapOn: "metadata"
 - extendedWaitUntil: { visible: "opened in .* ms", timeout: 15000 }

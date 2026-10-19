@@ -2,11 +2,9 @@
 # reads the outline twice (the second call hits the cache).
 appId: software.gmi.betterpdf.example
 ---
-- launchApp: { stopApp: true }
-- runFlow: _dismiss-dev-menu.yaml
+- runFlow: _start.yaml
 - tapOn: "Viewer"
-- scrollUntilVisible: { element: "outline-large.*" }
-- tapOn: "outline-large.*"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "outline-large.*" } }
 - extendedWaitUntil: { visible: "1 / 1000", timeout: 60000 }
 - tapOn: "TOC"
 - extendedWaitUntil: { visible: "Contents \\(1000\\)", timeout: 10000 }
