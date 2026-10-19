@@ -136,7 +136,7 @@ class DocumentCacheTest {
   @Test
   fun `an unreachable server falls back to the stored copy only when allowed`() {
     val stored = fetch(source()).ready()
-    server.stop()
+    server.refuseConnections()
 
     val stale = fetch(source(maxAgeMs = 0.0), allowStale = true).ready()
     assertTrue(stale.isStale)
@@ -162,7 +162,7 @@ class DocumentCacheTest {
 
   @Test
   fun `without a stored copy an unreachable server is an error`() {
-    server.stop()
+    server.refuseConnections()
     assertEquals(PdfErrorCode.NETWORK_ERROR, fetch(source(), allowStale = true).failure().code)
   }
 
@@ -404,6 +404,7 @@ class DocumentCacheTest {
     @Volatile var status: Int? = null
 
     @Volatile private var gate: CountDownLatch? = null
+    @Volatile private var refusing = false
     val requests = CopyOnWriteArrayList<Request>()
 
     init {
@@ -413,6 +414,11 @@ class DocumentCacheTest {
             socket.accept()
           } catch (_: IOException) {
             break
+          }
+          if (refusing) {
+            client.setSoLinger(true, 0)
+            client.close()
+            continue
           }
           workers.execute { serve(client) }
         }
@@ -465,6 +471,15 @@ class DocumentCacheTest {
         if (System.nanoTime() > deadline) throw AssertionError("Expected $count requests, got ${requests.size}")
         Thread.sleep(5)
       }
+    }
+
+    /**
+     * Resets every connection from now on. Unlike [stop], the port stays
+     * taken: once freed, another listener (or the client's own ephemeral
+     * port) can take it and leave the request hanging until its read timeout.
+     */
+    fun refuseConnections() {
+      refusing = true
     }
 
     fun stop() {
