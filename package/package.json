@@ -1,6 +1,6 @@
 {
   "name": "react-native-better-pdf",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "A native, virtualized PDF viewer for React Native built on Nitro Views. PDFKit on iOS, PdfRenderer on Android, zero JS in the scroll/zoom/render path.",
   "main": "lib/src/index.js",
   "types": "lib/src/index.d.ts",
