@@ -3,6 +3,8 @@
 #   example/e2e/run.sh <device-id> [flow ...]
 # Prerequisites: app installed, Metro running (debug) and
 # `node benchmarks/serve-fixtures.mjs` running (Android: adb reverse tcp:8090 tcp:8090).
+# The default flows need Android's newer renderer (Android 15, or 12–14 with
+# SDK extension 13); without it, pass android-legacy/* and viewer-links.
 set -uo pipefail
 cd "$(dirname "$0")"
 device="$1"; shift

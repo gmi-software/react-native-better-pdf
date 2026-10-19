@@ -41,6 +41,8 @@ class PdfSourceResolver(private val context: Context) {
     source: NativePdfSource,
     onProgress: (loadedBytes: Long, totalBytes: Long?, isComplete: Boolean) -> Unit,
   ): ResolvedSource {
+    // Cancelled while waiting for its turn among a document's sources.
+    if (cancelled) throw InterruptedException()
     source.base64?.let { return openBase64(it) }
     val uri = source.uri
     if (uri.isBlank()) throw invalidSource(uri)

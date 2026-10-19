@@ -128,7 +128,8 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 `error.message` is human-readable and may change; `error.nativeDescription`
 carries the platform error for logging. Load failures carry
 `error.sourceIndex`, the source that could not be loaded (`0` for a single
-source).
+source; unset when the set failed as a whole, as when Android runs out of
+memory laying out many sources' pages).
 
 ## Types
 

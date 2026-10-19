@@ -119,6 +119,9 @@ class PdfDocumentSession internal constructor(
   /** Several sources: a document for reading, whose form cannot be filled in, printed or exported. */
   val isSet: Boolean get() = sources.single == null
 
+  /** The source a failure of the whole document names: the only one, else none. */
+  private val wholeDocumentSource: Int? get() = if (isSet) null else 0
+
   private val thread = Thread(::run, "BetterPdf-render").apply { isDaemon = true }
 
   fun start() = thread.start()
@@ -326,9 +329,9 @@ class PdfDocumentSession internal constructor(
       // A source's own failures name it (see DocumentSources).
       post { listener.onFailed(failure) }
     } catch (error: OutOfMemoryError) {
-      post { listener.onFailed(PdfFailure(PdfErrorCode.OUT_OF_MEMORY, "Out of memory while opening the PDF", cause = error, sourceIndex = 0)) }
+      post { listener.onFailed(PdfFailure(PdfErrorCode.OUT_OF_MEMORY, "Out of memory while opening the PDF", cause = error, sourceIndex = wholeDocumentSource)) }
     } catch (error: Exception) {
-      post { listener.onFailed(PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF could not be opened", cause = error, sourceIndex = 0)) }
+      post { listener.onFailed(PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF could not be opened", cause = error, sourceIndex = wholeDocumentSource)) }
     } finally {
       sources.closeAll()
       // When this thread stops on its own (the document did not open), close

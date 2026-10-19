@@ -254,6 +254,36 @@ class PdfDocumentSessionTest {
     assertEquals(1, listener.failures.single().sourceIndex)
   }
 
+  @Test
+  fun `sources resolve a few at a time`() {
+    val resolving = AtomicInteger()
+    val mostResolving = AtomicInteger()
+    start(sources = 20, openRenderer = { _, _ -> FakeRenderer(pageCount = 1) }, openSource = {
+      mostResolving.accumulateAndGet(resolving.incrementAndGet()) { most, now -> maxOf(most, now) }
+      Thread.sleep(20)
+      resolving.decrementAndGet()
+      null
+    })
+    runUntil("the document to open") { listener.opened }
+
+    // The first on the session's thread, the others on the pool.
+    assertTrue(mostResolving.get() in 2..DocumentSources.MAX_PARALLEL_OPENS + 1)
+  }
+
+  @Test
+  fun `running out of memory over the whole document names a source only when there is one`() {
+    // Too many pages for the document's page arrays, though each source opens.
+    start(sources = 1, openRenderer = { _, _ -> FakeRenderer(pageCount = 2_000_000_000) })
+    runUntil("the failure") { listener.failures.size == 1 }
+    assertEquals(PdfErrorCode.OUT_OF_MEMORY, listener.failures.last().code)
+    assertEquals(0, listener.failures.last().sourceIndex)
+
+    start(sources = 2, openRenderer = { _, _ -> FakeRenderer(pageCount = 1_000_000_000) })
+    runUntil("the failure") { listener.failures.size == 2 }
+    assertEquals(PdfErrorCode.OUT_OF_MEMORY, listener.failures.last().code)
+    assertNull(listener.failures.last().sourceIndex)
+  }
+
   /**
    * A session of [sources] files, `/0.pdf`, `/1.pdf` …, each with its index
    * as password. [openSource] may throw for a source; it returns null to

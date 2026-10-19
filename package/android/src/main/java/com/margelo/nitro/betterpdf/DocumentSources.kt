@@ -4,9 +4,10 @@ import android.content.Context
 import android.os.ParcelFileDescriptor
 import android.os.Trace
 import java.io.IOException
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
-import kotlin.concurrent.thread
 
 /**
  * The files behind a [PdfDocumentSession]'s document, one per source: each
@@ -72,8 +73,9 @@ internal class DocumentSources(
 
   /**
    * Resolves every source to a descriptor, the first on the calling thread
-   * and the others in parallel (downloads take their time). The first that
-   * fails cancels the others, and is the failure reported.
+   * and the others [MAX_PARALLEL_OPENS] at a time (downloads take their
+   * time). The first that fails cancels the others, and is the failure
+   * reported. Returns once no source is resolving any more.
    */
   fun resolveAll(progress: SourcesProgress) {
     if (segments.isEmpty()) throw PdfFailure(PdfErrorCode.INVALID_SOURCE, "No PDF source was given", sourceIndex = 0)
@@ -90,10 +92,22 @@ internal class DocumentSources(
         if (failure.compareAndSet(null, error)) cancel()
       }
     }
-    val others = segments.drop(1).map { thread(name = "BetterPdf-open", isDaemon = true) { resolveOrCancel(it) } }
-    resolveOrCancel(segments[0])
-    // cancel() (also from the session's close()) makes every resolve end.
-    others.forEach { it.join() }
+    val others = segments.drop(1)
+    val pool = if (others.isEmpty()) null else Executors.newFixedThreadPool(minOf(others.size, MAX_PARALLEL_OPENS)) {
+      Thread(it, "BetterPdf-open").apply { isDaemon = true }
+    }
+    try {
+      others.forEach { segment -> pool!!.execute { resolveOrCancel(segment) } }
+      resolveOrCancel(segments[0])
+    } catch (error: Throwable) {
+      // No thread could be started for a source.
+      if (failure.compareAndSet(null, error)) cancel()
+    } finally {
+      pool?.shutdown()
+      // cancel() (also from the session's close()) makes every resolve end,
+      // so none sets a descriptor after the session closes them.
+      while (pool?.awaitTermination(1, TimeUnit.SECONDS) == false) continue
+    }
     failure.get()?.let { throw it }
   }
 
@@ -217,5 +231,8 @@ internal class DocumentSources(
      * lie in at most two, so swiping across a source's end opens none.
      */
     const val MAX_OPEN_RENDERERS = 3
+
+    /** Sources resolved at a time besides the first; the rest wait. */
+    const val MAX_PARALLEL_OPENS = 4
   }
 }

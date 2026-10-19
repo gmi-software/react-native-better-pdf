@@ -1842,11 +1842,12 @@ every gesture to the list.
   unchanged.
   `PdfDocument.open` follows the same rule with its `password` option;
   `PdfCache` ignores passwords (it only downloads).
-- **All or nothing.** Sources open in parallel; the first failure cancels
-  the others and `onError` reports it with `sourceIndex`. Showing the
-  sources that did open would renumber every page after a failed one,
-  and the app's map from pages to songs with it. An empty list is an
-  `invalid-source` error.
+- **All or nothing.** Sources open in parallel (on Android four at a time
+  besides the first); the first failure cancels the others and `onError`
+  reports it with `sourceIndex`, unset when the set failed as a whole.
+  Showing the sources that did open would renumber every page after a
+  failed one, and the app's map from pages to songs with it. An empty
+  list is an `invalid-source` error.
 - **Load progress** sums the bytes of every download; `totalBytes` is set
   only while every download reports its size.
 - **Viewing only.** `print`, `exportDocument`, `getFormFields` and
