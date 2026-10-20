@@ -42,7 +42,7 @@ Every component, object and type is exported from the package root. The
 | `onLoad` | `({ pageCount, firstPageWidth, firstPageHeight, filePath?, isStale, sources }) => void` | | first page's size in PDF points, as displayed (crop box, rotation applied); `filePath`: the local file being displayed (downloaded copy, local file or extracted asset; not for `{ base64 }`, `content://` or several sources); `isStale`: an outdated stored copy shown because the server could not be reached (see [Offline reading and caching](guides/offline-and-caching.md)); `sources`: each source's `{ pageCount, firstPage, filePath?, isStale }` |
 | `onLoadProgress` | `({ loadedBytes, totalBytes? }) => void` | | remote downloads only (not when a stored copy is used); at most every 100 ms plus once on completion |
 | `onPageChange` | `({ page, pageCount }) => void` | | zero-based |
-| `onError` | `(error: PdfError) => void` | | |
+| `onError` | `(error: PdfLoadError \| PdfPageError) => void` | | without `error.page`: the load failed and nothing is shown; with `error.page` (Android only): a page could not be rendered after `onLoad`, and the document stays open; see [Errors](#errors) |
 | `onLinkPress` | `({ url }) => void` | | tap on a URL link; the viewer never opens URLs itself |
 | `onPageTap` | `({ page, x, y }) => void` | | tap on a page outside links; zero-based page, `x`/`y` in PDF points from the top-left of the page as displayed (crop box, rotation applied) |
 | `onScaleChange` | `({ scale }) => void` | | once per settled zoom change (pinch/double-tap end, `zoomTo`); relative to the fitted page |
@@ -127,13 +127,27 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 `invalid-source` · `file-not-found` · `network-error` · `http-error`
 (`error.httpStatus`) · `invalid-pdf` · `password-required` ·
 `invalid-password` · `unsupported-pdf` · `page-render-failed` (`error.page`) ·
-`out-of-memory`
+`out-of-memory` (`error.page` while rendering)
 
 `error.message` is human-readable and may change; `error.nativeDescription`
 carries the platform error for logging. Load failures carry
 `error.sourceIndex`, the source that could not be loaded (`0` for a single
 source; unset when the set failed as a whole, as when Android runs out of
 memory laying out many sources' pages).
+
+On Android, `onError` also comes after `onLoad` when a page cannot be
+rendered: `page-render-failed`, or `out-of-memory` while rendering, both
+with `error.page` and without `error.sourceIndex`. The document stays
+open and the other pages keep working:
+
+- `page-render-failed`: the page stays blank until the document is loaded
+  again, e.g. with a new `key`. Each page is reported once.
+- `out-of-memory`: the viewer frees memory and tries the page again later.
+  Reported once per document.
+
+`onError` receives a `PdfLoadError` or a `PdfPageError`, and
+`error.page !== undefined` tells them apart (it narrows the type to
+`PdfPageError`). iOS reports load failures only (PDFKit draws the pages).
 
 ### Method errors
 
@@ -167,6 +181,8 @@ is the platform's text (on Android with the stack trace), for logging.
 | `PdfSource` / `PdfUriSource` / `PdfFileSource` / `PdfBase64Source` | Where a document comes from: a URI (with cache options for downloads), a file path, a base64 string or a bundled asset; all but the asset can carry their own `password` |
 | `PdfLoadedSource` | One source as `onLoad` reports it: `{ pageCount, firstPage, filePath?, isStale }` |
 | `PdfError` / `PdfErrorCode` | Errors and their stable codes |
+| `PdfLoadError` / `PdfPageError` | `onError`'s argument: a load failure, or a page that could not be rendered after `onLoad` (Android, with `page`) |
+| `PdfMethodErrorCode` | The stable codes of `PdfMethodError`, see [Method errors](#method-errors) |
 | `PdfViewport` | A reading position: `{ page, x, y, scale }` |
 | `PdfFormField` | A form field, discriminated by `type` (`PdfTextFormField`, `PdfCheckboxFormField`, …) |
 | `PdfOutlineItem` | An outline entry: `{ title, page?, children }` |

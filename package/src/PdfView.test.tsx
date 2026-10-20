@@ -132,6 +132,7 @@ const { PdfView } = await import('./PdfView');
 const { PdfPageOverlay } = await import('./PdfPageOverlay');
 const { PdfMethodError } = await import('./PdfMethodError');
 import type { PdfViewRef } from './PdfView';
+import type { PdfError } from './types/PdfError';
 import type { PdfViewStats } from './types/PdfViewStats';
 
 // ---------------------------------------------------------------------------
@@ -364,6 +365,32 @@ describe('PdfView', () => {
       [10, 100],
       [20, undefined],
     ]);
+  });
+
+  test('forwards load and page errors, typed apart by page', () => {
+    const received: string[] = [];
+    // Handlers typed with PdfError, written before the split, still compile.
+    const untyped: (error: PdfError) => void = () => {};
+    render(<PdfView source={{ uri: 'x' }} onError={untyped} />);
+    render(
+      <PdfView
+        source={{ uri: 'x' }}
+        onError={(error) => {
+          if (error.page !== undefined) {
+            const code: 'page-render-failed' | 'out-of-memory' = error.code;
+            received.push(`${code} on page ${error.page + 1}`);
+            return;
+          }
+          // @ts-expect-error A load failure is never page-render-failed.
+          if (error.code === 'page-render-failed') return;
+          received.push(`load ${error.code}`);
+        }}
+      />,
+    );
+    const onError = lastHost().onError as { f: (error: PdfError) => void };
+    onError.f({ code: 'invalid-pdf', message: 'Not a PDF', sourceIndex: 0 });
+    onError.f({ code: 'out-of-memory', message: 'Out of memory', page: 2 });
+    expect(received).toEqual(['load invalid-pdf', 'out-of-memory on page 3']);
   });
 
   test('passes no native callback for events the app does not listen to', () => {

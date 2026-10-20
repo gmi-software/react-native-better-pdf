@@ -553,9 +553,15 @@ export function ViewerScreen() {
                 `tap: page ${event.page + 1} at ${Math.round(event.x)}, ${Math.round(event.y)} pt`,
               )
             }
-            onError={(pdfError) =>
-              setState({ kind: 'failed', source, error: pdfError })
-            }
+            onError={(pdfError) => {
+              if (pdfError.page != null) {
+                setLastEvent(
+                  `error: ${pdfError.code} on page ${pdfError.page + 1}`,
+                );
+              } else {
+                setState({ kind: 'failed', source, error: pdfError });
+              }
+            }}
           >
             {entry.overlays === true && (
               <DemoOverlays

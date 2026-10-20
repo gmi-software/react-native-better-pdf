@@ -42,7 +42,7 @@ import type { NativePdfFormChangeEvent } from './types/NativePdfFormChangeEvent'
 import type { NativePdfSource } from './types/NativePdfSource';
 import type { PdfColorScheme } from './types/PdfColorScheme';
 import type { PdfContentInset } from './types/PdfContentInset';
-import type { PdfError } from './types/PdfError';
+import type { PdfError, PdfLoadError, PdfPageError } from './types/PdfError';
 import type { PdfExportOptions } from './types/PdfExportOptions';
 import type { PdfExportResult } from './types/PdfExportResult';
 import type { PdfFitPolicy } from './types/PdfFitPolicy';
@@ -410,7 +410,20 @@ export interface PdfViewProps extends ViewProps {
    * server (see `PdfUriSource.cache` and `maxAgeMs`).
    */
   onLoadProgress?: (event: PdfLoadProgressEvent) => void;
-  onError?: (error: PdfError) => void;
+  /**
+   * The document could not be loaded, or (Android only) one of its pages
+   * could not be rendered. `error.page !== undefined` tells them apart.
+   *
+   * - {@linkcode PdfLoadError}, without `page`: the load failed and nothing
+   *   is shown.
+   * - {@linkcode PdfPageError}, with `page`, Android only: it comes after
+   *   {@linkcode PdfViewProps.onLoad}, and the document stays open.
+   *   `page-render-failed`: the page stays blank until the document is
+   *   loaded again (e.g. a new `key`); each page is reported once.
+   *   `out-of-memory`: the viewer frees memory and tries the page again
+   *   later; reported once per document.
+   */
+  onError?: (error: PdfLoadError | PdfPageError) => void;
   onPageChange?: (event: PdfPageChangeEvent) => void;
   /**
    * The user tapped a link to a URL. Links to other pages of the document
@@ -631,7 +644,10 @@ export function PdfView({
       onLoadProgress: callback((event: PdfLoadProgressEvent) =>
         handlers.current.onLoadProgress?.(event),
       ),
-      onError: callback((error: PdfError) => handlers.current.onError?.(error)),
+      // Native sets `page` only for page failures.
+      onError: callback((error: PdfError) =>
+        handlers.current.onError?.(error as PdfLoadError | PdfPageError),
+      ),
       onPageChange: callback((event: PdfPageChangeEvent) =>
         handlers.current.onPageChange?.(event),
       ),
