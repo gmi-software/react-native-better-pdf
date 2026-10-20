@@ -72,7 +72,7 @@ users see.
 | **Page numbers** | 1-based everywhere (`page`, `setPage`, `onPageChanged`, `onPageSingleTap`) | 0-based everywhere | Add or subtract 1 at the boundary. |
 | **TLS certificates** | `trustAllCerts` defaults to **`true`** — invalid certificates are accepted | Certificates are always validated | Fix the server's certificate. Downloads that "worked" before may now fail with `network-error`. |
 | **Download progress value** | `onLoadProgress(fraction)` — `0…1`, despite the name | `onLoadProgress({ loadedBytes, totalBytes? })` | `totalBytes === undefined ? undefined : loadedBytes / totalBytes` |
-| **Loading UI** | Shows `xx.xx%` text (or `renderActivityIndicator`) while downloading | Shows nothing | Render your own indicator until `onLoad` / `onError`. |
+| **Loading UI** | Shows `xx.xx%` text (or `renderActivityIndicator`) while downloading | Shows nothing | Render your own indicator until `onLoad`, or `onError` without `error.page`. |
 | **Background** | `#EEE` behind the pages | Transparent | `style={{ backgroundColor: '#EEE' }}` |
 | **Fit** | `fitPolicy` default `2` (fit whole page) | `'width'` when vertical and continuous; `'page'` with `horizontal` or `enablePaging` | Pass `fitPolicy="page"` to keep react-native-pdf's default. |
 | **Max zoom** | `maxScale` default `3` | `4` | Pass `maxScale={3}` to keep the old limit. |

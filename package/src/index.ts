@@ -18,7 +18,7 @@ export type { PdfCacheMode } from './types/PdfCacheMode';
 export type { PdfColorScheme } from './types/PdfColorScheme';
 export type { PdfContentInset } from './types/PdfContentInset';
 export type { PdfDocumentMetadata } from './types/PdfDocumentMetadata';
-export type { PdfError } from './types/PdfError';
+export type { PdfError, PdfLoadError, PdfPageError } from './types/PdfError';
 export type { PdfErrorCode } from './types/PdfErrorCode';
 export type { PdfExportOptions } from './types/PdfExportOptions';
 export type { PdfExportResult } from './types/PdfExportResult';

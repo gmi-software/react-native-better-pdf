@@ -67,6 +67,10 @@ For an overview of what each platform supports, see the
     from the viewport is visited.
   - Documents are parsed in-process; the platform recommends an isolated
     process for untrusted input, which this library does not provide.
+  - A page that cannot be rendered, or running out of memory while
+    rendering, is reported through `onError` after `onLoad` (with
+    `error.page`), and the document stays open (see
+    [Errors](api.md#errors)). iOS reports load failures only.
 - **iOS**: PDFKit does not expose cache statistics; `getStats()` reports
   `-1` for them.
 - A base64 source's text is held twice while the document is shown (your

@@ -151,8 +151,9 @@ smaller than its base64 form.
 
 ## Loading state
 
-There is no built-in spinner. Show your own until `onLoad` or `onError`;
-for remote documents `onLoadProgress` reports the download:
+There is no built-in spinner. Show your own until `onLoad`, or `onError`
+without `error.page`; for remote documents `onLoadProgress` reports the
+download:
 
 ```tsx
 onLoadProgress={({ loadedBytes, totalBytes }) =>
@@ -161,5 +162,19 @@ onLoadProgress={({ loadedBytes, totalBytes }) =>
 ```
 
 `totalBytes` is `undefined` when the server does not report a size.
+
+An `onError` with `error.page` is not a load failure: on Android, a page
+that cannot be rendered is reported after `onLoad`, and the rest of the
+document stays open. Keep the viewer on screen:
+
+```tsx
+onError={(error) => {
+  if (error.page !== undefined) {
+    console.warn(`${error.code} on page ${error.page + 1}`);
+  } else {
+    setLoadError(error); // nothing is shown
+  }
+}}
+```
 
 See the [API reference](../api.md#errors) for the error codes.
