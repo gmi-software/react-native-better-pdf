@@ -133,7 +133,7 @@ internal class DocumentReads(
    * aspect ratio, on white like the view, with a renderer of its own —
    * with the form as filled in ([formEdits]).
    *
-   * @throws IllegalArgumentException when the image would exceed
+   * @throws PdfMethodException when the image would exceed
    *   [MAX_IMAGE_PIXELS] (e.g. a very tall page at a large width).
    */
   fun renderPageImage(page: Int, width: Int, formEdits: List<FormEdit> = emptyList()): Bitmap {
@@ -142,7 +142,7 @@ internal class DocumentReads(
       renderer.applyEdits(formEdits)
       renderer.openPage(page).use { pdfPage ->
         val height = max(1, (width.toDouble() * pdfPage.height / pdfPage.width).roundToInt())
-        require(width.toLong() * height <= MAX_IMAGE_PIXELS) {
+        requireArgument(width.toLong() * height <= MAX_IMAGE_PIXELS) {
           "A ${width}×$height image exceeds the limit of $MAX_IMAGE_PIXELS pixels; use a smaller width"
         }
         val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)

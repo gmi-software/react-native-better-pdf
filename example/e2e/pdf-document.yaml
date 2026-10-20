@@ -30,7 +30,7 @@ appId: software.gmi.betterpdf.example
 - tapOn: "Thumbnails"
 - extendedWaitUntil: { visible: "thumbnails: 2 in .* ms", timeout: 10000 }
 - tapOn: "Close"
-- extendedWaitUntil: { visible: "after close: The document is closed", timeout: 5000 }
+- extendedWaitUntil: { visible: "after close: closed: The document is closed", timeout: 5000 }
 
 # Downloaded like a PdfView source.
 - tapOn: "metadata \\(remote\\)"
@@ -61,7 +61,7 @@ appId: software.gmi.betterpdf.example
 - runFlow:
     when: { platform: Android }
     commands:
-      - assertVisible: "metadata failed: .*Encrypted documents are not supported.*"
+      - assertVisible: "metadata failed: not-supported: .*"
 - assertVisible: "sizes: 595x842 595x842"
 - assertVisible: "cover: 300x425"
 

@@ -8,14 +8,14 @@ internal fun DocumentReads.readOutlineEntries(): Array<PdfOutlineEntry> =
   try {
     readOutline().map { it.toPdfOutlineEntry() }.toTypedArray()
   } catch (error: PdfFormatException) {
-    throw IllegalStateException("The outline could not be read: ${error.message}", error)
+    throw error.toMethodException("The outline could not be read: ${error.message}")
   }
 
 internal fun DocumentReads.readMetadata(): PdfDocumentMetadata =
   try {
     readInfo().toPdfDocumentMetadata()
   } catch (error: PdfFormatException) {
-    throw IllegalStateException("The metadata could not be read: ${error.message}", error)
+    throw error.toMethodException("The metadata could not be read: ${error.message}")
   }
 
 internal fun DocumentReads.readPdfPageSizes(pageCount: Int): Array<PdfPageSize> =

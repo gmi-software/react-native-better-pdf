@@ -133,7 +133,8 @@ smaller than its base64 form.
   shows none of them and `onError` reports `error.sourceIndex`. An empty
   list is an `invalid-source` error. `onLoadProgress` sums the downloads.
 - **Reading only:** forms cannot be filled in, and `print`,
-  `exportDocument`, `getFormFields` and `setFormFieldValues` reject.
+  `exportDocument`, `getFormFields` and `setFormFieldValues` reject with
+  `not-supported`.
   Printing and exporting need one file, and Android has no API that merges
   PDF files.
 - Links within a source lead to its pages, and "next page" / "previous

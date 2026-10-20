@@ -1,14 +1,12 @@
 package com.margelo.nitro.betterpdf
 
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import com.margelo.nitro.betterpdf.outline.FormFieldEntry
 import com.margelo.nitro.betterpdf.outline.FormFieldKind
 import com.margelo.nitro.betterpdf.outline.withLineFeeds
 
 /** A renderer widget of a field and the page it is on. */
 internal data class PlacedWidget(val page: Int, val widget: FormWidget)
-
-/** A value a field does not take; the message names the field. */
-internal class FormValueException(message: String) : IllegalArgumentException(message)
 
 /**
  * The field with its value as the renderer has it now. [widgets] holds the
@@ -40,14 +38,15 @@ internal fun FormFieldEntry.withRendererValues(widgets: List<FormWidget?>): Form
  * The renderer edits that give the field [value], from its widgets as the
  * renderer has them ([widgets] as in [withRendererValues], with pages).
  *
- * @throws FormValueException for a read-only field or a value its type does
+ * @throws PdfMethodException for a read-only field or a value its type does
  *   not take.
  */
 internal fun FormFieldEntry.plannedEdits(value: NativePdfFormValue, widgets: List<PlacedWidget?>): List<FormEdit> {
-  fun reject(reason: String): Nothing = throw FormValueException("The form field \"$name\" $reason")
-  if (isReadOnly) reject("is read-only")
+  fun reject(reason: String, code: PdfMethodException.Code = Code.INVALID_ARGUMENT): Nothing =
+    throw PdfMethodException(code, "The form field \"$name\" $reason")
+  if (isReadOnly) reject("is read-only", Code.NOT_PERMITTED)
   if (kind == FormFieldKind.SIGNATURE || kind == FormFieldKind.PUSH_BUTTON) reject("has no value to set")
-  val first = widgets.firstOrNull { it != null } ?: reject("could not be found on its page")
+  val first = widgets.firstOrNull { it != null } ?: reject("could not be found on its page", Code.INVALID_PDF)
   val text = value.text
   val isChecked = value.isChecked
   val options = value.options
@@ -67,11 +66,11 @@ internal fun FormFieldEntry.plannedEdits(value: NativePdfFormValue, widgets: Lis
       if (text != null) {
         val index = this.options.indexOf(text)
         if (index < 0) reject("has no option \"$text\"")
-        val target = widgets.getOrNull(index) ?: reject("could not be found on its page")
+        val target = widgets.getOrNull(index) ?: reject("could not be found on its page", Code.INVALID_PDF)
         if (target.widget.isOn) emptyList() else listOf(target.click())
       } else {
         val on = widgets.firstOrNull { it?.widget?.isOn == true } ?: return emptyList()
-        if (flags and FormFieldEntry.FLAG_NO_TOGGLE_TO_OFF != 0) reject("(radio) cannot be cleared on Android")
+        if (flags and FormFieldEntry.FLAG_NO_TOGGLE_TO_OFF != 0) reject("(radio) cannot be cleared on Android", Code.NOT_SUPPORTED)
         listOf(on.click())
       }
     }

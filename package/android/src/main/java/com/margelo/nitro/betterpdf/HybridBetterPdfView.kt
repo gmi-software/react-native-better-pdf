@@ -11,6 +11,7 @@ import android.view.View
 import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
 import com.facebook.react.uimanager.ThemedReactContext
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import com.margelo.nitro.betterpdf.outline.FormFieldEntry
 import com.margelo.nitro.core.Promise
 import com.margelo.nitro.core.resolve
@@ -322,8 +323,10 @@ class HybridBetterPdfView(
    * of several sources: those have no one file, so no form, print or export.
    */
   private inline fun <T> withOneSource(feature: String, block: (LoadedDocument) -> Promise<T>): Promise<T> {
-    val document = loaded ?: return Promise.rejected(IllegalStateException("No document is loaded"))
-    if (document.session.isSet) return Promise.rejected(UnsupportedOperationException("$feature is not available with several sources"))
+    val document = loaded ?: return Promise.rejected(PdfMethodException.notLoaded())
+    if (document.session.isSet) {
+      return Promise.rejected(PdfMethodException(Code.NOT_SUPPORTED, "$feature is not available with several sources"))
+    }
     return block(document)
   }
 
@@ -333,7 +336,7 @@ class HybridBetterPdfView(
       // Text being typed is read too.
       formFiller.commit()
       document.session.readFormFields { result ->
-        result.fold({ fields -> promise.resolve(fields.map { it.toNative() }.toTypedArray()) }, promise::reject)
+        result.fold({ fields -> promise.resolve(fields.map { it.toNative() }.toTypedArray()) }, promise::fail)
       }
     }
     promise
@@ -344,7 +347,7 @@ class HybridBetterPdfView(
     mainHandler.post {
       // Text being typed goes first, so it does not overwrite these values.
       formFiller.commit()
-      document.session.setFormValues(values.toList()) { error -> if (error == null) promise.resolve() else promise.reject(error) }
+      document.session.setFormValues(values.toList()) { error -> if (error == null) promise.resolve() else promise.fail(error) }
     }
     promise
   }
@@ -354,17 +357,17 @@ class HybridBetterPdfView(
     val target = if (filePath.isEmpty()) null else File(filePath)
     // As on iOS, where replacing a directory would delete everything in it.
     if (target != null && (filePath.endsWith("/") || target.isDirectory)) {
-      return@export Promise.rejected(IllegalArgumentException("The export path is a directory, not a file: $filePath"))
+      return@export Promise.rejected(PdfMethodException(Code.INVALID_ARGUMENT, "The export path is a directory, not a file: $filePath"))
     }
     // The displayed file is read while the copy is written, and is never changed.
     if (target != null && document.file != null && target.canonicalFile == document.file.canonicalFile) {
-      return@export Promise.rejected(IllegalArgumentException("The export cannot replace the displayed document's file"))
+      return@export Promise.rejected(PdfMethodException(Code.INVALID_ARGUMENT, "The export cannot replace the displayed document's file"))
     }
     afterFormSettles(session, session::write, commitTyping = true) {
       // Nor any downloaded copy: the cache would serve the export as the
       // server's document, with the server's ETag.
       if (target != null && DocumentCache.shared(context).contains(target)) {
-        throw IllegalArgumentException("The export path is in the cache of downloaded documents")
+        throw PdfMethodException(Code.INVALID_ARGUMENT, "The export path is in the cache of downloaded documents")
       }
       val file = target ?: newExportFile(document.name)
       // Written beside the target and renamed over it: a failed write
@@ -407,28 +410,28 @@ class HybridBetterPdfView(
     mainHandler.post {
       if (commitTyping) formFiller.commit()
       session.afterFormWork { error ->
-        if (error != null) promise.reject(error) else schedule(work, promise::settle)
+        if (error != null) promise.fail(error) else schedule(work, promise::settle)
       }
     }
     return promise
   }
 
   override fun getOutline(): Promise<Array<PdfOutlineEntry>> {
-    val session = loaded?.session ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+    val session = loaded?.session ?: return Promise.rejected(PdfMethodException.notLoaded())
     return afterFormSettles(session, session::read, commitTyping = false) { session.readOutlineEntries() }
   }
 
   override fun getPageSizes(): Promise<Array<PdfPageSize>> {
-    val session = loaded?.session ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+    val session = loaded?.session ?: return Promise.rejected(PdfMethodException.notLoaded())
     return afterFormSettles(session, session::read, commitTyping = false) { session.readPageSizes() }
   }
 
   override fun renderPage(page: Double, options: PdfRenderPageOptions): Promise<PdfPageImage> {
-    val document = loaded ?: return Promise.rejected(IllegalStateException("No document is loaded"))
+    val document = loaded ?: return Promise.rejected(PdfMethodException.notLoaded())
     val session = document.session
     val request = try {
       PageImageRequest.of(page, document.pageCount, options)
-    } catch (error: IllegalArgumentException) {
+    } catch (error: PdfMethodException) {
       return Promise.rejected(error)
     }
     return afterFormSettles(session, session::read, commitTyping = true) { session.renderPageImage(request, context) }
@@ -441,9 +444,9 @@ class HybridBetterPdfView(
       formFiller.commit()
       document.session.afterFormWork { error ->
         when {
-          error != null -> promise.reject(error)
+          error != null -> promise.fail(error)
           // Closed or replaced meanwhile: no dialog over another screen.
-          loaded !== document -> promise.reject(IllegalStateException("The document was closed"))
+          loaded !== document -> promise.reject(PdfMethodException.closed())
           else -> openPrintDialog(document.session, jobName, document.pageCount, promise)
         }
       }
@@ -454,8 +457,8 @@ class HybridBetterPdfView(
   private fun openPrintDialog(session: PdfDocumentSession, jobName: String, pageCount: Int, promise: Promise<PdfPrintResult>) {
     val activity = context.currentActivity
     when {
-      activity == null -> promise.reject(IllegalStateException("Printing needs the app in the foreground"))
-      printJob != null -> promise.reject(IllegalStateException("A print dialog is already open"))
+      activity == null -> promise.reject(PdfMethodException(Code.BUSY, "Printing needs the app in the foreground"))
+      printJob != null -> promise.reject(PdfMethodException(Code.BUSY, "A print dialog is already open"))
       else -> try {
         var job: PrintJob? = null
         val adapter = PdfPrintAdapter(printFileName(jobName), pageCount, session::writeForPrinting) {
@@ -466,7 +469,7 @@ class HybridBetterPdfView(
         job = activity.getSystemService(PrintManager::class.java).print(jobName, adapter, null)
         printJob = job
       } catch (error: Exception) {
-        promise.reject(error)
+        promise.fail(error)
       }
     }
   }
@@ -489,7 +492,7 @@ class HybridBetterPdfView(
           promise.resolve(PdfPrintResult(isSubmitted = false))
         }
       PrintJobInfo.STATE_CANCELED -> promise.resolve(PdfPrintResult(isSubmitted = false))
-      PrintJobInfo.STATE_FAILED -> promise.reject(IllegalStateException("The print job failed"))
+      PrintJobInfo.STATE_FAILED -> promise.reject(PdfMethodException(Code.IO_ERROR, "The print job failed"))
       else -> promise.resolve(PdfPrintResult(isSubmitted = true))
     }
   }
@@ -657,4 +660,4 @@ class HybridBetterPdfView(
 }
 
 /** Resolves with [result]'s value, or rejects with its error. */
-private fun <T> Promise<T>.settle(result: Result<T>) = result.fold({ resolve(it) }, { reject(it) })
+private fun <T> Promise<T>.settle(result: Result<T>) = result.fold({ resolve(it) }, { fail(it) })

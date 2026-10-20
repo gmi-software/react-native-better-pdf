@@ -13,6 +13,7 @@ interface NativeDocument {
   failOpen: (error: Error) => void;
   closeCount: number;
   calls: string[];
+  readError?: Error;
 }
 
 const natives: NativeDocument[] = [];
@@ -25,6 +26,10 @@ function createNativeDocument() {
     calls: [],
   };
   natives.push(state);
+  const read = <T>(value: T) =>
+    state.readError === undefined
+      ? Promise.resolve(value)
+      : Promise.reject(state.readError);
   return {
     open: (
       source: NativePdfSource,
@@ -41,22 +46,22 @@ function createNativeDocument() {
     },
     getMetadata: () => {
       state.calls.push('getMetadata');
-      return Promise.resolve({ title: 'Report', createdAtMs: 1 });
+      return read({ title: 'Report', createdAtMs: 1 });
     },
     getPageSizes: () => {
       state.calls.push('getPageSizes');
-      return Promise.resolve([{ width: 595, height: 842 }]);
+      return read([{ width: 595, height: 842 }]);
     },
     getOutline: () => {
       state.calls.push('getOutline');
-      return Promise.resolve([
+      return read([
         { title: 'Chapter', page: 0, depth: 0 },
         { title: 'Section', page: 1, depth: 1 },
       ]);
     },
     renderPage: (page: number, options: { width: number }) => {
       state.calls.push(`renderPage(${page}, ${options.width})`);
-      return Promise.resolve({
+      return read({
         uri: `file:///page-${page}.png`,
         width: options.width,
         height: options.width,
@@ -92,6 +97,7 @@ mock.module('react-native-nitro-modules', () => ({
 
 const { PdfDocument } = await import('./PdfDocument');
 const { PdfOpenError } = await import('./PdfOpenError');
+const { PdfMethodError } = await import('./PdfMethodError');
 
 // ---------------------------------------------------------------------------
 
@@ -276,6 +282,27 @@ describe('PdfDocument reads', () => {
     ]);
   });
 
+  test('native rejections become coded PdfMethodErrors', async () => {
+    const document = await openDocument();
+    const raw =
+      'java.lang.IllegalStateException: [invalid-pdf] The metadata could not be read: No trailer\n\tat x.y(Z.kt:1)';
+    lastNative().readError = new Error(raw);
+    for (const call of [
+      () => document.getMetadata(),
+      () => document.getPageSizes(),
+      () => document.getOutline(),
+      () => document.renderPage(0, { width: 100 }),
+    ]) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(PdfMethodError);
+      expect(error).toMatchObject({
+        code: 'invalid-pdf',
+        message: 'The metadata could not be read: No trailer',
+        nativeDescription: raw,
+      });
+    }
+  });
+
   test('getOutline rebuilds the tree', async () => {
     const document = await openDocument();
     expect(await document.getOutline()).toEqual([
@@ -301,7 +328,11 @@ describe('PdfDocument.close', () => {
       () => document.renderPage(0, { width: 100 }),
     ]) {
       const error = await call().catch((e: unknown) => e);
-      expect(error).toMatchObject({ message: 'The document is closed' });
+      expect(error).toBeInstanceOf(PdfMethodError);
+      expect(error).toMatchObject({
+        code: 'closed',
+        message: 'The document is closed',
+      });
     }
     expect(lastNative().calls).toEqual([]);
   });

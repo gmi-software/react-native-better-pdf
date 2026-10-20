@@ -1,4 +1,3 @@
-import NitroModules
 import PDFKit
 import UIKit
 
@@ -9,11 +8,11 @@ extension PDFPage {
   func renderImage(width: Int) throws -> UIImage {
     let size = displaySize
     guard size.width > 0, size.height > 0 else {
-      throw RuntimeError.error(withMessage: "The page has no area")
+      throw PdfMethodFailure(.invalidPdf, "The page has no area")
     }
     let height = max(1, Int((Double(width) * size.height / size.width).rounded()))
     guard width * height <= Self.maxImagePixels else {
-      throw RuntimeError.error(withMessage: "A \(width)×\(height) image exceeds the limit of \(Self.maxImagePixels) pixels; use a smaller width")
+      throw PdfMethodFailure(.invalidArgument, "A \(width)×\(height) image exceeds the limit of \(Self.maxImagePixels) pixels; use a smaller width")
     }
     let format = UIGraphicsImageRendererFormat()
     format.scale = 1

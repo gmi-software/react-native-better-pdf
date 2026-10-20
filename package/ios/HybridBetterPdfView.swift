@@ -360,19 +360,20 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   ) -> Promise<[T]> {
     let promise = Promise<[T]>()
     DispatchQueue.main.async { [weak self] in
-      guard let self, let files = self.displayed?.files else {
-        promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
+      guard let self, let displayed = self.displayed else {
+        promise.reject(withError: PdfMethodFailure.notLoaded)
         return
       }
+      let files = displayed.files
       if let cached = self[keyPath: cache], cached.files == files {
         promise.resolve(withResult: cached.values)
         return
       }
-      Self.readQueue.async { [weak self] in
+      self.asyncWhileDisplayed(on: Self.readQueue, rejecting: promise) { [weak self] in
         var values: [T] = []
         for file in files {
           guard let document = Self.openCopy(of: file)?.document else {
-            promise.reject(withError: RuntimeError.error(withMessage: failure))
+            promise.reject(withError: PdfMethodFailure(.ioError, failure))
             return
           }
           values += read(document, file)
@@ -390,18 +391,18 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     let promise = Promise<PdfPageImage>()
     DispatchQueue.main.async { [weak self] in
       guard let self, let displayed = self.displayed else {
-        promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
+        promise.reject(withError: PdfMethodFailure.notLoaded)
         return
       }
       let request: PageImageRequest
       do {
         request = try PageImageRequest(page: page, pageCount: displayed.document.pageCount, options: options)
       } catch {
-        promise.reject(withError: error)
+        promise.reject(withError: error.asMethodFailure)
         return
       }
       guard let located = displayed.file(ofPage: request.page) else {
-        promise.reject(withError: RuntimeError.error(withMessage: "Page \(request.page) could not be read"))
+        promise.reject(withError: PdfMethodFailure(.invalidPdf, "Page \(request.page) could not be read"))
         return
       }
       // Commits text being typed, so the image shows it.
@@ -410,14 +411,14 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // A separate instance of the page's file, like getOutline: PDFKit
       // objects are not thread-safe and the view draws its own document on
       // main. A filled-in form is copied over to it.
-      Self.readQueue.async {
+      self.asyncWhileDisplayed(on: Self.readQueue, rejecting: promise) {
         do {
           guard let renderDocument = Self.openCopy(of: located.file, filledIn: filledForm)?.document else {
-            throw RuntimeError.error(withMessage: "The document could not be opened for rendering")
+            throw PdfMethodFailure(.ioError, "The document could not be opened for rendering")
           }
           promise.resolve(withResult: try request.render(pageInFile: located.page, from: renderDocument))
         } catch {
-          promise.reject(withError: error)
+          promise.reject(withError: error.asMethodFailure)
         }
       }
     }
@@ -427,19 +428,19 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func print(jobName: String) throws -> Promise<PdfPrintResult> {
     let promise = Promise<PdfPrintResult>()
     DispatchQueue.main.async { [weak self] in
-      guard let self else { return promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded")) }
+      guard let self else { return promise.reject(withError: PdfMethodFailure.notLoaded) }
       guard let source = self.oneSource(for: "Printing", rejecting: promise) else { return }
       let document = source.loaded.document
       guard UIPrintInteractionController.isPrintingAvailable else {
-        promise.reject(withError: RuntimeError.error(withMessage: "Printing is not available on this device"))
+        promise.reject(withError: PdfMethodFailure(.notSupported, "Printing is not available on this device"))
         return
       }
       guard document.allowsPrinting else {
-        promise.reject(withError: RuntimeError.error(withMessage: "The document does not permit printing"))
+        promise.reject(withError: PdfMethodFailure(.notPermitted, "The document does not permit printing"))
         return
       }
       guard !self.isPrinting else {
-        promise.reject(withError: RuntimeError.error(withMessage: "A print dialog is already open"))
+        promise.reject(withError: PdfMethodFailure(.busy, "A print dialog is already open"))
         return
       }
       self.isPrinting = true
@@ -463,12 +464,12 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
           // Closed or replaced meanwhile: no dialog over another screen.
           guard let self, self.pdfView?.document === document else {
             self?.isPrinting = false
-            promise.reject(withError: RuntimeError.error(withMessage: "The document was closed"))
+            promise.reject(withError: PdfMethodFailure.closed)
             return
           }
           guard let data else {
             self.isPrinting = false
-            promise.reject(withError: RuntimeError.error(withMessage: "The document could not be prepared for printing"))
+            promise.reject(withError: PdfMethodFailure(.ioError, "The document could not be prepared for printing"))
             return
           }
           self.presentPrintDialog(printing: data, jobName: jobName, promise: promise)
@@ -482,7 +483,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     let promise = Promise<[NativePdfFormField]>()
     DispatchQueue.main.async { [weak self] in
       guard let self, let pdfView = self.pdfView else {
-        promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
+        promise.reject(withError: PdfMethodFailure.notLoaded)
         return
       }
       guard let file = self.oneSource(for: "The form", rejecting: promise)?.file else { return }
@@ -495,9 +496,9 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       // thread instead, filled in like the displayed document, as for
       // renderPage. A ColorSchemeDocument, so its widgets are read as the
       // displayed document's are.
-      Self.readQueue.async {
+      self.asyncWhileDisplayed(on: Self.readQueue, rejecting: promise) {
         guard let copy = Self.openCopy(of: file, filledIn: filledForm, opening: ColorSchemeDocument.init(url:))?.document else {
-          promise.reject(withError: RuntimeError.error(withMessage: "The form could not be read"))
+          promise.reject(withError: PdfMethodFailure(.ioError, "The form could not be read"))
           return
         }
         promise.resolve(withResult: DocumentForm(document: copy).fields().compactMap { field in
@@ -511,10 +512,10 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func setFormFieldValues(values: [NativePdfFormValue]) throws -> Promise<Void> {
     let promise = Promise<Void>()
     DispatchQueue.main.async { [weak self] in
-      guard let self else { return promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded")) }
+      guard let self else { return promise.reject(withError: PdfMethodFailure.notLoaded) }
       guard self.oneSource(for: "The form", rejecting: promise) != nil else { return }
       guard let document = self.pdfView?.document as? ColorSchemeDocument, let form = self.form() else {
-        promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
+        promise.reject(withError: PdfMethodFailure.notLoaded)
         return
       }
       // Commits text being typed first, so it does not overwrite the values.
@@ -523,7 +524,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
         try document.withoutReportingChanges { try form.setValues(values) }
         promise.resolve(withResult: ())
       } catch {
-        promise.reject(withError: error)
+        promise.reject(withError: error.asMethodFailure)
       }
     }
     return promise
@@ -532,7 +533,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   func exportDocument(filePath: String) throws -> Promise<PdfExportResult> {
     let promise = Promise<PdfExportResult>()
     DispatchQueue.main.async { [weak self] in
-      guard let self else { return promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded")) }
+      guard let self else { return promise.reject(withError: PdfMethodFailure.notLoaded) }
       guard let source = self.oneSource(for: "Exporting", rejecting: promise) else { return }
       let url = source.file.url
       // `onLoad`'s `filePath`: a remote document's copy in the cache, which
@@ -546,7 +547,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
           ? Self.newExportFile(named: displayedFile != nil ? url : nil)
           : Self.exportFile(at: filePath)
       } catch {
-        promise.reject(withError: error)
+        promise.reject(withError: error.asMethodFailure)
         return
       }
       // The displayed file is read while the copy is written, and is never
@@ -556,27 +557,27 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       if [url, displayedFile].compactMap({ $0 }).contains(where: {
         $0.standardizedFileURL.resolvingSymlinksInPath() == resolvedDestination
       }) {
-        promise.reject(withError: RuntimeError.error(withMessage: "The export cannot replace the displayed document's file"))
+        promise.reject(withError: PdfMethodFailure(.invalidArgument, "The export cannot replace the displayed document's file"))
         return
       }
       // Nor any other copy: the cache would serve the export as the
       // server's document, with the server's ETag.
       if DocumentCache.shared.store.contains(destination) {
-        promise.reject(withError: RuntimeError.error(withMessage: "The export path is in the cache of downloaded documents"))
+        promise.reject(withError: PdfMethodFailure(.invalidArgument, "The export path is in the cache of downloaded documents"))
         return
       }
       let file = source.file
       let filledForm = self.filledFormSnapshot()
       // Off the main thread: PDFKit writes a long document in seconds.
-      Self.writeQueue.async {
+      self.asyncWhileDisplayed(on: Self.writeQueue, rejecting: promise) {
         do {
           if let filledForm {
             guard let copy = Self.openCopy(of: file, filledIn: filledForm) else {
-              throw RuntimeError.error(withMessage: "The document could not be opened for writing")
+              throw PdfMethodFailure(.ioError, "The document could not be opened for writing")
             }
             let options = copy.document.protectedWriteOptions(unlockPassword: copy.unlockPassword)
             guard let data = copy.document.dataRepresentation(options: options) else {
-              throw RuntimeError.error(withMessage: "The document could not be written")
+              throw PdfMethodFailure(.ioError, "The document could not be written")
             }
             try data.write(to: destination, options: .atomic)
           } else {
@@ -585,7 +586,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
           }
           promise.resolve(withResult: PdfExportResult(filePath: destination.path))
         } catch {
-          promise.reject(withError: error)
+          promise.reject(withError: error.asMethodFailure)
         }
       }
     }
@@ -598,7 +599,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     var isDirectory: ObjCBool = false
     if filePath.hasSuffix("/")
       || (FileManager.default.fileExists(atPath: filePath, isDirectory: &isDirectory) && isDirectory.boolValue) {
-      throw RuntimeError.error(withMessage: "The export path is a directory, not a file: \(filePath)")
+      throw PdfMethodFailure(.invalidArgument, "The export path is a directory, not a file: \(filePath)")
     }
     return URL(fileURLWithPath: filePath, isDirectory: false)
   }
@@ -650,14 +651,25 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   /// several sources, which have no one file: no form, print or export.
   private func oneSource<T>(for feature: String, rejecting promise: Promise<T>) -> DisplayedSource? {
     guard let displayed else {
-      promise.reject(withError: RuntimeError.error(withMessage: "No document is loaded"))
+      promise.reject(withError: PdfMethodFailure.notLoaded)
       return nil
     }
     guard let source = displayed.single else {
-      promise.reject(withError: RuntimeError.error(withMessage: "\(feature) is not available with several sources"))
+      promise.reject(withError: PdfMethodFailure(.notSupported, "\(feature) is not available with several sources"))
       return nil
     }
     return source
+  }
+
+  /// Runs `work` on `queue` unless the view lets go of the displayed
+  /// document before its turn: `promise` then rejects with `closed`, as
+  /// Android's queued work does. Main thread.
+  private func asyncWhileDisplayed<T>(on queue: DispatchQueue, rejecting promise: Promise<T>, _ work: @escaping () -> Void) {
+    guard let lifetime = displayed?.lifetime else { return promise.reject(withError: PdfMethodFailure.notLoaded) }
+    queue.async {
+      guard !lifetime.hasEnded else { return promise.reject(withError: PdfMethodFailure.closed) }
+      work()
+    }
   }
 
   /// A separate instance of a displayed file, unlocked and filled in like
@@ -719,7 +731,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       isSettled = true
       self?.isPrinting = false
       if let error {
-        promise.reject(withError: error)
+        promise.reject(withError: PdfMethodFailure(.ioError, "The print job failed", underlying: error))
       } else {
         promise.resolve(withResult: PdfPrintResult(isSubmitted: completed))
       }
@@ -731,7 +743,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     if !presented, !isSettled {
       isSettled = true
       isPrinting = false
-      promise.reject(withError: RuntimeError.error(withMessage: "The print dialog could not be opened (another one may be open)"))
+      promise.reject(withError: PdfMethodFailure(.busy, "The print dialog could not be opened (another one may be open)"))
     }
   }
 
@@ -809,6 +821,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
 
   private func releaseDisplayed() {
+    displayed?.lifetime.end()
     for pin in displayed?.sources.compactMap(\.loaded.pin) ?? [] {
       DocumentCache.shared.store.unpin(pin)
     }

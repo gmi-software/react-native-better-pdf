@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import {
   PdfDocument,
-  PdfOpenError,
   type PdfDocumentMetadata,
   type PdfOutlineItem,
   type PdfPageImage,
   type PdfSource,
 } from 'react-native-better-pdf';
+import { describeError } from '../describeError';
 import { ensureFixture, FIXTURE_SERVER, type FixtureName } from '../documents';
 import { Button, colors } from '../ui';
 
@@ -49,13 +49,6 @@ const TARGETS: Target[] = [
 ];
 
 const MAX_THUMBNAILS = 12;
-
-/** An open error's code, else the message's first line (on Android the stack follows). */
-function describeError(error: unknown): string {
-  if (error instanceof PdfOpenError) return error.code;
-  const message = error instanceof Error ? error.message : String(error);
-  return message.split('\n')[0] ?? message;
-}
 
 const date = (ms: number | undefined) =>
   ms === undefined ? '-' : new Date(ms).toISOString();

@@ -3,6 +3,7 @@ import { NitroModules } from 'react-native-nitro-modules';
 import { abortable, abortReason, untilAborted } from './abort';
 import { buildOutlineTree } from './outline';
 import { toNativeSource } from './nativeSource';
+import { PdfMethodError, withMethodErrors } from './PdfMethodError';
 import { PdfOpenError } from './PdfOpenError';
 import { normalizeSource, sourcePassword, type PdfSource } from './source';
 import type { BetterPdfDocument } from './specs/BetterPdfDocument.nitro';
@@ -22,6 +23,7 @@ import type { PdfRenderPageOptions } from './types/PdfRenderPageOptions';
  *
  * Call {@linkcode PdfDocument.close} when done: the document holds the file
  * open until then (or until JS garbage-collects it, which can take long).
+ * The reads reject with a {@linkcode PdfMethodError}; match on its `code`.
  *
  * @example
  * ```ts
@@ -120,8 +122,10 @@ export class PdfDocument {
    * `PdfViewRef.getOutline`. Cached. Rejects on Android for encrypted
    * documents, and after {@linkcode close}.
    */
-  async getOutline(): Promise<PdfOutlineItem[]> {
-    return buildOutlineTree(await this.call((native) => native.getOutline()));
+  getOutline(): Promise<PdfOutlineItem[]> {
+    return this.call(async (native) =>
+      buildOutlineTree(await native.getOutline()),
+    );
   }
 
   /**
@@ -147,11 +151,13 @@ export class PdfDocument {
     native?.close();
   }
 
-  private async call<T>(
-    read: (native: BetterPdfDocument) => Promise<T>,
-  ): Promise<T> {
-    const native = this.native;
-    if (native === undefined) throw new Error('The document is closed');
-    return read(native);
+  private call<T>(read: (native: BetterPdfDocument) => Promise<T>): Promise<T> {
+    return withMethodErrors(() => {
+      const native = this.native;
+      if (native === undefined) {
+        throw new PdfMethodError('closed', 'The document is closed');
+      }
+      return read(native);
+    });
   }
 }

@@ -6,6 +6,7 @@ import android.os.SystemClock
 import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
 import com.margelo.nitro.NitroModules
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import com.margelo.nitro.core.Promise
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
@@ -125,7 +126,7 @@ class HybridBetterPdfDocument : HybridBetterPdfDocumentSpec() {
     val pageCount = synchronized(lock) { opened?.pageCount } ?: return Promise.rejected(notOpen())
     val request = try {
       PageImageRequest.of(page, pageCount, options)
-    } catch (error: IllegalArgumentException) {
+    } catch (error: PdfMethodException) {
       return Promise.rejected(error)
     }
     val context = context
@@ -161,7 +162,7 @@ class HybridBetterPdfDocument : HybridBetterPdfDocumentSpec() {
       try {
         promise.resolve(block(opened))
       } catch (error: Throwable) {
-        promise.reject(error)
+        promise.fail(error)
       }
     }
     return promise
@@ -180,7 +181,12 @@ class HybridBetterPdfDocument : HybridBetterPdfDocumentSpec() {
   private fun duplicateDescriptor(): ParcelFileDescriptor =
     synchronized(lock) { master?.dup() } ?: throw notOpen()
 
-  private fun notOpen() = IllegalStateException(if (closed) "The document is closed" else "The document is not open")
+  private fun notOpen() =
+    if (closed) {
+      PdfMethodException(Code.CLOSED, "The document is closed")
+    } else {
+      PdfMethodException(Code.NOT_LOADED, "The document is not open")
+    }
 
   private companion object {
     /** The worker thread exits after this long without calls. */

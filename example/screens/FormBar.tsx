@@ -2,6 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import { useState, type RefObject } from 'react';
 import { StyleSheet, View } from 'react-native';
 import type { PdfFormField, PdfViewRef } from 'react-native-better-pdf';
+import { describeError } from '../describeError';
 import { Button } from '../ui';
 
 /**
@@ -34,8 +35,7 @@ export function FormBar({
 }) {
   const [exported, setExported] = useState<string | null>(null);
   const fail = (what: string) => (error: unknown) =>
-    // Android's rejections carry the Java stack trace: first line only.
-    onEvent(`${what}: ${String(error).split('\n')[0]}`);
+    onEvent(`${what}: ${describeError(error)}`);
   return (
     <View style={styles.row}>
       <Button
@@ -71,13 +71,12 @@ export function FormBar({
       <Button
         title="Bad"
         onPress={() => {
-          const message = (error: unknown) => String(error).split('\n')[0];
           const target = directoryWithFile();
           // First, while the form can still be as loaded (iOS then copies
           // the file instead of writing it anew).
           const intoDirectory = pdf.current
             ?.exportDocument({ filePath: target.path })
-            .then(() => 'exported into a directory', message);
+            .then(() => 'exported into a directory', describeError);
           // Where another document's copy would be.
           const besideCopy =
             isDownloaded && sourcePath != null
@@ -86,16 +85,16 @@ export function FormBar({
                     ?.exportDocument({
                       filePath: sourcePath.replace(/[^/]*$/, 'beside.pdf'),
                     })
-                    .then(() => 'exported beside the copy', message),
+                    .then(() => 'exported beside the copy', describeError),
                 ]
               : [];
           void Promise.all([
             pdf.current
               ?.setFormFieldValues({ name: 'Never', id: 'B-1' })
-              .then(() => 'accepted', message),
+              .then(() => 'accepted', describeError),
             pdf.current
               ?.exportDocument({ filePath: sourcePath })
-              .then(() => 'exported over the source', message),
+              .then(() => 'exported over the source', describeError),
             intoDirectory,
             ...besideCopy,
           ]).then((results) =>

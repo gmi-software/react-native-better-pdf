@@ -34,7 +34,7 @@ class PdfDocumentReader internal constructor(
 
   init {
     if (trailer["Encrypt"] != null && trailer["Encrypt"] != PdfObject.Null) {
-      throw PdfFormatException("Encrypted documents are not supported")
+      throw EncryptedPdfException()
     }
   }
 

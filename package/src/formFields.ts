@@ -1,3 +1,4 @@
+import { PdfMethodError } from './PdfMethodError';
 import type { NativePdfFormField } from './types/NativePdfFormField';
 import type { NativePdfFormValue } from './types/NativePdfFormValue';
 import type { PdfFormField } from './types/PdfFormField';
@@ -66,7 +67,8 @@ export function toNativeFormValues(
     ) {
       return { name, options: [...(value as readonly string[])] };
     }
-    throw new TypeError(
+    throw new PdfMethodError(
+      'invalid-argument',
       `Form field "${name}": expected a string, a boolean, an array of strings or null`,
     );
   });

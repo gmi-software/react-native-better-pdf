@@ -23,6 +23,7 @@ import {
   type PdfViewRef,
   type PdfViewStats,
 } from 'react-native-better-pdf';
+import { describeError } from '../describeError';
 import {
   DOCUMENTS,
   type DocumentEntry,
@@ -245,7 +246,7 @@ export function ViewerScreen() {
                 setOutline(items);
               })
               .catch((error: unknown) =>
-                setLastEvent(`outline: ${String(error)}`),
+                setLastEvent(`outline: ${describeError(error)}`),
               );
           }}
         />
@@ -306,7 +307,7 @@ export function ViewerScreen() {
                 setLastEvent(`sizes ${sizes.length}: ${list} (${ms} ms)`);
               })
               .catch((error: unknown) =>
-                setLastEvent(`sizes: ${String(error)}`),
+                setLastEvent(`sizes: ${describeError(error)}`),
               );
           }}
         />
@@ -326,7 +327,7 @@ export function ViewerScreen() {
                 setPageImage(image);
               })
               .catch((error: unknown) =>
-                setLastEvent(`image: ${String(error)}`),
+                setLastEvent(`image: ${describeError(error)}`),
               );
           }}
           onLongPress={() => {
@@ -373,7 +374,7 @@ export function ViewerScreen() {
                 );
               })
               .catch((error: unknown) =>
-                setLastEvent(`burst: ${String(error)}`),
+                setLastEvent(`burst: ${describeError(error)}`),
               );
           }}
         />
@@ -400,7 +401,7 @@ export function ViewerScreen() {
                 ),
               )
               .catch((error: unknown) =>
-                setLastEvent(`print: ${String(error)}`),
+                setLastEvent(`print: ${describeError(error)}`),
               );
           }}
         />

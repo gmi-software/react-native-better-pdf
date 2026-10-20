@@ -56,7 +56,7 @@ appId: software.gmi.betterpdf.example
       - tapOn: "Thumbnails"
       - tapOn: "Close"
       # Below the bottom edge on Android's screen.
-      - scrollUntilVisible: { element: "after close: The document is closed", timeout: 30000 }
+      - scrollUntilVisible: { element: "after close: closed: The document is closed", timeout: 30000 }
 # Still alive.
 - tapOn: "Viewer"
 - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Bundled sample.*" } }

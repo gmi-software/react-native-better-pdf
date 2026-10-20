@@ -1,4 +1,3 @@
-import NitroModules
 import PDFKit
 
 /// A validated `renderPage` call, shared by the view and `PdfDocument`.
@@ -12,10 +11,10 @@ struct PageImageRequest {
   /// pixels (rejected rather than clamped).
   init(page: Double, pageCount: Int, options: PdfRenderPageOptions) throws {
     guard page.isFinite, page == page.rounded(.down), page >= 0, page < Double(pageCount) else {
-      throw RuntimeError.error(withMessage: "Page \(page) is outside the document (0–\(pageCount - 1))")
+      throw PdfMethodFailure(.invalidArgument, "Page \(page) is outside the document (0–\(pageCount - 1))")
     }
     guard options.width.isFinite, options.width >= 1, options.width <= Self.maxWidth else {
-      throw RuntimeError.error(withMessage: "width must be 1–\(Int(Self.maxWidth)) pixels, got \(options.width)")
+      throw PdfMethodFailure(.invalidArgument, "width must be 1–\(Int(Self.maxWidth)) pixels, got \(options.width)")
     }
     self.page = Int(page)
     width = Int(options.width.rounded())
@@ -28,11 +27,11 @@ struct PageImageRequest {
   /// source). Call on the thread that owns `document`.
   func render(pageInFile page: Int, from document: PDFDocument) throws -> PdfPageImage {
     guard let pdfPage = document.page(at: page) else {
-      throw RuntimeError.error(withMessage: "Page \(page) could not be read")
+      throw PdfMethodFailure(.invalidPdf, "Page \(page) could not be read")
     }
     let image = try pdfPage.renderImage(width: width)
     guard let data = isJpeg ? image.jpegData(compressionQuality: quality) : image.pngData() else {
-      throw RuntimeError.error(withMessage: "The page image could not be encoded")
+      throw PdfMethodFailure(.ioError, "The page image could not be encoded")
     }
     let file = try FileManager.default.newRenderFile(pathExtension: isJpeg ? "jpg" : "png")
     try data.write(to: file)

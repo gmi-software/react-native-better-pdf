@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type Ref,
+  type RefObject,
 } from 'react';
 import {
   Image,
@@ -26,6 +27,7 @@ import {
   toNativeFormValues,
 } from './formFields';
 import { nativeColor } from './nativeColor';
+import { PdfMethodError, withMethodErrors } from './PdfMethodError';
 import { OverlayRegistryContext, type OverlayRegistry } from './PdfPageOverlay';
 import { buildOutlineTree } from './outline';
 import { defaultPrintJobName } from './printJobName';
@@ -84,6 +86,10 @@ export interface NavigationOptions {
   animated?: boolean;
 }
 
+/**
+ * `PdfView`'s methods. The promise methods reject with a
+ * {@linkcode PdfMethodError}; match on its `code`.
+ */
 export interface PdfViewRef {
   /**
    * Scrolls so `page` (zero-based, rounded to the nearest page, clamped) is
@@ -677,50 +683,48 @@ export function PdfView({
         if (!Number.isFinite(scale)) return;
         nativeRef.current?.zoomTo(scale, options?.animated ?? true);
       },
-      async getOutline() {
-        const native = nativeRef.current;
-        if (native == null) throw new Error('The PDF view is not mounted');
-        return buildOutlineTree(await native.getOutline());
+      getOutline() {
+        return withNativeView(nativeRef, async (native) =>
+          buildOutlineTree(await native.getOutline()),
+        );
       },
       goToViewport(viewport) {
         const { page, x, y, scale } = viewport;
         if (![page, x, y, scale].every(Number.isFinite) || scale <= 0) return;
         nativeRef.current?.goToViewport({ page, x, y, scale });
       },
-      async getPageSizes() {
-        const native = nativeRef.current;
-        if (native == null) throw new Error('The PDF view is not mounted');
-        return native.getPageSizes();
+      getPageSizes() {
+        return withNativeView(nativeRef, (native) => native.getPageSizes());
       },
-      async renderPage(page, options) {
-        const native = nativeRef.current;
-        if (native == null) throw new Error('The PDF view is not mounted');
-        return native.renderPage(page, options);
-      },
-      async print(options) {
-        const native = nativeRef.current;
-        if (native == null) throw new Error('The PDF view is not mounted');
-        const jobName = options?.jobName?.trim() ?? '';
-        const [first] = latestSources.current;
-        if (jobName !== '') return native.print(jobName);
-        return native.print(
-          first == null ? 'Document' : defaultPrintJobName(first),
+      renderPage(page, options) {
+        return withNativeView(nativeRef, (native) =>
+          native.renderPage(page, options),
         );
       },
-      async getFormFields() {
-        const native = nativeRef.current;
-        if (native == null) throw new Error('The PDF view is not mounted');
-        return (await native.getFormFields()).map(toFormField);
+      print(options) {
+        return withNativeView(nativeRef, (native) => {
+          const jobName = options?.jobName?.trim() ?? '';
+          const [first] = latestSources.current;
+          if (jobName !== '') return native.print(jobName);
+          return native.print(
+            first == null ? 'Document' : defaultPrintJobName(first),
+          );
+        });
       },
-      async setFormFieldValues(values) {
-        const native = nativeRef.current;
-        if (native == null) throw new Error('The PDF view is not mounted');
-        await native.setFormFieldValues(toNativeFormValues(values));
+      getFormFields() {
+        return withNativeView(nativeRef, async (native) =>
+          (await native.getFormFields()).map(toFormField),
+        );
       },
-      async exportDocument(options) {
-        const native = nativeRef.current;
-        if (native == null) throw new Error('The PDF view is not mounted');
-        return native.exportDocument(toNativeFilePath(options?.filePath));
+      setFormFieldValues(values) {
+        return withNativeView(nativeRef, (native) =>
+          native.setFormFieldValues(toNativeFormValues(values)),
+        );
+      },
+      exportDocument(options) {
+        return withNativeView(nativeRef, (native) =>
+          native.exportDocument(toNativeFilePath(options?.filePath)),
+        );
       },
       getStats() {
         return nativeRef.current?.getStats() ?? null;
@@ -847,6 +851,20 @@ function useContentInset(
 
 function clearance(value: number | undefined): number {
   return value != null && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/** `use` with the mounted native view; rejects with a `PdfMethodError`. */
+function withNativeView<T>(
+  ref: RefObject<NativeRef | null>,
+  use: (native: NativeRef) => T | Promise<T>,
+): Promise<T> {
+  return withMethodErrors(() => {
+    const native = ref.current;
+    if (native == null) {
+      throw new PdfMethodError('not-loaded', 'The PDF view is not mounted');
+    }
+    return use(native);
+  });
 }
 
 /** The placements of the `PdfPageOverlay`s rendered inside a `PdfView`. */

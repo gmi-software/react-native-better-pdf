@@ -266,6 +266,40 @@ type PdfErrorCode =
 
 `error.nativeDescription` carries the raw platform message for logs.
 
+The ref's promise methods and `PdfDocument`'s reads reject with a
+`PdfMethodError` and codes of their own:
+
+```ts
+type PdfMethodErrorCode =
+  | 'not-loaded'          // before onLoad, while a new source loads
+  | 'closed'              // closed or replaced while the call waited
+  | 'invalid-argument'    // page, width, form value, export path
+  | 'not-supported'       // several sources, a platform limit
+  | 'not-permitted'       // printing forbidden, read-only field
+  | 'busy'                // a print dialog is open
+  | 'io-error'
+  | 'invalid-pdf'         // outline, metadata or form not parsable
+  | 'out-of-memory'
+  | 'unknown';            // see nativeDescription
+```
+
+- **A union of its own.** Adding these to `PdfErrorCode` would break apps
+  that switch exhaustively over `onError`'s codes.
+- **A coded message, not result structs.** Nitro rejections carry only a
+  message. `open` and `download` resolve a result struct instead, but that
+  would have changed 11 signatures and every future method. Native code
+  rejects with `[code] message` (`PdfMethodFailure` in Swift,
+  `PdfMethodException` in Kotlin), and one JS function parses the first
+  line: Android puts the exception's class before it (renamed in minified
+  release builds) and the stack trace after it. A rejection without a
+  known code is `unknown`, the platform's text in `nativeDescription`.
+- **Platform errors get a code by type**: file system errors are
+  `io-error` on both platforms, `OutOfMemoryError` `out-of-memory`, a parse
+  failure `invalid-pdf`.
+- In 1.1 these methods rejected with plain `Error`s: on Android the message
+  was the exception's class, message and stack trace, and the same failure
+  read differently on each platform, so apps could only match on text.
+
 ## What we omit from react-native-pdf, and why
 
 | react-native-pdf                         | Decision                | Reason                                                                     |

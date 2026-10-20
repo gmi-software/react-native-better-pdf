@@ -8,6 +8,7 @@ import android.os.Looper
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.os.Trace
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import com.margelo.nitro.betterpdf.outline.FormFieldEntry
 import java.io.File
 import java.io.FileOutputStream
@@ -158,13 +159,13 @@ class PdfDocumentSession internal constructor(
   val formEdits: List<FormEdit> get() = form.edits
 
   private fun submitForm(work: FormWork) {
-    if (closed) work.fail(IllegalStateException("The document is closed")) else queue.submitInOrder(work)
+    if (closed) work.fail(PdfMethodException(Code.CLOSED, "The document is closed")) else queue.submitInOrder(work)
   }
 
   /** Where each source's pages are; set by the worker before [Listener.onOpened]. */
   @Volatile private var sourcePages: SourcePages? = null
 
-  private fun openedPages(): SourcePages = sourcePages ?: throw IllegalStateException("The document is not open")
+  private fun openedPages(): SourcePages = sourcePages ?: throw PdfMethodException(Code.NOT_LOADED, "The document is not open")
 
   /**
    * The outline: the sources' outlines in source order, at their pages in
@@ -285,7 +286,7 @@ class PdfDocumentSession internal constructor(
     sources.cancel()
     // Posts already queued stay: `post` drops listener calls once closed and
     // releases their bitmaps, and form work's results still settle promises.
-    dropped.forEach { (it as? FormWork)?.fail(IllegalStateException("The document was closed")) }
+    dropped.forEach { (it as? FormWork)?.fail(PdfMethodException.closed()) }
   }
 
   // region Worker thread
@@ -397,7 +398,7 @@ class PdfDocumentSession internal constructor(
         postRenderFailed(work, PdfFailure(PdfErrorCode.PAGE_RENDER_FAILED, "Rendering page ${work.page} failed", page = work.page, cause = error))
       is TextSelectionQuery -> post { listener.onTextSelected(work, null) }
       is PageTextQuery -> post { listener.onPageText(work.page, null) }
-      is FormWork -> mainThread.execute { work.fail(IllegalStateException("The form could not be read or changed", error)) }
+      is FormWork -> mainThread.execute { work.fail(error.toMethodException("The form could not be read or changed")) }
     }
   }
 
@@ -564,14 +565,14 @@ class PdfDocumentSession internal constructor(
   private fun doFormWork(work: FormWork) {
     when (work) {
       is FormWork.ReaderEdit -> applyReaderEdit(work.edit)
-      is FormWork.Barrier -> post(onDropped = { work.done(IllegalStateException("The document was closed")) }) { work.done(null) }
+      is FormWork.Barrier -> post(onDropped = { work.done(PdfMethodException.closed()) }) { work.done(null) }
       is FormWork.ReadFields -> {
         val result = try {
           Result.success(form.fields())
         } catch (error: Exception) {
-          Result.failure(IllegalStateException("The form could not be read", error))
+          Result.failure(error.toMethodException("The form could not be read"))
         } catch (error: OutOfMemoryError) {
-          Result.failure(IllegalStateException("Out of memory while reading the form", error))
+          Result.failure(error.toMethodException("Out of memory while reading the form"))
         }
         mainThread.execute { work.done(result) }
       }
@@ -580,9 +581,9 @@ class PdfDocumentSession internal constructor(
           setFormValues(work.values)
           null
         } catch (error: Exception) {
-          error
+          error.toMethodException()
         } catch (error: OutOfMemoryError) {
-          IllegalStateException("Out of memory while filling the form in", error)
+          error.toMethodException("Out of memory while filling the form in")
         }
         mainThread.execute { work.done(error) }
       }
@@ -608,12 +609,15 @@ class PdfDocumentSession internal constructor(
 
   private fun setFormValues(values: List<NativePdfFormValue>) {
     if (!canFillForm) {
-      throw UnsupportedOperationException("Filling forms requires Android 15, or Android 12–14 with the updated PDF module (SDK extension 13)")
+      throw PdfMethodException(
+        Code.NOT_SUPPORTED,
+        "Filling forms requires Android 15, or Android 12–14 with the updated PDF module (SDK extension 13)",
+      )
     }
     val fields = form.fields()
     val targets = values.map { value ->
       val index = fields.indexOfFirst { it.name == value.name }
-      if (index < 0) throw FormValueException("The form has no field named \"${value.name}\"")
+      if (index < 0) throw PdfMethodException(Code.INVALID_ARGUMENT, "The form has no field named \"${value.name}\"")
       index to value
     }
     // Each field's pages are read first: edits depend on what they show.

@@ -27,7 +27,7 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
   over the form field (kept above the keyboard) and a list to pick
   choices from. `enableFormFilling={false}` leaves them as they are.
 - A view showing several sources has no form to fill in: fields are drawn
-  but not editable, and the form methods reject (see
+  but not editable, and the form methods reject with `not-supported` (see
   [Several documents as one](sources-and-loading.md#several-documents-as-one)).
 - `onFormChange` reports the reader's changes only — at once for a toggle
   or choice, when editing ends for text, never per keystroke — not
@@ -37,14 +37,14 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
   coordinates as `onPageTap` — e.g. to place a `PdfPageOverlay` on a
   signature field. Choices are their displayed labels.
 - `setFormFieldValues()` sets fields by name, all or none: it rejects,
-  changing nothing, for an unknown or read-only field or a value its type
-  does not take.
+  changing nothing, for an unknown field or a value its type does not take
+  (`invalid-argument`) and for a read-only field (`not-permitted`).
 - `exportDocument()` writes the document as shown to a new file (the
   cache directory by default, or `{ filePath }`, which must name a file,
   not a directory), keeping its password protection, off the main thread;
   the source file is never changed. A remote document's `onLoad`
   `filePath` is the library's downloaded copy: exporting over it, or
-  anywhere else in that cache, is rejected.
+  anywhere else in that cache, is rejected (`invalid-argument`).
   Printing and `renderPage` show the form as filled in too.
 - Password protection of an export: the password that opened the document
   opens the export, with the same permissions (printing, copying, form

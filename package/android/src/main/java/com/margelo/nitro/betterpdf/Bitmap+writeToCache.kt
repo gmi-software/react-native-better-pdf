@@ -2,6 +2,7 @@ package com.margelo.nitro.betterpdf
 
 import android.content.Context
 import android.graphics.Bitmap
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import java.io.File
 import java.util.UUID
 import kotlin.math.roundToInt
@@ -18,7 +19,7 @@ internal fun Bitmap.writeToCache(context: Context, format: PdfImageFormat, quali
   val written = file.outputStream().use { compress(compressFormat, (quality * 100).roundToInt(), it) }
   if (!written) {
     file.delete()
-    throw IllegalStateException("The page image could not be encoded")
+    throw PdfMethodException(Code.IO_ERROR, "The page image could not be encoded")
   }
   return file
 }

@@ -122,7 +122,7 @@ final class HybridBetterPdfDocument: HybridBetterPdfDocumentSpec {
     do {
       request = try PageImageRequest(page: page, pageCount: pageCount, options: options)
     } catch {
-      return Promise.rejected(withError: error)
+      return Promise.rejected(withError: error.asMethodFailure)
     }
     return read { document in try request.render(pageInFile: request.page, from: document) }
   }
@@ -170,13 +170,15 @@ final class HybridBetterPdfDocument: HybridBetterPdfDocumentSpec {
       do {
         promise.resolve(withResult: try body(document))
       } catch {
-        promise.reject(withError: error)
+        promise.reject(withError: error.asMethodFailure)
       }
     }
     return promise
   }
 
   private func notOpen() -> Error {
-    return RuntimeError.error(withMessage: isClosed ? "The document is closed" : "The document is not open")
+    return isClosed
+      ? PdfMethodFailure(.closed, "The document is closed")
+      : PdfMethodFailure(.notLoaded, "The document is not open")
   }
 }

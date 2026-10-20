@@ -60,7 +60,7 @@ appId: software.gmi.betterpdf.example
 
 # Viewing only: printing a set is rejected.
 - tapOn: "Print"
-- extendedWaitUntil: { visible: "print: .*several sources.*", timeout: 5000 }
+- extendedWaitUntil: { visible: "print: not-supported: Printing is not available with several sources", timeout: 5000 }
 - tapOn: "‹ Back"
 
 # All or nothing: a failing source fails the load and is named.

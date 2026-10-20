@@ -178,7 +178,7 @@ internal class DocumentSources(
    * number in between.
    */
   fun duplicate(segment: Segment): ParcelFileDescriptor =
-    synchronized(lock) { segment.master?.dup() } ?: throw IllegalStateException("The document is not open")
+    synchronized(lock) { segment.master?.dup() } ?: throw PdfMethodException.closed()
 
   /** A duplicate of every source's descriptor, for a search; null unless all could be taken. Main thread: never throws. */
   fun duplicateAll(): List<PdfSearchTask.Source>? {

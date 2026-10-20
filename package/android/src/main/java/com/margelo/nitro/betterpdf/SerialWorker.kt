@@ -1,5 +1,6 @@
 package com.margelo.nitro.betterpdf
 
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ThreadPoolExecutor
@@ -21,10 +22,10 @@ internal class SerialWorker(threadName: String) {
   fun <T> run(work: () -> T, done: (Result<T>) -> Unit) {
     try {
       executor.execute {
-        done(if (closed) Result.failure(IllegalStateException("The document was closed")) else runCatching(work))
+        done(if (closed) Result.failure(PdfMethodException.closed()) else runCatching(work))
       }
     } catch (_: RejectedExecutionException) {
-      done(Result.failure(IllegalStateException("The document is closed")))
+      done(Result.failure(PdfMethodException(Code.CLOSED, "The document is closed")))
     }
   }
 

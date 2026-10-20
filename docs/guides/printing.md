@@ -14,14 +14,15 @@ if (result?.isSubmitted) showToast('Sent to the printer');
   Works for `content://` sources, which have no file path.
 - `jobName` names the job in the print queue and the file when saving as
   PDF; by default the source's file name, or `'Document'`.
-- Rejects before `onLoad`, while the view's print dialog is open, when the
-  view closes or its `source` changes before the dialog opens (a filled-in
-  form, and on iOS a protected document, is prepared first: seconds when
-  the document is long),
-  when the app is not in the foreground, and on iOS when the device cannot
-  print or the document's permissions forbid printing (Android has no API
-  to read them and prints anyway). Also rejects for a view showing several
-  sources (see
+- Rejects with a `PdfMethodError` before `onLoad` (`not-loaded`), while
+  the view's print dialog is open or, on Android, when the app is not in
+  the foreground (`busy`), when the view closes or its `source` changes
+  before the dialog opens (`closed`; a filled-in form, and on iOS a
+  protected document, is prepared first: seconds when the document is
+  long), and on iOS when the device cannot print (`not-supported`) or the
+  document's permissions forbid printing (`not-permitted`; Android has no
+  API to read them and prints anyway). Also rejects for a view showing
+  several sources (`not-supported`, see
   [Several documents as one](sources-and-loading.md#several-documents-as-one)).
   On iPad the dialog opens as a popover from the view.
 - Printing a file the app already has needs no viewer: `onLoad`'s

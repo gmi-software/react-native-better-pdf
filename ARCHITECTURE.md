@@ -42,6 +42,7 @@ package/
     PdfView.tsx                    public component (wrapper over the host component)
     PdfCache.ts                    public cache API: AbortSignal, PdfDownloadError
     PdfDocument.ts                 public document API: open (AbortSignal, PdfOpenError), close
+    PdfMethodError.ts              methods' rejections: native `[code] message` → PdfMethodError
     source.ts                      PdfSource union (or a list) → native [{ uri, base64, headers, cache options, password }]
     nativeSource.ts                base64 text → native-owned ArrayBuffer (once per distinct text)
   test/base64/                     the C++ and Swift base64 decoders against shared cases, and each other
@@ -56,6 +57,7 @@ package/
     DocumentSetLoader.swift        the view's sources in parallel; several assembled into one PDFDocument
     DisplayedDocument.swift        the displayed document and its sources (files, passwords, first pages)
     PdfLoadFailure.swift           Swift error → PdfError
+    PdfMethodFailure.swift         a method's rejection as `[code] message`
     DocumentCache.swift            fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.swift       copies on disk: session/persistent dirs, metadata, pins
     SharedDownload.swift           one URLSession request per copy, conditional with a copy
@@ -93,6 +95,7 @@ package/
     DocumentReads.kt               outline, metadata, page sizes, page images on duplicated FDs
                                    (view session and document)
     PageImageRequest.kt            renderPage validation and file write (view and document)
+    PdfMethodException.kt          a method's rejection as `[code] message`
     outline/                       bounded PDF parser: outline, page tree, /Info (PdfDate)
   android/src/main/cpp/
     cpp-adapter.cpp                JNI_OnLoad: Nitro's natives, then NativeBase64Document's and NativePageCoverage's

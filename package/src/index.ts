@@ -5,6 +5,7 @@ export type { NavigationOptions, PdfViewProps, PdfViewRef } from './PdfView';
 export { PdfCache } from './PdfCache';
 export { PdfDocument } from './PdfDocument';
 export { PdfDownloadError } from './PdfDownloadError';
+export { PdfMethodError } from './PdfMethodError';
 export { PdfOpenError } from './PdfOpenError';
 export type { PdfDownloadOptions } from './types/PdfDownloadOptions';
 export type {
@@ -44,6 +45,7 @@ export type { PdfLoadProgressEvent } from './types/PdfLoadProgressEvent';
 export type { PdfOpenOptions } from './types/PdfOpenOptions';
 export type { PdfOutlineItem } from './types/PdfOutlineItem';
 export type { PdfImageFormat } from './types/PdfImageFormat';
+export type { PdfMethodErrorCode } from './types/PdfMethodErrorCode';
 export type { PdfPageChangeEvent } from './types/PdfPageChangeEvent';
 export type { PdfPageImage } from './types/PdfPageImage';
 export type { PdfPageSize } from './types/PdfPageSize';

@@ -8,6 +8,7 @@ struct DisplayedDocument {
   let document: PDFDocument
   /// In source order.
   let sources: [DisplayedSource]
+  let lifetime = DocumentLifetime()
 
   /// The sources' documents shown as one: a lone source's own document, or
   /// an empty `ColorSchemeDocument` with every source's pages inserted in
@@ -56,6 +57,19 @@ struct DisplayedDocument {
       return nil
     }
     return (source.file, page - source.file.firstPage)
+  }
+}
+
+/// Ended when the view lets go of its document: a new `source`, or the
+/// view closing.
+final class DocumentLifetime {
+  private let lock = NSLock()
+  private var ended = false
+
+  var hasEnded: Bool { lock.withLock { ended } }
+
+  func end() {
+    lock.withLock { ended = true }
   }
 }
 

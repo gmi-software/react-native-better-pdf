@@ -33,8 +33,8 @@ For an overview of what each platform supports, see the
   that page, copying ends the selection (as in a text field), dragging a
   handle to the edge does not scroll, and a handle dragged past the other
   end stops at the first character.
-- **Outline (`getOutline`)**: on Android, encrypted documents reject (their
-  titles are encrypted). iOS (PDFKit) leaves PDF 1.1 named destinations
+- **Outline (`getOutline`)**: on Android, encrypted documents reject with
+  `not-supported` (their titles are encrypted). iOS (PDFKit) leaves PDF 1.1 named destinations
   (`/Dest /name`) without a page.
 - **Metadata (`PdfDocument.getMetadata`)**: on Android, encrypted documents
   reject, like the outline. XMP metadata is not read, only the information

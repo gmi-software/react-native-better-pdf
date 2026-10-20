@@ -75,6 +75,9 @@ each page. The viewer adds no safe-area insets on either platform, like
 | `search(query)` / `searchNext()` / `searchPrevious()` / `clearSearch()` | Full-text search. `search` is ignored before `onLoad` |
 | `getStats()` | Render and cache statistics, for diagnostics |
 
+The promise methods reject with a `PdfMethodError`; see
+[Method errors](#method-errors).
+
 `goToPage`, `zoomTo` and `goToViewport` ignore `NaN` and `±Infinity`, e.g.
 `goToPage(Number(text) - 1)` while a page field holds a letter. A fractional
 page is rounded to the nearest page on both platforms: `goToPage(1.6)` opens
@@ -115,6 +118,7 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 | `PdfCache` | Stored downloads: `download()`, `getEntry()`, `remove()`, `getByteSize()`, `clear()` |
 | `PdfOpenError` | Rejection of `PdfDocument.open`, with the view's error `code` |
 | `PdfDownloadError` | Rejection of `PdfCache.download`, with a `code` and `httpStatus` |
+| `PdfMethodError` | Rejection of the ref's promise methods and `PdfDocument`'s reads, with a `code` |
 
 ## Errors
 
@@ -130,6 +134,29 @@ carries the platform error for logging. Load failures carry
 `error.sourceIndex`, the source that could not be loaded (`0` for a single
 source; unset when the set failed as a whole, as when Android runs out of
 memory laying out many sources' pages).
+
+### Method errors
+
+The ref's promise methods (`getOutline`, `getPageSizes`, `renderPage`,
+`print`, `getFormFields`, `setFormFieldValues`, `exportDocument`) and
+`PdfDocument`'s reads reject with a `PdfMethodError`. Its `code`
+(`PdfMethodErrorCode`) is stable and identical on both platforms:
+
+| Code | When |
+| --- | --- |
+| `not-loaded` | Before `onLoad`, also while a new `source` loads; before the view mounts |
+| `closed` | `PdfDocument` after `close()`; the view closed or its `source` changed while the call waited for its turn (a call already running finishes) |
+| `invalid-argument` | `renderPage`: a page outside the document, a `width` outside 1–4096 px, an image over 4096 × 4096 px. `setFormFieldValues`: an unknown field, a value its type does not take, text over its maximum length, an option it does not have. `exportDocument`: a `filePath` that is a directory, the displayed file or in the download cache |
+| `not-supported` | Several sources (`print`, the form methods, `exportDocument`); a device that cannot print (iOS); filling forms on Android below 15 without SDK extension 13; selecting several options of a list box on iOS; clearing a radio group that cannot be turned off on Android; the outline and metadata of encrypted documents on Android |
+| `not-permitted` | The document does not permit printing (iOS); a read-only form field |
+| `busy` | A print dialog of the view is open; on Android, the app is not in the foreground |
+| `io-error` | A file could not be read or written: a copy of the document, an export, a page image. The print job failed |
+| `invalid-pdf` | The outline, metadata or form could not be parsed |
+| `out-of-memory` | Out of memory, e.g. while rendering a page image |
+| `unknown` | Anything else; see `nativeDescription` |
+
+`error.message` is one sentence and may change; `error.nativeDescription`
+is the platform's text (on Android with the stack trace), for logging.
 
 ## Types
 

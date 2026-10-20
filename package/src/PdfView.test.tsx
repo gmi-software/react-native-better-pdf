@@ -130,6 +130,7 @@ mock.module(
 
 const { PdfView } = await import('./PdfView');
 const { PdfPageOverlay } = await import('./PdfPageOverlay');
+const { PdfMethodError } = await import('./PdfMethodError');
 import type { PdfViewRef } from './PdfView';
 import type { PdfViewStats } from './types/PdfViewStats';
 
@@ -947,5 +948,51 @@ describe('PdfView', () => {
         children: [{ title: 'Section', page: 2, children: [] }],
       },
     ]);
+  });
+
+  test('promise methods reject with coded PdfMethodErrors', async () => {
+    const ref = createRef<PdfViewRef>();
+    render(<PdfView ref={ref} source={{ uri: 'x' }} />);
+    const view = ref.current!;
+    const rejections = () =>
+      Promise.all(
+        [
+          view.getOutline(),
+          view.getPageSizes(),
+          view.renderPage(0, { width: 100 }),
+          view.print(),
+          view.getFormFields(),
+          view.setFormFieldValues({ name: 'Anna' }),
+          view.exportDocument(),
+        ].map((call) => call.catch((error: unknown) => error)),
+      );
+    for (const error of await rejections()) {
+      expect(error).toBeInstanceOf(PdfMethodError);
+      expect(error).toMatchObject({ code: 'not-loaded' });
+    }
+    const raw =
+      'com.margelo.nitro.betterpdf.PdfMethodException: [not-supported] Printing is not available with several sources\n\tat x.y(Z.kt:1)';
+    const reject = () => Promise.reject(new Error(raw));
+    (lastHost().hybridRef as { f: (instance: object) => void }).f({
+      ...nativeInstance,
+      getOutline: reject,
+      getPageSizes: reject,
+      renderPage: reject,
+      print: reject,
+      getFormFields: reject,
+      setFormFieldValues: reject,
+      exportDocument: reject,
+    });
+    for (const error of await rejections()) {
+      expect(error).toMatchObject({
+        code: 'not-supported',
+        message: 'Printing is not available with several sources',
+        nativeDescription: raw,
+      });
+    }
+
+    await expect(
+      view.setFormFieldValues({ age: 42 } as unknown as Record<string, string>),
+    ).rejects.toMatchObject({ code: 'invalid-argument' });
   });
 });

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Matrix
 import android.graphics.Rect
 import android.os.ParcelFileDescriptor
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import com.margelo.nitro.betterpdf.TextSelectionQuery.Boundary
 import com.margelo.nitro.betterpdf.outline.FormFieldEntry
 import org.junit.Assert.assertEquals
@@ -114,7 +115,7 @@ class PdfDocumentSessionTest {
     var fields: Result<List<FormFieldEntry>>? = null
     session.readFormFields { fields = it }
     runUntil("the form read to settle") { fields != null }
-    assertTrue(fields!!.isFailure)
+    assertEquals(Code.CLOSED, (fields!!.exceptionOrNull() as PdfMethodException).code)
   }
 
   @Test
@@ -167,7 +168,7 @@ class PdfDocumentSessionTest {
     val settled = List(5) { results.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS) ?: throw AssertionError("Timed out waiting for a read") }.toMap()
     // The read in progress finishes.
     assertEquals(Result.success(0), settled[0])
-    for (index in 1..4) assertTrue(settled.getValue(index).exceptionOrNull() is IllegalStateException)
+    for (index in 1..4) assertEquals(Code.CLOSED, (settled.getValue(index).exceptionOrNull() as PdfMethodException).code)
     assertEquals(listOf(0), ran.toList())
   }
 

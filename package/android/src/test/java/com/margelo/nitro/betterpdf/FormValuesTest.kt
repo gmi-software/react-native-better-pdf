@@ -1,5 +1,6 @@
 package com.margelo.nitro.betterpdf
 
+import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import com.margelo.nitro.betterpdf.outline.FormFieldEntry
 import com.margelo.nitro.betterpdf.outline.FormFieldKind
 import com.margelo.nitro.betterpdf.outline.FormWidgetEntry
@@ -60,20 +61,24 @@ class FormValuesTest {
 
   @Test
   fun `values a field does not take are rejected before any edit`() {
+    fun rejection(plan: () -> Unit) = assertThrows(PdfMethodException::class.java) { plan() }.code
     val text = listOf(PlacedWidget(0, widget(0, FormWidget.Type.TEXT)))
-    assertThrows(FormValueException::class.java) {
-      field(FormFieldKind.TEXT, flags = FormFieldEntry.FLAG_READ_ONLY).plannedEdits(value(text = "x"), text)
-    }
-    assertThrows(FormValueException::class.java) { field(FormFieldKind.TEXT).plannedEdits(value(isChecked = true), text) }
-    assertThrows(FormValueException::class.java) { field(FormFieldKind.TEXT, maxLength = 2).plannedEdits(value(text = "abc"), text) }
+    assertEquals(
+      Code.NOT_PERMITTED,
+      rejection { field(FormFieldKind.TEXT, flags = FormFieldEntry.FLAG_READ_ONLY).plannedEdits(value(text = "x"), text) },
+    )
+    assertEquals(Code.INVALID_ARGUMENT, rejection { field(FormFieldKind.TEXT).plannedEdits(value(isChecked = true), text) })
+    assertEquals(Code.INVALID_ARGUMENT, rejection { field(FormFieldKind.TEXT, maxLength = 2).plannedEdits(value(text = "abc"), text) })
     val buttons = listOf(PlacedWidget(0, widget(0, FormWidget.Type.RADIO, "true")))
-    assertThrows(FormValueException::class.java) {
-      field(FormFieldKind.RADIO, options = listOf("basic")).plannedEdits(value(text = "gold"), buttons)
-    }
+    assertEquals(
+      Code.INVALID_ARGUMENT,
+      rejection { field(FormFieldKind.RADIO, options = listOf("basic")).plannedEdits(value(text = "gold"), buttons) },
+    )
     // PDFium keeps a selected button of a group that cannot be turned off.
-    assertThrows(FormValueException::class.java) {
-      field(FormFieldKind.RADIO, flags = FormFieldEntry.FLAG_NO_TOGGLE_TO_OFF, options = listOf("basic")).plannedEdits(value(), buttons)
-    }
-    assertThrows(FormValueException::class.java) { field(FormFieldKind.SIGNATURE).plannedEdits(value(text = "x"), text) }
+    assertEquals(
+      Code.NOT_SUPPORTED,
+      rejection { field(FormFieldKind.RADIO, flags = FormFieldEntry.FLAG_NO_TOGGLE_TO_OFF, options = listOf("basic")).plannedEdits(value(), buttons) },
+    )
+    assertEquals(Code.INVALID_ARGUMENT, rejection { field(FormFieldKind.SIGNATURE).plannedEdits(value(text = "x"), text) })
   }
 }

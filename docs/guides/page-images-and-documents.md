@@ -68,4 +68,5 @@ try {
   once renders them one at a time.
 - **Call `close()`** when done: an open document keeps its file open until
   then (or until the JS garbage collector releases it, which can take
-  long). Calls after `close()` reject.
+  long). Calls after `close()` reject with a `PdfMethodError` whose `code`
+  is `closed`.

@@ -30,16 +30,16 @@ internal class PageImageRequest private constructor(
     private const val DEFAULT_JPEG_QUALITY = 0.9
 
     /**
-     * @throws IllegalArgumentException for a page outside the document or a
+     * @throws PdfMethodException for a page outside the document or a
      *   width outside 1–4096 pixels (rejected rather than clamped).
      */
     fun of(page: Double, pageCount: Int, options: PdfRenderPageOptions): PageImageRequest {
-      require(page.isFinite() && page == Math.floor(page) && page >= 0 && page < pageCount) {
+      requireArgument(page.isFinite() && page == Math.floor(page) && page >= 0 && page < pageCount) {
         "Page $page is outside the document (0–${pageCount - 1})"
       }
       val width = options.width
-      require(width.isFinite() && width >= 1 && width <= MAX_WIDTH) {
-        "width must be 1–$MAX_WIDTH pixels, got $width"
+      requireArgument(width.isFinite() && width >= 1 && width <= MAX_WIDTH) {
+        "width must be 1–${MAX_WIDTH.toInt()} pixels, got $width"
       }
       return PageImageRequest(
         page = page.toInt(),
