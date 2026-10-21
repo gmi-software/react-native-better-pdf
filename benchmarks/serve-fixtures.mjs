@@ -13,6 +13,10 @@
 // `GET /__control/offline` makes the server drop every other connection
 // without answering (a device without network, as far as the app can tell)
 // until `GET /__control/online`.
+//
+// Redirects: `/__redirect?to=<url>` answers 302 to `<url>`, and
+// `/__redirect-loop` redirects to itself. `?require=a,b` answers 401 unless
+// the request has all of these headers, `?forbid=a,b` 403 if it has any.
 
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
@@ -59,6 +63,24 @@ createServer((request, response) => {
       `${request.method} ${url.pathname}${url.search} → dropped (offline)`,
     );
     request.socket.destroy();
+    return;
+  }
+  if (url.pathname === '/__redirect' || url.pathname === '/__redirect-loop') {
+    const location = url.searchParams.get('to') ?? url.pathname;
+    response.writeHead(302, { Location: location }).end();
+    console.log(`${request.method} ${url.pathname}${url.search} → ${location}`);
+    return;
+  }
+  const names = (key) =>
+    (url.searchParams.get(key) ?? '').split(',').filter(Boolean);
+  const status = names('require').some((n) => !(n in request.headers))
+    ? 401
+    : names('forbid').some((n) => n in request.headers)
+      ? 403
+      : null;
+  if (status !== null) {
+    response.writeHead(status).end();
+    console.log(`${request.method} ${url.pathname}${url.search} → ${status}`);
     return;
   }
   const name = basename(decodeURIComponent(url.pathname));

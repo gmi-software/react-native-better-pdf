@@ -31,6 +31,10 @@ export interface PdfUriSource {
    * ASCII (encode anything else yourself): Android sends other characters
    * as UTF-8, iOS as Latin-1 and cuts the value at the first character
    * outside it.
+   *
+   * They go to the URL's origin only: after a redirect to another scheme,
+   * host or port (http to https included), the rest of the download is
+   * sent without them.
    */
   headers?: Readonly<Record<string, string>>;
   /**

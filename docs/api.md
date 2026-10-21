@@ -129,6 +129,9 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 `invalid-password` · `unsupported-pdf` · `page-render-failed` (`error.page`) ·
 `out-of-memory` (`error.page` while rendering)
 
+A redirect that is not followed is an `http-error` with the redirect's
+status; see [Redirects](guides/sources-and-loading.md#redirects).
+
 `error.message` is human-readable and may change; `error.nativeDescription`
 carries the platform error for logging. Load failures carry
 `error.sourceIndex`, the source that could not be loaded (`0` for a single

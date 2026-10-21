@@ -90,7 +90,7 @@ users see.
 | --- | --- | --- |
 | `source={{ uri }}` | `source={{ uri }}` | `http(s)://`, `file://`, `content://` (Android). |
 | `source={require('./x.pdf')}` | `source={require('./x.pdf')}` | Same; no Metro config needed. |
-| `source.headers` | `source.headers` | Same. |
+| `source.headers` | `source.headers` | Same, but sent to the URL's origin only: a redirect to another origin drops them. See [Redirects](guides/sources-and-loading.md#redirects). |
 | `source.cache: true` | `source.cache: 'persistent'` | Kept across launches, never purged by the OS. See [Caching](#caching). |
 | `source.cacheFileName` | `source.cacheKey` | Identifies the copy instead of the URL and headers. |
 | `source.expiration` (seconds) | `source.maxAgeMs` (milliseconds) | An older copy is revalidated with the server (304 keeps it) instead of deleted, and still shown offline. |

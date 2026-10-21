@@ -27,6 +27,20 @@ before its `password` option.
 break or another control character (tab is fine): such a source fails with
 `invalid-source` on both platforms, before anything is sent.
 
+### Redirects
+
+Both platforms follow redirects the same way:
+
+- At most 10; more fail with `network-error`.
+- From http to https, never from https to http or to anything but
+  http(s): that fails with `http-error`, and `httpStatus` is the
+  redirect's status (301, 302, 303, 307 or 308).
+- `headers` go to the URL's origin (scheme, host and port) only,
+  `Authorization` included. After a redirect to another origin, the rest of
+  the download is sent without them, even if a later redirect comes back.
+  http to https on the same host is another origin too: when you send
+  credentials, use the https URL.
+
 ## Base64 documents
 
 A document you have as a base64 string — made with pdfmake or pdf-lib, or

@@ -1,0 +1,18 @@
+# Redirects follow one policy on both platforms: the source's headers reach
+# a target on the same origin (Authorization included) and never one on
+# another origin (localhost → 127.0.0.1), and a loop ends with network-error.
+# The fixture server answers 401 / 403 when the target sees the wrong headers.
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+- tapOn: "Viewer"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Redirect, same origin.*" } }
+- extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
+- tapOn: "‹ Back"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Redirect, other origin.*" } }
+- extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
+- tapOn: "‹ Back"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Redirect loop.*" } }
+- extendedWaitUntil: { visible: "network-error", timeout: 30000 }
+- assertVisible: ".*more than 10 redirects.*"
+- tapOn: "‹ Back"

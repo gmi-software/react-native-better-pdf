@@ -7,6 +7,7 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.nio.file.Files
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.ExecutorService
@@ -30,6 +31,9 @@ class DocumentCacheTest {
   val temp = TemporaryFolder()
 
   private lateinit var server: TestServer
+
+  /** Another origin, for redirects. */
+  private lateinit var other: TestServer
   private lateinit var executor: ExecutorService
   private lateinit var cache: DocumentCache
   private val clock = AtomicLong(1_000_000)
@@ -42,6 +46,7 @@ class DocumentCacheTest {
   @Before
   fun setUp() {
     server = TestServer()
+    other = TestServer()
     executor = Executors.newCachedThreadPool()
     cache = newCache()
   }
@@ -49,6 +54,7 @@ class DocumentCacheTest {
   @After
   fun tearDown() {
     server.stop()
+    other.stop()
     executor.shutdownNow()
   }
 
@@ -224,6 +230,89 @@ class DocumentCacheTest {
 
   // endregion
 
+  // region Redirects
+
+  @Test
+  fun `a redirect within the origin keeps the caller's headers`() {
+    server.redirects["/old.pdf"] = "/doc.pdf"
+    fetch(source(server.url("/old.pdf"), headers = credentials)).ready()
+
+    assertEquals(listOf("/old.pdf", "/doc.pdf"), server.requests.map { it.path })
+    assertEquals("Bearer t", server.requests[1].headers["authorization"])
+    assertEquals("secret", server.requests[1].headers["x-api-key"])
+  }
+
+  @Test
+  fun `a redirect to another origin drops the caller's headers for the rest of the chain`() {
+    server.redirects["/away.pdf"] = other.url("/back.pdf")
+    other.redirects["/back.pdf"] = server.url("/doc.pdf")
+    fetch(source(server.url("/away.pdf"), headers = credentials)).ready()
+
+    val sent = listOf(other.requests.single(), server.requests[1])
+    assertEquals(listOf("/back.pdf", "/doc.pdf"), sent.map { it.path })
+    for (request in sent) {
+      assertNull(request.headers["authorization"])
+      assertNull(request.headers["x-api-key"])
+    }
+  }
+
+  @Test
+  fun `a redirected revalidation still sends the copy's ETag`() {
+    server.redirects["/away.pdf"] = other.url("/doc.pdf")
+    val first = fetch(source(server.url("/away.pdf"), headers = credentials)).ready()
+    clock.addAndGet(5_000)
+    val second = fetch(source(server.url("/away.pdf"), headers = credentials, maxAgeMs = 0.0)).ready()
+
+    assertEquals("\"v1\"", other.requests[1].ifNoneMatch)
+    assertEquals(first.copy.file, second.copy.file)
+    assertEquals(clock.get(), second.copy.metadata.validatedAtMs)
+  }
+
+  @Test
+  fun `ten redirects are followed, the eleventh fails without falling back to the stored copy`() {
+    redirectChain(hops = 10)
+    fetch(source(server.url("/hop0.pdf"))).ready()
+
+    redirectChain(hops = 11)
+    clock.addAndGet(5_000)
+    val failure = fetch(source(server.url("/hop0.pdf"), maxAgeMs = 0.0), allowStale = true).failure()
+    assertEquals(PdfErrorCode.NETWORK_ERROR, failure.code)
+    assertEquals(11 + 11, server.requests.size)
+  }
+
+  @Test
+  fun `a redirect that is not followed fails with http-error and its status`() {
+    fetch(source()).ready()
+    server.redirects["/doc.pdf"] = "ftp://127.0.0.1/doc.pdf"
+
+    val failure = fetch(source(maxAgeMs = 0.0), allowStale = true).failure()
+    assertEquals(PdfErrorCode.HTTP_ERROR, failure.code)
+    assertEquals(302, failure.httpStatus)
+  }
+
+  @Test
+  fun `cancelling during a redirect stops the request in progress`() {
+    server.redirects["/away.pdf"] = other.url("/doc.pdf")
+    val gate = other.hold()
+    val recorder = fetch(source(server.url("/away.pdf")))
+    other.awaitRequests(1)
+    recorder.subscription.cancel()
+    gate.countDown()
+    awaitIdle()
+
+    assertFalse(recorder.result.isDone)
+    assertNull(cache.find(source(server.url("/away.pdf"))))
+    assertEquals(0, partialDirectory.listFiles()?.size ?: 0)
+  }
+
+  /** `/hop0.pdf` → … → `/hop<hops - 1>.pdf` → `/doc.pdf`. */
+  private fun redirectChain(hops: Int) {
+    server.redirects.clear()
+    for (hop in 0 until hops) server.redirects["/hop$hop.pdf"] = if (hop + 1 < hops) "/hop${hop + 1}.pdf" else "/doc.pdf"
+  }
+
+  // endregion
+
   // region Sharing and cancellation
 
   @Test
@@ -361,7 +450,10 @@ class DocumentCacheTest {
 
   private class Ready(val copy: CachedCopy, val isStale: Boolean)
 
-  private class Request(val ifNoneMatch: String?)
+  /** [headers] by lowercase name. */
+  private class Request(val path: String, val headers: Map<String, String>) {
+    val ifNoneMatch get() = headers["if-none-match"]
+  }
 
   private class Recorder : DocumentCache.Listener {
     val result = CompletableFuture<Any>()
@@ -403,6 +495,9 @@ class DocumentCacheTest {
     /** Answer every request with this status and no body. */
     @Volatile var status: Int? = null
 
+    /** Paths answered with `302` and this `Location`. */
+    val redirects = ConcurrentHashMap<String, String>()
+
     @Volatile private var gate: CountDownLatch? = null
     @Volatile private var refusing = false
     val requests = CopyOnWriteArrayList<Request>()
@@ -428,17 +523,19 @@ class DocumentCacheTest {
     private fun serve(client: Socket) = client.use {
       try {
         val reader = client.getInputStream().bufferedReader(Charsets.ISO_8859_1)
-        reader.readLine() ?: return
+        val path = reader.readLine()?.split(' ')?.getOrNull(1) ?: return
         val headers = generateSequence { reader.readLine()?.takeIf { it.isNotEmpty() } }
           .associate { it.substringBefore(':').trim().lowercase() to it.substringAfter(':').trim() }
         val ifNoneMatch = headers["if-none-match"]
-        requests += Request(ifNoneMatch)
+        requests += Request(path, headers)
         gate?.await(5, TimeUnit.SECONDS)
         val forced = status
         val currentEtag = etag
+        val location = redirects[path]
         val output = client.getOutputStream()
         when {
           forced != null -> output.write(head(forced, null, 0))
+          location != null -> output.write(head(302, null, 0, location))
           currentEtag != null && ifNoneMatch == currentEtag -> output.write(head(304, currentEtag, null))
           else -> {
             val bytes = body
@@ -452,10 +549,11 @@ class DocumentCacheTest {
       }
     }
 
-    private fun head(status: Int, etag: String?, contentLength: Int?): ByteArray =
+    private fun head(status: Int, etag: String?, contentLength: Int?, location: String? = null): ByteArray =
       buildString {
         append("HTTP/1.1 $status Status\r\n")
         etag?.let { append("ETag: $it\r\n") }
+        location?.let { append("Location: $it\r\n") }
         contentLength?.let { append("Content-Length: $it\r\n") }
         append("Connection: close\r\n\r\n")
       }.toByteArray(Charsets.ISO_8859_1)
@@ -489,6 +587,8 @@ class DocumentCacheTest {
   }
 
   private companion object {
+    val credentials = mapOf("Authorization" to "Bearer t", "X-Api-Key" to "secret")
+
     fun pdf(version: String) = "%PDF-1.4\n% $version\n%%EOF\n".toByteArray()
   }
 }

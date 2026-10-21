@@ -26,7 +26,9 @@ const source: PdfUriSource = {
 - **Offline**: when the server cannot be reached (no connection, no answer
   within 10 seconds, or a 5xx response), the view shows the stored copy and
   `onLoad` reports `isStale: true`. Without a copy it fails with
-  `network-error`. A 4xx response is an error even with a copy.
+  `network-error`. A 4xx response is an error even with a copy, and so are
+  a redirect that is not followed and more than 10 redirects; see
+  [Redirects](sources-and-loading.md#redirects).
 - **`cacheKey`** identifies the copy instead of `uri` and `headers`. Set it
   when they change between opens — signed URLs, rotating tokens — or the
   copy is not found again. Sources with the same `cacheKey` are the same

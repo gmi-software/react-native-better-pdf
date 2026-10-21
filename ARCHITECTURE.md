@@ -438,7 +438,8 @@ fetch(source) ──► stored copy fresh for source.maxAgeMs? ──yes──�
           SharedDownload for the key in flight? ──yes──► join it
                       │ no
                       ▼
-          GET (conditional with the copy's ETag / Last-Modified)
+          GET (conditional with the copy's ETag / Last-Modified),
+          following redirects by RedirectPolicy
              304 → mark validated · 200 + %PDF- → rename into place
              unreachable / 5xx → view: stored copy as stale · PdfCache: error
 ```
@@ -457,10 +458,21 @@ fetch(source) ──► stored copy fresh for source.maxAgeMs? ──yes──�
   old ones and removal unlinks, so a displayed document keeps reading its
   file. iOS views open a pin (hard link in `BetterPdf/open`) because they
   re-open the displayed file by path for outline, page sizes and images.
+- **Redirects:** `RedirectPolicy` (Kotlin and Swift, same rules): at most
+  10 (then `network-error`), never https → http (`http-error` with the
+  3xx), caller headers only until the first hop to another origin; the
+  conditional headers go on every hop. Neither platform's own handling
+  fits: AOSP's OkHttp refuses scheme changes and sends every header but
+  `Authorization` to other hosts, so Android follows redirects itself
+  (`instanceFollowRedirects = false`, one connection per hop, each one
+  reachable by `cancel()`); CFNetwork drops `Authorization` on every
+  redirect and keeps the other headers on every host, so iOS rebuilds each
+  redirected request in a task delegate.
 - **Waiting:** one subscriber per view load or `PdfCache.download()`.
   Cancelling removes the subscriber; the request stops when none remain.
-- **Tests:** `DocumentCacheTest` (JVM, local HTTP server) and the
-  `viewer-offline` e2e flow on both platforms.
+- **Tests:** `DocumentCacheTest` (JVM, local HTTP server),
+  `RedirectPolicyTest`, and the `viewer-offline` and `viewer-redirects` e2e
+  flows on both platforms.
 
 ## Known platform constraints
 
