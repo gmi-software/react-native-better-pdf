@@ -1,58 +1,64 @@
 import { describe, expect, test } from 'bun:test';
 import {
-  normalizeSource,
-  normalizeSources,
+  inspectSources,
+  normalizeUriSource,
   sourceKey,
   sourcesKey,
+  validateSourceItem,
 } from './source';
 
 const resolveAsset = (asset: number) =>
   asset === 7 ? { uri: 'http://localhost:8081/assets/doc.pdf' } : null;
 
-describe('normalizeSource', () => {
+const validatedSource = (source: unknown) => {
+  const result = validateSourceItem(source, resolveAsset);
+  if (!result.ok) throw new Error(result.error);
+  return result.source;
+};
+
+describe('validateSourceItem', () => {
   test('passes uri sources through', () => {
-    expect(
-      normalizeSource({ uri: 'https://x.test/a.pdf' }, resolveAsset),
-    ).toEqual({
+    expect(validatedSource({ uri: 'https://x.test/a.pdf' })).toEqual({
       uri: 'https://x.test/a.pdf',
     });
   });
 
   test('copies headers so later mutation of the caller object cannot leak in', () => {
     const headers: Record<string, string> = { Authorization: 'Bearer 1' };
-    const normalized = normalizeSource(
-      { uri: 'https://x.test/a.pdf', headers },
-      resolveAsset,
-    );
+    const normalized = validatedSource({
+      uri: 'https://x.test/a.pdf',
+      headers,
+    });
     headers.Authorization = 'Bearer 2';
     expect(normalized.headers).toEqual({ Authorization: 'Bearer 1' });
   });
 
   test('maps filePath to a plain path uri', () => {
-    expect(
-      normalizeSource({ filePath: '/data/doc.pdf' }, resolveAsset),
-    ).toEqual({
+    expect(validatedSource({ filePath: '/data/doc.pdf' })).toEqual({
       uri: '/data/doc.pdf',
     });
   });
 
+  test('describes a filePath when a URI-only source receives one', () => {
+    expect(() => normalizeUriSource({ filePath: '/a.pdf' } as never)).toThrow(
+      'source must be an object with uri; got an object with filePath',
+    );
+  });
+
   test('resolves required assets', () => {
-    expect(normalizeSource(7, resolveAsset)).toEqual({
+    expect(validatedSource(7)).toEqual({
       uri: 'http://localhost:8081/assets/doc.pdf',
     });
   });
 
   test('passes cache options through and leaves absent ones absent', () => {
     expect(
-      normalizeSource(
-        {
-          uri: 'https://x.test/a.pdf',
-          cache: 'persistent',
-          maxAgeMs: 0,
-          cacheKey: 'doc',
-        },
-        resolveAsset,
-      ),
+      validatedSource({
+        uri: 'https://x.test/a.pdf',
+        cache: 'persistent',
+        maxAgeMs: 0,
+        cacheKey: 'doc',
+      }),
     ).toEqual({
       uri: 'https://x.test/a.pdf',
       cache: 'persistent',
@@ -60,28 +66,26 @@ describe('normalizeSource', () => {
       cacheKey: 'doc',
     });
     expect(
-      Object.keys(
-        normalizeSource({ uri: 'https://x.test/a.pdf' }, resolveAsset),
-      ),
+      Object.keys(validatedSource({ uri: 'https://x.test/a.pdf' })),
     ).toEqual(['uri']);
   });
 
   test('passes base64 through with an empty uri, without copying it', () => {
     const base64 = 'JVBERi0xLjQK';
-    const normalized = normalizeSource({ base64 }, resolveAsset);
+    const normalized = validatedSource({ base64 });
     expect(normalized).toEqual({ uri: '', base64 });
     expect(Object.keys(normalized)).toEqual(['uri', 'base64']);
   });
 
   test('passes an empty base64 string on, for native code to reject', () => {
-    expect(normalizeSource({ base64: '' }, resolveAsset)).toEqual({
+    expect(validatedSource({ base64: '' })).toEqual({
       uri: '',
       base64: '',
     });
   });
 
   test('unresolvable assets become an empty uri, which native reports as invalid-source', () => {
-    expect(normalizeSource(99, resolveAsset)).toEqual({ uri: '' });
+    expect(validatedSource(99)).toEqual({ uri: '' });
   });
 });
 
@@ -130,20 +134,19 @@ describe('sourceKey', () => {
   });
 });
 
-describe('normalizeSources', () => {
+describe('inspectSources', () => {
   test('a single source becomes a list of one, with its password', () => {
     expect(
-      normalizeSources(
-        { uri: 'https://x.test/a.pdf' },
-        undefined,
-        resolveAsset,
-      ),
-    ).toEqual([{ uri: 'https://x.test/a.pdf', password: '' }]);
+      inspectSources({ uri: 'https://x.test/a.pdf' }, undefined, resolveAsset),
+    ).toEqual({
+      status: 'valid',
+      sources: [{ uri: 'https://x.test/a.pdf', password: '' }],
+    });
   });
 
   test("each source keeps its own password, else takes the prop's", () => {
     expect(
-      normalizeSources(
+      inspectSources(
         [
           { uri: 'a', password: 'own' },
           { filePath: '/b', password: '' },
@@ -153,17 +156,20 @@ describe('normalizeSources', () => {
         'prop',
         resolveAsset,
       ),
-    ).toEqual([
-      { uri: 'a', password: 'own' },
-      { uri: '/b', password: '' },
-      { uri: 'c', password: 'prop' },
-      { uri: 'http://localhost:8081/assets/doc.pdf', password: 'prop' },
-    ]);
+    ).toEqual({
+      status: 'valid',
+      sources: [
+        { uri: 'a', password: 'own' },
+        { uri: '/b', password: '' },
+        { uri: 'c', password: 'prop' },
+        { uri: 'http://localhost:8081/assets/doc.pdf', password: 'prop' },
+      ],
+    });
   });
 
   test('a base64 source keeps its text and its own password', () => {
     expect(
-      normalizeSources(
+      inspectSources(
         [
           { base64: 'JVBERi0xLjQK', password: 'own' },
           { base64: 'JVBERi0xLjcK' },
@@ -171,14 +177,20 @@ describe('normalizeSources', () => {
         'prop',
         resolveAsset,
       ),
-    ).toEqual([
-      { uri: '', base64: 'JVBERi0xLjQK', password: 'own' },
-      { uri: '', base64: 'JVBERi0xLjcK', password: 'prop' },
-    ]);
+    ).toEqual({
+      status: 'valid',
+      sources: [
+        { uri: '', base64: 'JVBERi0xLjQK', password: 'own' },
+        { uri: '', base64: 'JVBERi0xLjcK', password: 'prop' },
+      ],
+    });
   });
 
   test('an empty list stays empty (native reports invalid-source)', () => {
-    expect(normalizeSources([], 'prop', resolveAsset)).toEqual([]);
+    expect(inspectSources([], 'prop', resolveAsset)).toEqual({
+      status: 'valid',
+      sources: [],
+    });
   });
 });
 
@@ -197,5 +209,75 @@ describe('sourcesKey', () => {
     expect(sourcesKey([{ uri: 'a' }, { uri: 'b', password: 'p' }])).not.toBe(
       base,
     );
+  });
+});
+
+describe('invalid and empty sources', () => {
+  test('validateSourceItem reports malformed values without throwing', () => {
+    for (const source of [
+      null,
+      undefined,
+      'https://example.com/a.pdf',
+      {},
+      { uri: 42 as never },
+      { uri: 42n } as never,
+    ]) {
+      expect(validateSourceItem(source, resolveAsset).ok).toBe(false);
+    }
+  });
+
+  test('inspectSources classifies null and undefined as empty', () => {
+    expect(inspectSources(null, undefined, resolveAsset)).toEqual({
+      status: 'empty',
+    });
+    expect(inspectSources(undefined, undefined, resolveAsset)).toEqual({
+      status: 'empty',
+    });
+  });
+
+  test('inspectSources reports malformed single sources as invalid with descriptive message', () => {
+    expect(
+      inspectSources('https://example.com/a.pdf', undefined, resolveAsset),
+    ).toEqual({
+      status: 'invalid',
+      message:
+        'source must be a require() result or an object with uri, filePath or base64; got a string',
+      sourceIndex: 0,
+    });
+    expect(inspectSources({}, undefined, resolveAsset)).toEqual({
+      status: 'invalid',
+      message:
+        'source must be a require() result or an object with uri, filePath or base64; got {}',
+      sourceIndex: 0,
+    });
+    expect(
+      inspectSources({ uri: 42 as never }, undefined, resolveAsset),
+    ).toEqual({
+      status: 'invalid',
+      message:
+        'source must be a require() result or an object with uri, filePath or base64; got { uri: 42 }',
+      sourceIndex: 0,
+    });
+  });
+
+  test('inspectSources reports malformed list items with sourceIndex', () => {
+    expect(inspectSources([null as never], undefined, resolveAsset)).toEqual({
+      status: 'invalid',
+      message:
+        'source must be a require() result or an object with uri, filePath or base64; got null',
+      sourceIndex: 0,
+    });
+    expect(
+      inspectSources(
+        [{ uri: 'https://x.test/a.pdf' }, 'bad' as never],
+        undefined,
+        resolveAsset,
+      ),
+    ).toEqual({
+      status: 'invalid',
+      message:
+        'source must be a require() result or an object with uri, filePath or base64; got a string',
+      sourceIndex: 1,
+    });
   });
 });

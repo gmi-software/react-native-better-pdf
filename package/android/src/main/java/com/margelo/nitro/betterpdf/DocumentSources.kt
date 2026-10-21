@@ -78,7 +78,7 @@ internal class DocumentSources(
    * reported. Returns once no source is resolving any more.
    */
   fun resolveAll(progress: SourcesProgress) {
-    if (segments.isEmpty()) throw PdfFailure(PdfErrorCode.INVALID_SOURCE, "No PDF source was given", sourceIndex = 0)
+    if (segments.isEmpty()) throw PdfFailure(PdfErrorCode.INVALID_SOURCE, "No PDF source was given")
     val failure = AtomicReference<Throwable?>()
     fun resolveOrCancel(segment: Segment) {
       try {

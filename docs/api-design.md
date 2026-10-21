@@ -185,7 +185,7 @@ type PdfSource =
 
 | Prop           | Type                  | Default | Notes                                                                 |
 | -------------- | --------------------- | ------- | --------------------------------------------------------------------- |
-| `source`       | `PdfSource`           | —       | Required.                                                             |
+| `source`       | `PdfSource \| PdfSource[] \| null` | —       | Optional.                                                             |
 | `password`     | `string`              | —       | Changing it reloads the document (downloaded file is reused).         |
 | `initialPage`  | `number`              | `0`     | Applied once per loaded document. Changing it later has no effect.    |
 | `initialScale` | `number`              | `1`     | Like `initialPage`, for zoom (relative to the fitted page). Not an `onScaleChange`. |

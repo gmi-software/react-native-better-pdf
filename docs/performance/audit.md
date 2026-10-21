@@ -36,7 +36,7 @@ Screen
 
 | Stage | Thread | Allocations | Copies / serialization | Sync / locks | Lifecycle events | Repeated work |
 | --- | --- | --- | --- | --- | --- | --- |
-| `PdfView` render | JS | `normalizeSource` object + `sourceKey` string per parent render | none unless value changed | — | mount / unmount | only when the *parent* re-renders; the component has no state |
+| `PdfView` render | JS | `inspectSources` result + `sourceKey` string per parent render | none unless value changed | — | mount / unmount | only when the *parent* re-renders; the component has no state |
 | Prop transfer | JS → UI | `ReactProp` entry per *changed* prop | `NativePdfSource` converted once per change | Fabric commit | — | none: identity-stable source & callbacks (tested) |
 | Load (Android) | worker | FD, `PdfRenderer`, **page-size list** | — | `PdfProcessor.sPdfiumLock` (static, process-wide) | `onOpened` → `onLoad` | **all pages opened once to read sizes** (see B1) |
 | Load (iOS) | background queue | `PDFDocument` | — | — | `onLoad` | PDFKit parses lazily |
@@ -102,7 +102,7 @@ direction.
 - Stabilized (each crosses the Nitro boundary, where a new identity costs a
   native setter call): source (by value), the three event callbacks, and
   `hybridRef`. Covered by `src/PdfView.test.tsx`.
-- Not memoized, on purpose: `normalizeSource`/`sourceKey` run per parent
+- Not memoized, on purpose: `inspectSources`/`sourceKey` run per parent
   render. They are O(headers) string work, cheaper than a memo cache check
   would save.
 - One `useLayoutEffect` without deps (assigns the latest handlers to a ref):

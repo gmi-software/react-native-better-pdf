@@ -5,7 +5,7 @@ import { buildOutlineTree } from './outline';
 import { toNativeSource } from './nativeSource';
 import { PdfMethodError, withMethodErrors } from './PdfMethodError';
 import { PdfOpenError } from './PdfOpenError';
-import { normalizeSource, sourcePassword, type PdfSource } from './source';
+import { sourcePassword, validateSourceItem, type PdfSource } from './source';
 import type { BetterPdfDocument } from './specs/BetterPdfDocument.nitro';
 import type { PdfDocumentMetadata } from './types/PdfDocumentMetadata';
 import type { PdfOpenOptions } from './types/PdfOpenOptions';
@@ -74,12 +74,19 @@ export class PdfDocument {
   ): Promise<PdfDocument> {
     const { password, onProgress, signal } = options;
     if (signal?.aborted) throw abortReason(signal);
+    const validation = validateSourceItem(source, Image.resolveAssetSource);
+    if (!validation.ok) {
+      throw new PdfOpenError({
+        code: 'invalid-source',
+        message: validation.error,
+      });
+    }
     const native =
       NitroModules.createHybridObject<BetterPdfDocument>('BetterPdfDocument');
     // Async, so that a synchronous throw becomes a rejection too.
     const result = (async () =>
       native.open(
-        toNativeSource(normalizeSource(source, Image.resolveAssetSource)),
+        toNativeSource(validation.source),
         sourcePassword(source) ?? password,
         untilAborted(onProgress, signal),
       ))();

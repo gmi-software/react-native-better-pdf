@@ -207,4 +207,38 @@ describe('PdfCache', () => {
     await PdfCache.clear();
     expect(await PdfCache.getByteSize()).toBe(42);
   });
+
+  test('download rejects with PdfDownloadError invalid-source for null, undefined and malformed values', async () => {
+    for (const invalid of [
+      null,
+      undefined,
+      'https://example.com/a.pdf',
+      {},
+      { uri: 42 },
+    ]) {
+      const error = await PdfCache.download(invalid as never).catch(
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(PdfDownloadError);
+      expect((error as InstanceType<typeof PdfDownloadError>).code).toBe(
+        'invalid-source',
+      );
+    }
+  });
+
+  test('getEntry and remove reject instead of throwing synchronously', async () => {
+    for (const invalid of [null, undefined, 'bad', {}, { uri: 42 }]) {
+      let getEntryPromise: Promise<unknown>;
+      expect(() => {
+        getEntryPromise = PdfCache.getEntry(invalid as never);
+      }).not.toThrow();
+      await expect(getEntryPromise!).rejects.toThrow();
+
+      let removePromise: Promise<unknown>;
+      expect(() => {
+        removePromise = PdfCache.remove(invalid as never);
+      }).not.toThrow();
+      await expect(removePromise!).rejects.toThrow();
+    }
+  });
 });

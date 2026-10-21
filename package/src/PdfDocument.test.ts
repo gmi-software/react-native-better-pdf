@@ -154,6 +154,24 @@ describe('PdfDocument.open', () => {
     expect(lastNative().password).toBe('secret');
   });
 
+  test('rejects with PdfOpenError invalid-source for null, undefined and malformed values', async () => {
+    for (const invalid of [
+      null,
+      undefined,
+      'https://example.com/a.pdf',
+      {},
+      { uri: 42 },
+    ]) {
+      const error = await PdfDocument.open(invalid as never).catch(
+        (e: unknown) => e,
+      );
+      expect(error).toBeInstanceOf(PdfOpenError);
+      expect((error as InstanceType<typeof PdfOpenError>).code).toBe(
+        'invalid-source',
+      );
+    }
+  });
+
   test("a source's own password takes precedence over the option", async () => {
     void PdfDocument.open(
       { uri: '/docs/a.pdf', password: 'own' },
