@@ -28,6 +28,6 @@ extension PDFView {
     let inset = scrollView.adjustedContentInset
     let maxY = max(-inset.top, scrollView.contentSize.height + inset.bottom - scrollView.bounds.height)
     let target = min(max(scrollView.contentOffset.y + pageTop - bounds.minY - topClearance, -inset.top), maxY)
-    if abs(target - scrollView.contentOffset.y) > 0.5 { scrollView.contentOffset.y = target }
+    if Swift.abs(target - scrollView.contentOffset.y) > 0.5 { scrollView.contentOffset.y = target }
   }
 }
