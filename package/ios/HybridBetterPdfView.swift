@@ -889,7 +889,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     lastLayoutSize = container.bounds.size
     let pageToKeep = isResize && pendingInitialPage == nil ? readingPage : -1
     let newFit = currentFitScale(pdfView)
-    if newFit > 0, abs(newFit - fitScale) > 0.0001 {
+    if newFit > 0, Swift.abs(newFit - fitScale) > 0.0001 {
       applyScaleLimits(preservingRelativeScale: fitScale > 0)
     }
     if let page = pendingInitialPage, fitScale > 0 {
@@ -938,7 +938,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       let fit = isPagedLayout ? (pagedFitScale ?? pdfView.scaleFactor) : fitScale
       scrollToPage(clamped, animated: false)
       let target = fit * CGFloat(clampScale(scale))
-      if abs(pdfView.scaleFactor - target) > 0.0001 { pdfView.scaleFactor = target }
+      if Swift.abs(pdfView.scaleFactor - target) > 0.0001 { pdfView.scaleFactor = target }
       settle.noteMotion()
       return
     }
@@ -997,7 +997,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private func reportScale() {
     guard let pdfView, fitScale > 0, let last = lastReportedScale else { return }
     guard let scale = relativeScale(pdfView) else { return }
-    guard abs(scale - last) > 0.001 else { return }
+    guard Swift.abs(scale - last) > 0.001 else { return }
     lastReportedScale = scale
     onScaleChange?(PdfScaleChangeEvent(scale: scale))
   }
@@ -1324,7 +1324,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       ? max(0, scrollView.bounds.height - clearance.top - clearance.bottom - scrollView.contentSize.height)
       : 0
     let insets = UIEdgeInsets(top: clearance.top, left: 0, bottom: clearance.bottom + freeHeight, right: 0)
-    if abs(scrollView.contentInset.top - insets.top) > 0.5 || abs(scrollView.contentInset.bottom - insets.bottom) > 0.5 {
+    if Swift.abs(scrollView.contentInset.top - insets.top) > 0.5 || Swift.abs(scrollView.contentInset.bottom - insets.bottom) > 0.5 {
       scrollView.contentInset = insets
     }
     let indicators = UIEdgeInsets(top: clearance.top, left: 0, bottom: clearance.bottom, right: 0)
@@ -1335,7 +1335,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     // while PDFKit still centred the document left the offset below it,
     // cutting the page off once the document moved up.
     let top = -scrollView.adjustedContentInset.top
-    if freeHeight > 0, abs(scrollView.contentOffset.y - top) > 0.5 {
+    if freeHeight > 0, Swift.abs(scrollView.contentOffset.y - top) > 0.5 {
       scrollView.contentOffset.y = top
     }
   }
