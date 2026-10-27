@@ -8,6 +8,12 @@ import type {
 
 /** Served by `node benchmarks/serve-fixtures.mjs` (Android: `adb reverse tcp:8090 tcp:8090`). */
 export const FIXTURE_SERVER = 'http://localhost:8090';
+/** The same server as another origin (another host name). */
+const FIXTURE_SERVER_OTHER_ORIGIN = 'http://127.0.0.1:8090';
+
+function redirectTo(url: string): string {
+  return `${FIXTURE_SERVER}/__redirect?to=${encodeURIComponent(url)}`;
+}
 
 export const FIXTURES = [
   'small',
@@ -173,6 +179,32 @@ export const DOCUMENTS: DocumentEntry[] = [
     title: 'Remote 404',
     subtitle: 'Expect http-error',
     resolve: async () => ({ uri: `${FIXTURE_SERVER}/does-not-exist.pdf` }),
+  },
+  {
+    id: 'remote-redirect',
+    title: 'Redirect, same origin',
+    subtitle: 'Authorization must reach the target',
+    resolve: async () => ({
+      uri: redirectTo('/medium.pdf?require=authorization,x-api-key'),
+      headers: { Authorization: 'Bearer e2e', 'X-Api-Key': 'e2e' },
+    }),
+  },
+  {
+    id: 'remote-redirect-other-origin',
+    title: 'Redirect, other origin',
+    subtitle: 'Headers must not reach the target',
+    resolve: async () => ({
+      uri: redirectTo(
+        `${FIXTURE_SERVER_OTHER_ORIGIN}/medium.pdf?forbid=authorization,x-api-key`,
+      ),
+      headers: { Authorization: 'Bearer e2e', 'X-Api-Key': 'e2e' },
+    }),
+  },
+  {
+    id: 'remote-redirect-loop',
+    title: 'Redirect loop',
+    subtitle: 'Expect network-error',
+    resolve: async () => ({ uri: `${FIXTURE_SERVER}/__redirect-loop` }),
   },
   {
     id: 'remote-forms',

@@ -27,6 +27,52 @@ before its `password` option.
 break or another control character (tab is fine): such a source fails with
 `invalid-source` on both platforms, before anything is sent.
 
+## Empty state
+
+`PdfView` accepts `source={null}` and `source={undefined}` while the document
+is not known yet. In this state, it renders a plain `View` container with the
+same style without mounting the native viewer; no load runs, no events fire,
+and ref methods behave as they do before the native view is mounted:
+`goToPage`, `zoomTo`, `goToViewport`, `search`, `searchNext`,
+`searchPrevious` and `clearSearch` are no-ops, `getStats()` returns `null`,
+and the promise methods reject with a `PdfMethodError` with code `not-loaded`
+(see [Method errors](../api.md#method-errors)).
+
+Setting a valid source afterwards mounts the native viewer and loads the
+document. Setting the source back to `null` unmounts the native viewer, closing
+the document.
+
+## Invalid sources
+
+A source must be a `require()` asset number or an object with `uri`, `filePath`
+or `base64`. Anything else — a raw URL string (e.g. `'https://...'`), an empty
+object `{}`, property types that do not match (such as `{ uri: 42 }`), or list
+items that are not objects (such as `[null]`) — is malformed:
+
+- In `PdfView`: it never throws during render. Nothing is sent to native, and
+  `onError` is called once with `code: 'invalid-source'` and an explanatory
+  message. `sourceIndex` is `0` for a single invalid source and identifies the
+  failing item for a list.
+- In `PdfDocument.open` and `PdfCache.download`: the returned promise rejects
+  with `PdfOpenError` or `PdfDownloadError` (`code: 'invalid-source'`).
+- `PdfCache.getEntry` and `PdfCache.remove`: reject their promise instead of
+  throwing synchronously.
+- An empty list `[]` reports an `invalid-source` error with no `sourceIndex`.
+
+### Redirects
+
+Both platforms follow redirects the same way:
+
+- At most 10; more fail with `network-error`.
+- From http to https, never from https to http or to anything but
+  http(s): that fails with `http-error`, and `httpStatus` is the
+  redirect's status (301, 302, 303, 307 or 308).
+- `headers` go to the URL's origin (scheme, host and port) only,
+  `Authorization` included. After a redirect to another origin, the rest of
+  the download is sent without them, even if a later redirect comes back.
+  http to https on the same host is another origin too: when you send
+  credentials, use the https URL.
+
 ## `content://` URIs on Android
 
 A `content://` URI (from the document picker, a share intent or another

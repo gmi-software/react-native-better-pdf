@@ -95,7 +95,7 @@ all props and ref methods; the [guides](#guides) cover each feature.
 
 | Guide | Covers |
 | --- | --- |
-| [Sources and loading](docs/guides/sources-and-loading.md) | Remote, local and bundled files, request headers, base64 data, several files as one document, loading state |
+| [Sources and loading](docs/guides/sources-and-loading.md) | Remote, local and bundled files, request headers and redirects, base64 data, several files as one document, loading state |
 | [Navigation and reading position](docs/guides/navigation.md) | Links and page taps; saving and restoring where the reader left off |
 | [Offline reading and caching](docs/guides/offline-and-caching.md) | Cache modes, revalidation, offline fallback, `PdfCache` |
 | [Layout and appearance](docs/guides/layout-and-appearance.md) | Facing pages, translucent bars, dark pages |

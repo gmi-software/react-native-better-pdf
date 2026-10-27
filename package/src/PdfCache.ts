@@ -1,6 +1,7 @@
 import { NitroModules } from 'react-native-nitro-modules';
 import { abortable, abortReason, untilAborted } from './abort';
 import { PdfDownloadError } from './PdfDownloadError';
+import type { NativePdfSource } from './types/NativePdfSource';
 import type { PdfDownloadOptions } from './types/PdfDownloadOptions';
 import { normalizeUriSource, type PdfUriSource } from './source';
 import type { BetterPdfCache } from './specs/BetterPdfCache.nitro';
@@ -67,12 +68,21 @@ export const PdfCache = {
   ): Promise<PdfCacheEntry> {
     const { onProgress, signal } = options;
     if (signal?.aborted) throw abortReason(signal);
+    let normalized: Omit<NativePdfSource, 'base64'>;
+    try {
+      normalized = normalizeUriSource(source);
+    } catch (error) {
+      throw new PdfDownloadError({
+        code: 'invalid-source',
+        message: error instanceof Error ? error.message : 'Invalid URI source',
+      });
+    }
     const cache = getNativeCache();
     const requestId = nextRequestId;
     nextRequestId += 1;
     const result = cache.download(
       requestId,
-      normalizeUriSource(source),
+      normalized,
       untilAborted(onProgress, signal),
     );
     return unwrap(
@@ -86,7 +96,7 @@ export const PdfCache = {
    * never checks `maxAgeMs`: compare {@linkcode PdfCacheEntry.validatedAtMs}
    * yourself.
    */
-  getEntry(source: PdfUriSource): Promise<PdfCacheEntry | undefined> {
+  async getEntry(source: PdfUriSource): Promise<PdfCacheEntry | undefined> {
     return getNativeCache().getEntry(normalizeUriSource(source));
   },
 
@@ -95,7 +105,7 @@ export const PdfCache = {
    * Resolves `false` when there was none. A `PdfView` showing the document
    * keeps showing it; a download in progress still stores its result.
    */
-  remove(source: PdfUriSource): Promise<boolean> {
+  async remove(source: PdfUriSource): Promise<boolean> {
     return getNativeCache().remove(normalizeUriSource(source));
   },
 

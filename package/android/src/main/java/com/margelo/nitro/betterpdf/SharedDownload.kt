@@ -62,52 +62,34 @@ internal class SharedDownload(
   private fun download(): DownloadOutcome {
     val partial = store.newPartialFile(key)
     try {
-      val connection = (URL(url).openConnection() as HttpURLConnection).apply {
-        val timeoutMs = if (existing != null) REVALIDATION_TIMEOUT_MS else TIMEOUT_MS
-        connectTimeout = timeoutMs
-        readTimeout = timeoutMs
-        instanceFollowRedirects = true
-        // The copies in the store are the cache; an app-installed
-        // HttpResponseCache must not answer instead of the server.
-        useCaches = false
-        headers.forEach { (name, value) -> setRequestProperty(name, value) }
-        existing?.metadata?.etag?.let { setRequestProperty("If-None-Match", it) }
-        existing?.metadata?.lastModified?.let { setRequestProperty("If-Modified-Since", it) }
+      val connection = connect()
+      val status = connection.responseCode
+      if (status == HttpURLConnection.HTTP_NOT_MODIFIED && existing != null) {
+        val validated = CacheMetadata(
+          validatedAtMs = clock(),
+          etag = connection.getHeaderField("ETag") ?: existing.metadata.etag,
+          lastModified = connection.getHeaderField("Last-Modified") ?: existing.metadata.lastModified,
+        )
+        return DownloadOutcome.Stored(store.markValidated(existing, validated))
       }
-      this.connection = connection
-      if (cancelled) throw InterruptedException()
-      val metadata: CacheMetadata
-      try {
-        val status = connection.responseCode
-        if (status == HttpURLConnection.HTTP_NOT_MODIFIED && existing != null) {
-          val validated = CacheMetadata(
-            validatedAtMs = clock(),
-            etag = connection.getHeaderField("ETag") ?: existing.metadata.etag,
-            lastModified = connection.getHeaderField("Last-Modified") ?: existing.metadata.lastModified,
-          )
-          return DownloadOutcome.Stored(store.markValidated(existing, validated))
-        }
-        if (status !in 200..299) {
-          return DownloadOutcome.Failed(
-            PdfFailure(PdfErrorCode.HTTP_ERROR, "Downloading $url failed with HTTP $status", httpStatus = status),
-            isServerUnreachable = status >= 500,
-          )
-        }
-        // -1 when unknown; also cleared when the response is transparently
-        // decompressed, so the byte count never exceeds a reported total.
-        val totalBytes = connection.contentLengthLong.takeIf { it >= 0 }
-        connection.inputStream.use { input ->
-          partial.outputStream().use { output ->
-            input.copyWithProgress(output, totalBytes, { cancelled }) { loadedBytes, total, isComplete ->
-              onProgress(this, loadedBytes, total, isComplete)
-            }
+      if (status !in 200..299) {
+        val reason = if (status in RedirectPolicy.STATUSES) ": the redirect is not followed" else ""
+        return DownloadOutcome.Failed(
+          PdfFailure(PdfErrorCode.HTTP_ERROR, "Downloading $url failed with HTTP $status$reason", httpStatus = status),
+          isServerUnreachable = status >= 500,
+        )
+      }
+      // -1 when unknown; also cleared when the response is transparently
+      // decompressed, so the byte count never exceeds a reported total.
+      val totalBytes = connection.contentLengthLong.takeIf { it >= 0 }
+      connection.inputStream.use { input ->
+        partial.outputStream().use { output ->
+          input.copyWithProgress(output, totalBytes, { cancelled }) { loadedBytes, total, isComplete ->
+            onProgress(this, loadedBytes, total, isComplete)
           }
         }
-        metadata = CacheMetadata(clock(), connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
-      } finally {
-        connection.disconnect()
-        this.connection = null
       }
+      val metadata = CacheMetadata(clock(), connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
       if (cancelled) throw InterruptedException()
       if (!partial.hasPdfHeader()) {
         return DownloadOutcome.Failed(
@@ -116,6 +98,8 @@ internal class SharedDownload(
         )
       }
       return DownloadOutcome.Stored(store.commit(key, partial, mode, metadata))
+    } catch (e: PdfFailure) {
+      return DownloadOutcome.Failed(e, isServerUnreachable = false)
     } catch (e: MalformedURLException) {
       return DownloadOutcome.Failed(
         PdfFailure(PdfErrorCode.INVALID_SOURCE, "Unsupported PDF source: \"$url\"", cause = e),
@@ -128,9 +112,51 @@ internal class SharedDownload(
         isServerUnreachable = true,
       )
     } finally {
+      this.connection?.disconnect()
+      this.connection = null
       // Never leave a partial file behind; a no-op once committed.
       partial.delete()
     }
+  }
+
+  /**
+   * Requests [url] and the redirects [RedirectPolicy] follows: the connection
+   * with the answer. Throws [PdfFailure] after too many redirects.
+   */
+  private fun connect(): HttpURLConnection {
+    var target = URL(url)
+    val redirects = RedirectPolicy(target)
+    while (true) {
+      val connection = open(target, withHeaders = redirects.sendsHeaders)
+      if (connection.responseCode !in RedirectPolicy.STATUSES) return connection
+      when (val next = redirects.next(target, connection.getHeaderField("Location"))) {
+        RedirectPolicy.Next.Refuse -> return connection
+        RedirectPolicy.Next.TooMany ->
+          throw PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $url failed: more than ${RedirectPolicy.MAX_REDIRECTS} redirects")
+        is RedirectPolicy.Next.Follow -> {
+          connection.disconnect()
+          target = next.url
+        }
+      }
+    }
+  }
+
+  private fun open(target: URL, withHeaders: Boolean): HttpURLConnection {
+    val connection = (target.openConnection() as HttpURLConnection).apply {
+      val timeoutMs = if (existing != null) REVALIDATION_TIMEOUT_MS else TIMEOUT_MS
+      connectTimeout = timeoutMs
+      readTimeout = timeoutMs
+      instanceFollowRedirects = false
+      // The copies in the store are the cache; an app-installed
+      // HttpResponseCache must not answer instead of the server.
+      useCaches = false
+      if (withHeaders) headers.forEach { (name, value) -> setRequestProperty(name, value) }
+      existing?.metadata?.etag?.let { setRequestProperty("If-None-Match", it) }
+      existing?.metadata?.lastModified?.let { setRequestProperty("If-Modified-Since", it) }
+    }
+    this.connection = connection
+    if (cancelled) throw InterruptedException()
+    return connection
   }
 
   private companion object {

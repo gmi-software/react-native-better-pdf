@@ -31,6 +31,10 @@ export interface PdfUriSource {
    * ASCII (encode anything else yourself): Android sends other characters
    * as UTF-8, iOS as Latin-1 and cuts the value at the first character
    * outside it.
+   *
+   * They go to the URL's origin only: after a redirect to another scheme,
+   * host or port (http to https included), the rest of the download is
+   * sent without them.
    */
   headers?: Readonly<Record<string, string>>;
   /**
@@ -106,6 +110,114 @@ export type NormalizedSource = Omit<NativePdfSource, 'base64'> & {
   base64?: string;
 };
 
+/** Describes an arbitrary runtime value without invoking unsafe serialization. */
+function describeValue(value: unknown): string {
+  if (value === null) return 'null';
+  switch (typeof value) {
+    case 'undefined':
+      return 'undefined';
+    case 'string':
+      return 'a string';
+    case 'number':
+      return Number.isNaN(value) ? 'NaN' : String(value);
+    case 'bigint':
+      return `${value}n`;
+    case 'symbol':
+      return value.toString();
+    case 'function':
+      return 'a function';
+    case 'object':
+      return Array.isArray(value) ? 'an array' : 'an object';
+    default:
+      return typeof value;
+  }
+}
+
+/**
+ * Describes the runtime shape of a source for a validation error.
+ *
+ * `normalizeUriSource` passes `uriOnly` because that helper accepts only URI
+ * sources, while the other callers accept `uri`, `filePath`, or `base64`.
+ */
+function describeSourceType(source: unknown, uriOnly = false): string {
+  if (source === null) return 'null';
+  if (source === undefined) return 'undefined';
+  if (Array.isArray(source)) return 'an array';
+  const type = typeof source;
+  if (type === 'string') return 'a string';
+  if (type === 'number') return 'a number';
+  if (type === 'boolean') return 'a boolean';
+  if (type === 'object') {
+    const obj = source as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    if (keys.length === 0) return '{}';
+    if ('uri' in obj && typeof obj.uri !== 'string') {
+      return `{ uri: ${describeValue(obj.uri)} }`;
+    }
+    if ('filePath' in obj && typeof obj.filePath !== 'string') {
+      return `{ filePath: ${describeValue(obj.filePath)} }`;
+    }
+    if ('base64' in obj && typeof obj.base64 !== 'string') {
+      return `{ base64: ${describeValue(obj.base64)} }`;
+    }
+    if (uriOnly) {
+      if (typeof obj.filePath === 'string') return 'an object with filePath';
+      if (typeof obj.base64 === 'string') return 'an object with base64';
+      return 'an object without uri';
+    }
+    return 'an object without uri, filePath or base64';
+  }
+  return type;
+}
+
+/** Validates and normalizes one runtime source value without throwing. */
+export function validateSourceItem(
+  source: unknown,
+  resolveAsset: AssetResolver,
+): { ok: true; source: NormalizedSource } | { ok: false; error: string } {
+  if (typeof source === 'number') {
+    return { ok: true, source: { uri: resolveAsset(source)?.uri ?? '' } };
+  }
+  if (source == null || typeof source !== 'object' || Array.isArray(source)) {
+    return {
+      ok: false,
+      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
+    };
+  }
+  const obj = source as Record<string, unknown>;
+  if ('filePath' in obj) {
+    if (typeof obj.filePath === 'string') {
+      return { ok: true, source: { uri: obj.filePath } };
+    }
+    return {
+      ok: false,
+      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
+    };
+  }
+  if ('base64' in obj) {
+    if (typeof obj.base64 === 'string') {
+      return { ok: true, source: { uri: '', base64: obj.base64 } };
+    }
+    return {
+      ok: false,
+      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
+    };
+  }
+  if ('uri' in obj) {
+    if (typeof obj.uri === 'string') {
+      return { ok: true, source: normalizeUriSource(source as PdfUriSource) };
+    }
+    return {
+      ok: false,
+      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
+    };
+  }
+  return {
+    ok: false,
+    error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
+  };
+}
+
 /**
  * The native shape of a URI source. Copies `headers` so later mutation of
  * the caller's object cannot leak into native code, and leaves absent
@@ -114,6 +226,15 @@ export type NormalizedSource = Omit<NativePdfSource, 'base64'> & {
 export function normalizeUriSource(
   source: PdfUriSource,
 ): Omit<NativePdfSource, 'base64'> {
+  if (
+    source == null ||
+    typeof source !== 'object' ||
+    typeof (source as { uri?: unknown }).uri !== 'string'
+  ) {
+    throw new Error(
+      `source must be an object with uri; got ${describeSourceType(source, true)}`,
+    );
+  }
   const normalized: Omit<NativePdfSource, 'base64'> = { uri: source.uri };
   if (source.headers != null) normalized.headers = { ...source.headers };
   if (source.cache != null) normalized.cache = source.cache;
@@ -122,49 +243,54 @@ export function normalizeUriSource(
   return normalized;
 }
 
-export function normalizeSource(
-  source: PdfSource,
-  resolveAsset: AssetResolver,
-): NormalizedSource {
-  if (typeof source === 'number') {
-    return { uri: resolveAsset(source)?.uri ?? '' };
+/** The source's own password, if it has one (bundled assets cannot). */
+export function sourcePassword(source: unknown): string | undefined {
+  if (source != null && typeof source === 'object' && 'password' in source) {
+    const pwd = (source as { password?: unknown }).password;
+    return typeof pwd === 'string' ? pwd : undefined;
   }
-  if ('filePath' in source) {
-    return { uri: source.filePath };
-  }
-  if ('base64' in source) {
-    return { uri: '', base64: source.base64 };
-  }
-  return normalizeUriSource(source);
+  return undefined;
 }
 
-/** The source's own password, if it has one (bundled assets cannot). */
-export function sourcePassword(source: PdfSource): string | undefined {
-  return typeof source === 'number' ? undefined : source.password;
-}
+export type SourceInspection =
+  | { status: 'empty' }
+  | { status: 'valid'; sources: NormalizedSource[] }
+  | { status: 'invalid'; message: string; sourceIndex?: number };
 
 /**
- * The native sources of `PdfView`'s `source`, one or several, each with its
- * password: its own, else `password` (the prop), else `''` for none.
+ * Validates and inspects `source`, detecting whether it is empty (null/undefined),
+ * valid, or malformed with an explanatory message.
  */
-export function normalizeSources(
-  source: PdfSource | readonly PdfSource[],
+export function inspectSources(
+  source: unknown,
   password: string | undefined,
   resolveAsset: AssetResolver,
-): NormalizedSource[] {
-  const sources: readonly PdfSource[] = isSourceList(source)
-    ? source
-    : [source];
-  return sources.map((item) => ({
-    ...normalizeSource(item, resolveAsset),
-    password: sourcePassword(item) ?? password ?? '',
-  }));
-}
-
-function isSourceList(
-  source: PdfSource | readonly PdfSource[],
-): source is readonly PdfSource[] {
-  return Array.isArray(source);
+): SourceInspection {
+  if (source == null) {
+    return { status: 'empty' };
+  }
+  const isList = Array.isArray(source);
+  const items = isList ? source : [source];
+  if (items.length === 0) {
+    return { status: 'valid', sources: [] };
+  }
+  const normalized: NormalizedSource[] = [];
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const validation = validateSourceItem(item, resolveAsset);
+    if (!validation.ok) {
+      return {
+        status: 'invalid',
+        message: validation.error,
+        sourceIndex: index,
+      };
+    }
+    normalized.push({
+      ...validation.source,
+      password: sourcePassword(item) ?? password ?? '',
+    });
+  }
+  return { status: 'valid', sources: normalized };
 }
 
 /**

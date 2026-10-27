@@ -47,6 +47,7 @@ final class DocumentSetLoader {
     downloads = Array(repeating: nil, count: sources.count)
   }
 
+  /// Starts resolving all sources and reports the first failure or assembled document.
   private func start() {
     // Cancelled by the view before the result: the sources that loaded are
     // released (those still loading release themselves).
@@ -57,8 +58,7 @@ final class DocumentSetLoader {
       DispatchQueue.main.async { if !self.isFinished { self.releaseLoaded() } }
     }
     guard !sources.isEmpty else {
-      var failure = PdfLoadFailure(code: .invalidSource, message: "No PDF source was given")
-      failure.sourceIndex = 0
+      let failure = PdfLoadFailure(code: .invalidSource, message: "No PDF source was given")
       DispatchQueue.main.async { [self] in finish(.failure(failure)) }
       return
     }

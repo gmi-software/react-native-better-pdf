@@ -14,7 +14,7 @@ Every component, object and type is exported from the package root. The
 
 | Prop | Type | Default | |
 | --- | --- | --- | --- |
-| `source` | `PdfSource \| PdfSource[]` | — | required; a list is shown as one document, see [Several documents as one](guides/sources-and-loading.md#several-documents-as-one) |
+| `source` | `PdfSource \| PdfSource[] \| null` | — | optional; renders an empty viewer when `null` or `undefined`. A list is shown as one document, see [Several documents as one](guides/sources-and-loading.md#several-documents-as-one) |
 | `password` | `string` | — | for every source without a `password` of its own; changing it re-opens the document (no re-download) |
 | `initialPage` | `number` | `0` | zero-based, rounded to the nearest page, applied once per loaded document |
 | `initialScale` | `number` | `1` | zoom applied once per loaded document, relative to the fitted page |
@@ -75,6 +75,11 @@ each page. The viewer adds no safe-area insets on either platform, like
 | `search(query)` / `searchNext()` / `searchPrevious()` / `clearSearch()` | Full-text search. `search` is ignored before `onLoad` |
 | `getStats()` | Render and cache statistics, for diagnostics |
 
+Before the native view is mounted, `goToPage`, `zoomTo`, `goToViewport`,
+`search`, `searchNext`, `searchPrevious` and `clearSearch` are no-ops,
+`getStats()` returns `null`, and the promise methods reject with code
+`not-loaded`.
+
 The promise methods reject with a `PdfMethodError`; see
 [Method errors](#method-errors).
 
@@ -128,6 +133,9 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 (`error.httpStatus`) · `invalid-pdf` · `password-required` ·
 `invalid-password` · `unsupported-pdf` · `page-render-failed` (`error.page`) ·
 `out-of-memory` (`error.page` while rendering)
+
+A redirect that is not followed is an `http-error` with the redirect's
+status; see [Redirects](guides/sources-and-loading.md#redirects).
 
 `error.message` is human-readable and may change; `error.nativeDescription`
 carries the platform error for logging. Load failures carry

@@ -207,7 +207,7 @@ type PdfSource =
 
 | Prop           | Type                  | Default | Notes                                                                 |
 | -------------- | --------------------- | ------- | --------------------------------------------------------------------- |
-| `source`       | `PdfSource`           | —       | Required.                                                             |
+| `source`       | `PdfSource \| PdfSource[] \| null` | —       | Optional.                                                             |
 | `password`     | `string`              | —       | Changing it reloads the document (downloaded file is reused).         |
 | `initialPage`  | `number`              | `0`     | Applied once per loaded document. Changing it later has no effect.    |
 | `initialScale` | `number`              | `1`     | Like `initialPage`, for zoom (relative to the fitted page). Not an `onScaleChange`. |
@@ -1186,6 +1186,20 @@ invalidation, prefetch and offline reading (#952, #964, #572, #566, #689,
 - **Only PDFs are stored.** A `200` that does not start with `%PDF-` within
   1024 bytes (login page, captive portal) fails with `invalid-pdf` instead
   of being kept — persistently — as the document.
+- **Redirects: one policy, ours.** The platforms disagreed and both were
+  unsafe: Android (AOSP's OkHttp) refused http → https and sent every
+  header but `Authorization` on to other hosts; iOS (CFNetwork) followed
+  https → http and also forwarded every header but `Authorization`, which
+  it dropped even on the same origin. Now both follow at most 10 redirects
+  (`network-error` after that), follow http → https but refuse https → http
+  (`http-error` with the 3xx: the server answered), and send the source's
+  headers only while every hop stays on the URL's origin (scheme, host,
+  port), as the Fetch standard does with `Authorization`. A token in
+  `X-Api-Key` or `Cookie` is a credential too, so all headers are dropped,
+  for the rest of the chain. The conditional headers are ours and always
+  go, so a `304` from the target still validates the copy. Neither a refused
+  redirect nor too many redirects shows the stored copy: the server
+  answered. Not included: an allowlist of hosts that keep the headers.
 - **One download per copy.** A list prefetching a document and a viewer
   opening it share one request (`SharedDownload`); cancelling one waiter
   leaves the others, and the request stops when nobody waits.
@@ -1208,9 +1222,10 @@ invalidation, prefetch and offline reading (#952, #964, #572, #566, #689,
 - **Tested:** JVM tests run the Android cache against a local HTTP server
   (reuse, 304, changed document, stale fallback, 5xx vs 4xx, non-PDF
   responses, invalid headers, shared and cancelled downloads, `cacheKey`,
-  promotion, restart, cleanup). `viewer-offline` runs the same story on both
-  platforms with the fixture server's simulated outage
-  (`/__control/offline`), including an app restart.
+  promotion, restart, cleanup, redirects). `viewer-offline` runs the same
+  story on both platforms with the fixture server's simulated outage
+  (`/__control/offline`), including an app restart; `viewer-redirects`
+  checks the redirect policy on both.
 
 ## Short documents, rounded corners, safe area
 
