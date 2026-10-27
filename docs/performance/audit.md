@@ -88,7 +88,7 @@ through `BitmapPool`. iOS: PDFKit reuses its internal page views.
 | `getStats` | JS → native | COLD (diagnostic) | on demand | 10 numbers |
 | `onLoad`, `onError` | native → JS | COLD | per document | small struct |
 | `onPageChange` | native → JS | WARM | per page boundary crossed | 2 numbers |
-| `onLoadProgress` | native → JS | WARM | ≤ 10/s during a remote download, 0 otherwise | 2 numbers |
+| `onLoadProgress` | native → JS | WARM | ≤ 10/s during a remote download or an Android `content://` copy, 0 otherwise | 2 numbers |
 | `onLinkPress`, `onPageTap` | native → JS | COLD | per user tap | small struct |
 
 HOT crossings: **none**. No scroll, zoom, visibility or render-lifecycle data

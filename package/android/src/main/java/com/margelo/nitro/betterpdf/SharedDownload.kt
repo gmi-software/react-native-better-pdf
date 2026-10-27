@@ -98,17 +98,9 @@ internal class SharedDownload(
         val totalBytes = connection.contentLengthLong.takeIf { it >= 0 }
         connection.inputStream.use { input ->
           partial.outputStream().use { output ->
-            val buffer = ByteArray(BUFFER_BYTES)
-            var loadedBytes = 0L
-            while (true) {
-              if (cancelled) throw InterruptedException()
-              val read = input.read(buffer)
-              if (read < 0) break
-              output.write(buffer, 0, read)
-              loadedBytes += read
-              onProgress(this, loadedBytes, totalBytes?.takeIf { it >= loadedBytes }, false)
+            input.copyWithProgress(output, totalBytes, { cancelled }) { loadedBytes, total, isComplete ->
+              onProgress(this, loadedBytes, total, isComplete)
             }
-            onProgress(this, loadedBytes, totalBytes?.takeIf { it >= loadedBytes }, true)
           }
         }
         metadata = CacheMetadata(clock(), connection.getHeaderField("ETag"), connection.getHeaderField("Last-Modified"))
@@ -142,7 +134,6 @@ internal class SharedDownload(
   }
 
   private companion object {
-    const val BUFFER_BYTES = 64 * 1024
     const val TIMEOUT_MS = 30_000
 
     /** Shorter, so a dead network shows the existing copy soon. */

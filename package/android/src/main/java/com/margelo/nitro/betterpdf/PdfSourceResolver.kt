@@ -1,8 +1,15 @@
 package com.margelo.nitro.betterpdf
 
 import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.net.Uri
+import android.os.CancellationSignal
+import android.os.OperationCanceledException
 import android.os.ParcelFileDescriptor
+import android.provider.OpenableColumns
+import android.system.ErrnoException
+import android.system.Os
+import android.system.OsConstants
 import com.margelo.nitro.core.ArrayBuffer
 import java.io.File
 import java.io.FileNotFoundException
@@ -25,17 +32,20 @@ class PdfSourceResolver(private val context: Context) {
   @Volatile
   private var cancelled = false
   private val remoteDone = CountDownLatch(1)
+  private val contentCancellation = CancellationSignal()
 
-  /** Aborts an in-flight download; [open] then throws [InterruptedException]. Safe from any thread. */
+  /** Aborts an in-flight download or copy; [open] then throws [InterruptedException]. Safe from any thread. */
   fun cancel() {
     cancelled = true
     subscription?.cancel()
     remoteDone.countDown()
+    contentCancellation.cancel()
   }
 
   /**
    * Opens [source]. For remote sources that are downloaded (not cached),
-   * [onProgress] receives every chunk on a download thread; callers throttle.
+   * [onProgress] receives every chunk on a download thread, and for
+   * `content://` sources that are copied, on the calling thread; callers throttle.
    */
   fun open(
     source: NativePdfSource,
@@ -52,7 +62,7 @@ class PdfSourceResolver(private val context: Context) {
     return when (parsed.scheme?.lowercase()) {
       "file" -> openFile(File(parsed.path ?: throw invalidSource(uri)))
       "http", "https" -> openRemote(source, onProgress)
-      "content" -> ResolvedSource(openContent(parsed), file = null)
+      "content" -> openContent(parsed, onProgress)
       // Release builds resolve `require('./x.pdf')` to a bare resource name.
       null -> openRawResource(uri)
       else -> throw invalidSource(uri)
@@ -70,42 +80,96 @@ class PdfSourceResolver(private val context: Context) {
     }
   }
 
-  private fun openContent(uri: Uri): ParcelFileDescriptor {
-    try {
-      return context.contentResolver.openFileDescriptor(uri, "r")
+  /** The provider's descriptor when the renderer can use it; a pipe, or part of a file, is copied. */
+  private fun openContent(
+    uri: Uri,
+    onProgress: (loadedBytes: Long, totalBytes: Long?, isComplete: Boolean) -> Unit,
+  ): ResolvedSource {
+    val asset = try {
+      context.contentResolver.openAssetFileDescriptor(uri, "r", contentCancellation)
         ?: throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at $uri")
     } catch (e: FileNotFoundException) {
       throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at $uri", cause = e)
     } catch (e: SecurityException) {
       throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No permission to read $uri", cause = e)
+    } catch (_: OperationCanceledException) {
+      throw InterruptedException()
+    }
+    val descriptor = asset.parcelFileDescriptor
+    if (asset.declaredLength == AssetFileDescriptor.UNKNOWN_LENGTH && descriptor.isSeekable()) {
+      return ResolvedSource(descriptor, file = null)
+    }
+    val totalBytes = if (asset.declaredLength >= 0) asset.declaredLength else statedSize(uri)
+    // Closing it also ends a read blocked on a stalled pipe.
+    contentCancellation.setOnCancelListener(descriptor::closeQuietly)
+    try {
+      return openTemporaryCopy { file ->
+        file.outputStream().use { output ->
+          asset.createInputStream().use { it.copyWithProgress(output, totalBytes, { cancelled }, onProgress) }
+        }
+      }
+    } finally {
+      contentCancellation.setOnCancelListener(null)
+      descriptor.closeQuietly()
     }
   }
 
-  /** Like `content://`, the session needs only the descriptor, so the file is deleted at once. */
+  private fun ParcelFileDescriptor.isSeekable(): Boolean =
+    try {
+      Os.lseek(fileDescriptor, 0, OsConstants.SEEK_CUR)
+      true
+    } catch (_: ErrnoException) {
+      false
+    }
+
+  private fun statedSize(uri: Uri): Long? =
+    try {
+      context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+        val column = cursor.getColumnIndex(OpenableColumns.SIZE)
+        if (column >= 0 && cursor.moveToFirst() && !cursor.isNull(column)) cursor.getLong(column) else null
+      }
+    } catch (_: RuntimeException) {
+      null
+    }
+
   private fun openBase64(text: ArrayBuffer): ResolvedSource {
     if (!text.isOwner) throw IllegalStateException("The base64 text is not in a native buffer")
-    val file = File(base64Directory(), "${UUID.randomUUID()}.pdf")
-    try {
+    return openTemporaryCopy { file ->
       val mode = ParcelFileDescriptor.MODE_WRITE_ONLY or ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_TRUNCATE
       ParcelFileDescriptor.open(file, mode).use { output ->
         NativeBase64Document.writeDecoded(text.getBuffer(false), output.fd)?.let {
           throw PdfFailure(PdfErrorCode.INVALID_SOURCE, it)
         }
       }
+    }
+  }
+
+  /**
+   * Opens the file [write] fills, and deletes it at once: the session needs
+   * only the descriptor, so nothing stays on disk.
+   */
+  private fun openTemporaryCopy(write: (File) -> Unit): ResolvedSource {
+    val file = File(openDirectory(), "${UUID.randomUUID()}.pdf")
+    try {
+      write(file)
       if (cancelled) throw InterruptedException()
       return ResolvedSource(ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY), file = null)
+    } catch (e: IOException) {
+      // Cancelling closes what a copy reads from.
+      if (cancelled) throw InterruptedException()
+      throw PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF could not be copied to the app's cache", cause = e)
     } finally {
       file.delete()
     }
   }
 
   /** Emptied once per process, for files left by a crash before deletion. */
-  private fun base64Directory(): File {
+  private fun openDirectory(): File {
     val directory = File(cacheDirectory(), "open")
     synchronized(Companion) {
-      if (!isBase64DirectorySwept) {
+      if (!isOpenDirectorySwept) {
         directory.listFiles()?.forEach { it.delete() }
-        isBase64DirectorySwept = true
+        isOpenDirectorySwept = true
       }
     }
     directory.mkdirs()
@@ -181,6 +245,6 @@ class PdfSourceResolver(private val context: Context) {
     PdfFailure(PdfErrorCode.INVALID_SOURCE, "Unsupported PDF source: \"$uri\"")
 
   private companion object {
-    var isBase64DirectorySwept = false
+    var isOpenDirectorySwept = false
   }
 }

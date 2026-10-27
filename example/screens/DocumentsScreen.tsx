@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 import {
   PdfDocument,
   type PdfDocumentMetadata,
@@ -8,7 +15,12 @@ import {
   type PdfSource,
 } from 'react-native-better-pdf';
 import { describeError } from '../describeError';
-import { ensureFixture, FIXTURE_SERVER, type FixtureName } from '../documents';
+import {
+  contentFixture,
+  ensureFixture,
+  FIXTURE_SERVER,
+  type FixtureName,
+} from '../documents';
 import { Button, colors } from '../ui';
 
 interface Target {
@@ -39,6 +51,14 @@ const TARGETS: Target[] = [
       base64: await (await ensureFixture('metadata')).base64(),
     }),
   },
+  ...(Platform.OS === 'android'
+    ? [
+        {
+          title: 'metadata (content pipe)',
+          resolve: () => contentFixture('pipe', 'metadata'),
+        },
+      ]
+    : []),
   fixture('metadata-encrypted'),
   fixture('page-boxes'),
   fixture('outline'),

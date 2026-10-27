@@ -12,6 +12,7 @@
 | A remote document fails with `invalid-source` | Check that the URL is `http(s)://` and the `headers`: often a token read with a trailing newline. `error.message` names the header. |
 | A signed URL or rotating token downloads the document on every open | Set `cacheKey` on the source to identify the stored copy. |
 | The document is a base64 string | Pass `source={{ base64 }}` (1.1+); for large documents write it to a file. See [Base64 documents](guides/sources-and-loading.md#base64-documents). |
+| On Android, a `content://` document fails with `invalid-source` ("The PDF source is not seekable"), or with `file-not-found` and "Not a whole file" | The provider streams the document or hands out part of a file, which 1.1 and earlier cannot open. Later versions copy it first (see [`content://` URIs on Android](guides/sources-and-loading.md#content-uris-on-android)); on 1.1, copy it to a file and open that. |
 | A base64 source fails with `invalid-source` | `error.message` says why: a `data:` URI prefix to remove, URL-safe base64 (`-`, `_`) to convert, or another character that is not base64. |
 | Tapping a URL link does nothing | The viewer never opens URLs: open them in `onLinkPress`. |
 | `onPageTap` arrives about 300 ms after the tap | It waits for a possible double tap; `enableDoubleTapZoom={false}` reports taps at once. |
