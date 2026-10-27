@@ -410,10 +410,11 @@ export interface PdfViewProps extends ViewProps {
   searchCurrentHighlightColor?: ColorValue;
   onLoad?: (event: PdfLoadEvent) => void;
   /**
-   * Download progress of a remote document, at most every 100 ms plus once on
-   * completion (before {@linkcode PdfViewProps.onLoad}). Not called for local
-   * files, or when a downloaded copy is used or confirmed unchanged by the
-   * server (see `PdfUriSource.cache` and `maxAgeMs`).
+   * Download progress of a remote document (on Android also the copy of a
+   * `content://` document its provider streams), at most every 100 ms plus
+   * once on completion (before {@linkcode PdfViewProps.onLoad}). Not called
+   * for local files, or when a downloaded copy is used or confirmed
+   * unchanged by the server (see `PdfUriSource.cache` and `maxAgeMs`).
    */
   onLoadProgress?: (event: PdfLoadProgressEvent) => void;
   /**

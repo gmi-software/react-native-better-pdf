@@ -1,0 +1,44 @@
+# content:// sources (Android only), from the example's provider
+# (modules/content-fixtures): a seekable file, a pipe and part of a larger
+# file all open; a pipe the provider breaks fails with invalid-pdf; a
+# stalled pipe reports progress, and Swap replaces it.
+appId: software.gmi.betterpdf.example
+---
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - runFlow: _start.yaml
+      - tapOn: "Viewer"
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content file" } }
+      - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
+      - assertVisible: "file: none"
+      - tapOn: "‹ Back"
+
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content pipe" } }
+      - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
+      - assertVisible: "file: none"
+      - tapOn: "Image"
+      - extendedWaitUntil: { visible: "image p1: 300x.*", timeout: 10000 }
+      - tapOn: "‹ Back"
+
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content partial" } }
+      - extendedWaitUntil: { visible: "1 / 12", timeout: 15000 }
+      - tapOn: "‹ Back"
+
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content broken" } }
+      - extendedWaitUntil: { visible: "invalid-pdf", timeout: 15000 }
+      - assertVisible: "The PDF could not be copied to the app's cache"
+      - tapOn: "‹ Back"
+
+      # 64 KiB of 3.1 MB arrive, then nothing for a minute.
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content stalled" } }
+      - extendedWaitUntil: { visible: "Downloading \\d+% \\(.* / 3\\.1 MB\\)", timeout: 15000 }
+      - tapOn: "Swap"
+      - extendedWaitUntil: { visible: "1 / 1", timeout: 15000 }
+      - assertVisible: "loads: 1"
+      - tapOn: "‹ Back"
+
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content sources" } }
+      - extendedWaitUntil: { visible: "1 / 20", timeout: 15000 }
+      - assertVisible: "sources: p1\\+3 p4\\+12 p16\\+5"
+      - tapOn: "‹ Back"

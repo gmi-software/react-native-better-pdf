@@ -73,6 +73,22 @@ Both platforms follow redirects the same way:
   http to https on the same host is another origin too: when you send
   credentials, use the https URL.
 
+## `content://` URIs on Android
+
+A `content://` URI (from the document picker, a share intent or another
+app's provider) opens through the `ContentResolver`, with the read
+permission your app was granted. Most providers (FileProvider, MediaStore,
+the Downloads provider) hand out the file itself, which opens as it is.
+
+A document the provider streams instead (through a pipe, for example when
+it generates or decrypts the document as it is read), or hands out as part
+of a larger file, is first copied into the app's cache. Nothing is shown
+until the whole document has arrived, and the copy takes as much disk space
+as the document until the document closes or the app ends.
+`onLoadProgress` reports the copy, with `totalBytes` when the provider
+states the size, and changing the source stops it. `onLoad`'s `filePath` is
+`undefined` for every `content://` source.
+
 ## Base64 documents
 
 A document you have as a base64 string — made with pdfmake or pdf-lib, or

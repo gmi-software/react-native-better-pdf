@@ -180,6 +180,28 @@ type PdfSource =
     an API that returns a PDF as base64 in JSON is better served by returning
     the PDF and passing `uri` + `headers`: native download, progress,
     caching, offline.
+- **`content://` (Android, issue #69).** `PdfRenderer` needs a seekable
+  descriptor, and a provider may hand out a pipe
+  (`ContentProvider.openPipeHelper`, AOSP's MTP provider without partial
+  reads) or part of a larger file (an `AssetFileDescriptor` with an offset,
+  which `openFileDescriptor` refuses: "Not a whole file"). 1.1 failed them
+  with `invalid-source` and `file-not-found`. The source is opened with
+  `openAssetFileDescriptor`; a whole file that `lseek` accepts (the
+  renderer's own check; `S_ISREG` would refuse seekable descriptors that
+  are not regular files) is used as is, as FileProvider, MediaStore and the
+  Downloads provider hand out. Anything else is copied with the downloads'
+  64 KB loop into the directory base64 writes to, opened, and deleted at
+  once like base64's file. The copy reports progress like a download
+  (`totalBytes` from the asset's length or the provider's
+  `OpenableColumns.SIZE`) and takes disk space outside `PdfCache`'s
+  accounting. A source change or dispose cancels the open
+  (`CancellationSignal`), and the signal's listener closes the descriptor,
+  which ends a read blocked on a stalled pipe (checked on API 37: the
+  thread and the partial file are gone at once). A failed read (the
+  provider's `closeWithError`) or write (a full disk) is `invalid-pdf`,
+  "The PDF could not be copied to the app's cache", with the cause in
+  `nativeDescription`; Android's base64 write failures now say the same. react-native-pdf reads
+  the whole document into memory instead (`openInputStream`).
 
 ### Props
 
@@ -204,7 +226,7 @@ type PdfSource =
 | `horizontal`   | `boolean`             | `false` | Pages side by side; see "Layout modes".                               |
 | `enablePaging` | `boolean`             | `false` | One page per swipe; see "Layout modes".                               |
 | `onLoad`       | `(e: PdfLoadEvent)`   | —       | `{ pageCount, firstPageWidth, firstPageHeight, filePath? }` (PDF points). |
-| `onLoadProgress` | `(e: PdfLoadProgressEvent)` | — | `{ loadedBytes, totalBytes? }`; remote only; see "Load progress".      |
+| `onLoadProgress` | `(e: PdfLoadProgressEvent)` | — | `{ loadedBytes, totalBytes? }`; remote, and Android `content://` copies; see "Load progress". |
 | `onPageChange` | `(e: PdfPageChangeEvent)` | —   | `{ page, pageCount }`. The page under the viewport centre (the last page once scrolled to the end). |
 | `onError`      | `(e: PdfError)`       | —       | Load and render errors.                                               |
 | `onLinkPress`  | `(e: PdfLinkPressEvent)` | —    | `{ url }`. URL links only; see "Links and taps".                       |
@@ -416,9 +438,10 @@ onLoadProgress?: (event: { loadedBytes: number; totalBytes?: number }) => void;
   download 1% steps still mean 100 events. The time contract bounds JS work
   at ~10 events per second for any file size or network speed (unit tested:
   400 MB in 2 s → 21 events).
-- **Remote downloads only.** Local files open without a download phase;
-  stored copies that are used, or confirmed unchanged by the server, open
-  without progress events (see "Caching and offline").
+- **Remote downloads, and Android `content://` copies** (see "Source").
+  Local files open without a download phase; stored copies that are used,
+  or confirmed unchanged by the server, open without progress events (see
+  "Caching and offline").
 - The throttle runs natively on the download thread
   (`ProgressThrottle` in Kotlin and Swift); JS never sees dropped updates.
 

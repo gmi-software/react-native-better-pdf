@@ -6,7 +6,8 @@
 # a wrong and with the right password; Android cannot read the metadata of
 # encrypted documents), rotated and cropped pages (`page-boxes`, as in
 # viewer-page-sizes), the outline fixture, the bundled asset and a file that
-# is not a PDF. Screenshots show the cover and thumbnails.
+# is not a PDF; on Android also a content:// pipe. Screenshots show the
+# cover and thumbnails.
 appId: software.gmi.betterpdf.example
 ---
 - runFlow: _start.yaml
@@ -45,6 +46,15 @@ appId: software.gmi.betterpdf.example
 - assertVisible: "title: Raport kwartalny — żółć"
 - assertVisible: "sizes: 595x842 595x842"
 - assertVisible: "cover: 300x425"
+
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - tapOn: "metadata \\(content pipe\\)"
+      - extendedWaitUntil: { visible: "opened in .* ms", timeout: 15000 }
+      - assertVisible: "pages 2, stale no, file no"
+      - assertVisible: "title: Raport kwartalny — żółć"
+      - assertVisible: "cover: 300x425"
 
 - tapOn: "metadata-encrypted"
 - extendedWaitUntil: { visible: "error: password-required", timeout: 15000 }

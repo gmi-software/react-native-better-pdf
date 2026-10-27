@@ -1,4 +1,5 @@
 import { Directory, File, Paths } from 'expo-file-system';
+import { Platform } from 'react-native';
 import type {
   PdfBase64Source,
   PdfSource,
@@ -92,6 +93,64 @@ export async function ensureFixture(name: FixtureName): Promise<File> {
 async function base64Fixture(name: FixtureName): Promise<PdfBase64Source> {
   return { base64: await (await ensureFixture(name)).base64() };
 }
+
+/** How the example's Android provider hands a fixture out (modules/content-fixtures). */
+type ContentKind = 'file' | 'pipe' | 'partial' | 'stalled' | 'broken';
+
+/** A `content://` URI for a fixture, served by the example's own provider. */
+export async function contentFixture(
+  kind: ContentKind,
+  name: FixtureName,
+): Promise<PdfSource> {
+  await ensureFixture(name);
+  return {
+    uri: `content://software.gmi.betterpdf.example.fixtures/${kind}/${name}.pdf`,
+  };
+}
+
+const CONTENT_DOCUMENTS: DocumentEntry[] = [
+  {
+    id: 'content-file',
+    title: 'Content file',
+    subtitle: 'content:// of outline, a seekable file',
+    resolve: () => contentFixture('file', 'outline'),
+  },
+  {
+    id: 'content-pipe',
+    title: 'Content pipe',
+    subtitle: 'content:// of outline, streamed through a pipe',
+    resolve: () => contentFixture('pipe', 'outline'),
+  },
+  {
+    id: 'content-partial',
+    title: 'Content partial',
+    subtitle: 'content:// of outline, part of a larger file',
+    resolve: () => contentFixture('partial', 'outline'),
+  },
+  {
+    id: 'content-broken',
+    title: 'Content broken',
+    subtitle: 'A pipe whose provider fails halfway: expect invalid-pdf',
+    resolve: () => contentFixture('broken', 'outline'),
+  },
+  {
+    id: 'content-stalled',
+    title: 'Content stalled',
+    subtitle: 'A pipe of outline-large that stops; Swap: single-page',
+    resolve: () => contentFixture('stalled', 'outline-large'),
+    alternate: () => contentFixture('pipe', 'single-page'),
+  },
+  {
+    id: 'content-sources',
+    title: 'Content sources',
+    subtitle: 'links (pipe) + outline (partial) + mixed-sizes (file)',
+    resolve: async () => [
+      await contentFixture('pipe', 'links'),
+      await contentFixture('partial', 'outline'),
+      await contentFixture('file', 'mixed-sizes'),
+    ],
+  },
+];
 
 export const DOCUMENTS: DocumentEntry[] = [
   {
@@ -340,4 +399,5 @@ export const DOCUMENTS: DocumentEntry[] = [
       { uri: `${FIXTURE_SERVER}/does-not-exist.pdf` },
     ],
   },
+  ...(Platform.OS === 'android' ? CONTENT_DOCUMENTS : []),
 ];
