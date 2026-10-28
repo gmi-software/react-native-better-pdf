@@ -70,7 +70,8 @@ final class HybridBetterPdfCache: HybridBetterPdfCacheSpec {
     }
   }
 
-  private static let queue = DispatchQueue(label: "com.betterpdf.cache.api", qos: .userInitiated, attributes: .concurrent)
+  // Serial on purpose; see PdfDocumentLoader.workQueue.
+  private static let queue = DispatchQueue(label: "com.betterpdf.cache.api", qos: .userInitiated)
 
   private func finish(_ requestId: Double) {
     lock.withLock {

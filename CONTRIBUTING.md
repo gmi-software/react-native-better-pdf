@@ -46,6 +46,16 @@ adb reverse tcp:8090 tcp:8090           # Android only
 cd example && bunx expo run:ios         # or run:android
 ```
 
+`betterpdfexample://reopen?count=150` opens a document 150 times in a row and
+closes each viewer right after it loads. Add `&source=file` or `&source=remote`
+for a downloaded copy or a remote document instead of the bundled sample. Read
+the result on screen: `Reopened 150 / 150`, or `Stalled: open N never loaded`.
+On iOS 26 each viewer closed while PDFKit still analyzes its page blocks a
+thread for good, and loads must go on past the process's constrained thread
+limit (`sysctl kern.wq_max_constrained_threads`, 64 or more depending on the
+Mac). It is not a Maestro flow: once those threads are blocked, Maestro's
+hierarchy snapshots slow down enough to time out.
+
 ## End-to-end tests (Maestro)
 
 Flows live in `example/e2e/` and run on both platforms:
