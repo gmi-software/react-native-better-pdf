@@ -62,7 +62,7 @@ function parseShowcaseLink(url: string | null): ShowcaseFeature | null {
 }
 
 /**
- * `betterpdfexample://reopen?count=80[&source=bundled|file|remote]` opens a
+ * `betterpdfexample://reopen?count=150[&source=bundled|file|remote]` opens a
  * document `count` times in a row.
  */
 function parseReopenLink(
@@ -71,7 +71,7 @@ function parseReopenLink(
   const match = url == null ? null : /^[a-z]+:\/\/reopen\?(.*)$/.exec(url);
   if (match == null) return null;
   const params = new URLSearchParams(match[1]);
-  const count = Number(params.get('count') ?? 80);
+  const count = Number(params.get('count') ?? 150);
   const source = params.get('source') ?? 'bundled';
   if (!Number.isSafeInteger(count) || count <= 0) return null;
   if (source !== 'bundled' && source !== 'file' && source !== 'remote') {
