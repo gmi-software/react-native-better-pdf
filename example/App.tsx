@@ -73,7 +73,7 @@ function parseReopenLink(
   const params = new URLSearchParams(match[1]);
   const count = Number(params.get('count') ?? 80);
   const source = params.get('source') ?? 'bundled';
-  if (!(count > 0)) return null;
+  if (!Number.isSafeInteger(count) || count <= 0) return null;
   if (source !== 'bundled' && source !== 'file' && source !== 'remote') {
     return null;
   }
