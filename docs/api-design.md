@@ -194,8 +194,8 @@ type PdfSource =
   once like base64's file. The copy reports progress like a download
   (`totalBytes` from the asset's length or the provider's
   `OpenableColumns.SIZE`) and takes disk space outside `PdfCache`'s
-  accounting. A source change or dispose cancels the open
-  (`CancellationSignal`), and the signal's listener closes the descriptor,
+  accounting. A source change or dispose cancels the open and the size
+  query (`CancellationSignal`), and the signal's listener closes the descriptor,
   which ends a read blocked on a stalled pipe (checked on API 37: the
   thread and the partial file are gone at once). A failed read (the
   provider's `closeWithError`) or write (a full disk) is `invalid-pdf`,

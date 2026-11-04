@@ -6,6 +6,7 @@ import android.content.res.AssetFileDescriptor
 import android.database.Cursor
 import android.database.MatrixCursor
 import android.net.Uri
+import android.os.CancellationSignal
 import android.os.ParcelFileDescriptor
 import android.provider.OpenableColumns
 import android.util.Log
@@ -26,6 +27,7 @@ import kotlin.concurrent.thread
  * - `partial`: a part of a larger file, as an asset at an offset.
  * - `stalled`: a pipe that stops for a minute after its first 64 KiB.
  * - `broken`: a pipe whose writer fails halfway (`closeWithError`).
+ * - `slow-size`: a pipe whose size query takes a minute, unless cancelled.
  */
 class FixtureContentProvider : ContentProvider() {
   override fun onCreate() = true
@@ -48,6 +50,16 @@ class FixtureContentProvider : ContentProvider() {
     }
   }
 
+  override fun query(uri: Uri, projection: Array<String>?, selection: String?, selectionArgs: Array<String>?, sortOrder: String?, cancellationSignal: CancellationSignal?): Cursor {
+    if (kind(uri) == "slow-size") {
+      repeat((STALL_MS / POLL_MS).toInt()) {
+        cancellationSignal?.throwIfCanceled()
+        Thread.sleep(POLL_MS)
+      }
+    }
+    return query(uri, projection, selection, selectionArgs, sortOrder)
+  }
+
   override fun openAssetFile(uri: Uri, mode: String): AssetFileDescriptor? {
     if (kind(uri) != "partial") return super.openAssetFile(uri, mode)
     val file = fixture(uri)
@@ -68,7 +80,7 @@ class FixtureContentProvider : ContentProvider() {
     val file = fixture(uri)
     return when (kind(uri)) {
       "file" -> ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-      "pipe" -> pipe(uri, file) { input, output -> input.copyTo(output) }
+      "pipe", "slow-size" -> pipe(uri, file) { input, output -> input.copyTo(output) }
       "stalled" -> pipe(uri, file) { input, output ->
         val head = ByteArray(STALL_AFTER)
         output.write(head, 0, input.read(head))
@@ -121,5 +133,6 @@ class FixtureContentProvider : ContentProvider() {
     const val PADDING = 4096
     const val STALL_AFTER = 64 * 1024
     const val STALL_MS = 60_000L
+    const val POLL_MS = 100L
   }
 }

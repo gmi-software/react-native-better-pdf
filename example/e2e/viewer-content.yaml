@@ -1,7 +1,8 @@
 # content:// sources (Android only), from the example's provider
 # (modules/content-fixtures): a seekable file, a pipe and part of a larger
 # file all open; a pipe the provider breaks fails with invalid-pdf; a
-# stalled pipe reports progress, and Swap replaces it.
+# stalled pipe reports progress, and Swap replaces it; a broken source
+# fails a set at once, although another's size query has not returned.
 appId: software.gmi.betterpdf.example
 ---
 - runFlow:
@@ -41,4 +42,10 @@ appId: software.gmi.betterpdf.example
       - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content sources" } }
       - extendedWaitUntil: { visible: "1 / 20", timeout: 15000 }
       - assertVisible: "sources: p1\\+3 p4\\+12 p16\\+5"
+      - tapOn: "‹ Back"
+
+      # The broken source fails while the other waits a minute for its size.
+      - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Content failing sources" } }
+      - extendedWaitUntil: { visible: "invalid-pdf", timeout: 15000 }
+      - assertVisible: "The PDF could not be copied to the app's cache"
       - tapOn: "‹ Back"

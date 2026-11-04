@@ -95,7 +95,8 @@ async function base64Fixture(name: FixtureName): Promise<PdfBase64Source> {
 }
 
 /** How the example's Android provider hands a fixture out (modules/content-fixtures). */
-type ContentKind = 'file' | 'pipe' | 'partial' | 'stalled' | 'broken';
+type ContentKind =
+  'file' | 'pipe' | 'partial' | 'stalled' | 'broken' | 'slow-size';
 
 /** A `content://` URI for a fixture, served by the example's own provider. */
 export async function contentFixture(
@@ -148,6 +149,16 @@ const CONTENT_DOCUMENTS: DocumentEntry[] = [
       await contentFixture('pipe', 'links'),
       await contentFixture('partial', 'outline'),
       await contentFixture('file', 'mixed-sizes'),
+    ],
+  },
+  {
+    id: 'content-failing-sources',
+    title: 'Content failing sources',
+    subtitle:
+      'outline (pipe, size query takes a minute) + outline-large (broken): expect invalid-pdf at once',
+    resolve: async () => [
+      await contentFixture('slow-size', 'outline'),
+      await contentFixture('broken', 'outline-large'),
     ],
   },
 ];

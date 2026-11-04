@@ -99,10 +99,10 @@ class PdfSourceResolver(private val context: Context) {
     if (asset.declaredLength == AssetFileDescriptor.UNKNOWN_LENGTH && descriptor.isSeekable()) {
       return ResolvedSource(descriptor, file = null)
     }
-    val totalBytes = if (asset.declaredLength >= 0) asset.declaredLength else statedSize(uri)
     // Closing it also ends a read blocked on a stalled pipe.
     contentCancellation.setOnCancelListener(descriptor::closeQuietly)
     try {
+      val totalBytes = if (asset.declaredLength >= 0) asset.declaredLength else statedSize(uri)
       return openTemporaryCopy { file ->
         file.outputStream().use { output ->
           asset.createInputStream().use { it.copyWithProgress(output, totalBytes, { cancelled }, onProgress) }
@@ -124,10 +124,12 @@ class PdfSourceResolver(private val context: Context) {
 
   private fun statedSize(uri: Uri): Long? =
     try {
-      context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { cursor ->
+      context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null, contentCancellation)?.use { cursor ->
         val column = cursor.getColumnIndex(OpenableColumns.SIZE)
         if (column >= 0 && cursor.moveToFirst() && !cursor.isNull(column)) cursor.getLong(column) else null
       }
+    } catch (_: OperationCanceledException) {
+      throw InterruptedException()
     } catch (_: RuntimeException) {
       null
     }
