@@ -48,6 +48,9 @@ internal interface DocumentRenderer : AutoCloseable {
     /** Whether a long press can select text: the same renderers. */
     val supportsTextSelection: Boolean get() = supportsPasswords
 
+    /** Whether `search()` can find text: the same renderers. */
+    val supportsSearch: Boolean get() = supportsPasswords
+
     /** Android 12–14 with SDK extension 13; API 35+ uses `PdfRenderer` itself. */
     @get:ChecksSdkIntAtLeast(api = PRE_V_EXTENSION_VERSION, extension = Build.VERSION_CODES.S)
     private val hasPreV: Boolean get() = usesPreV(Build.VERSION.SDK_INT, sExtensionVersion)

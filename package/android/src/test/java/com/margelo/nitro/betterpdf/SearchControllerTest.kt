@@ -24,7 +24,7 @@ class SearchControllerTest {
 
   private val host = Host(pageCount = 10, currentPageIndex = 4)
   private val events = ArrayList<PdfSearchChangeEvent>()
-  private val controller = SearchController(host) { events += it }
+  private val controller = SearchController(host, canSearch = true) { events += it }
   private val started = ArrayList<Started>()
   private var canStart = true
   private val startSearch: SearchStart = { query, pageCount, startPage, pages, listener ->
@@ -35,6 +35,8 @@ class SearchControllerTest {
       null
     }
   }
+
+  private val startNothing: SearchStart = { _, _, _, _, _ -> throw AssertionError("A device that cannot search started a task") }
 
   private fun match(page: Int) = listOf(listOf(PageRect(page.toFloat(), 0f, page + 1f, 1f)))
 
@@ -160,5 +162,35 @@ class SearchControllerTest {
     controller.onViewDetached()
     controller.onViewAttached()
     assertEquals(1, started.size)
+  }
+
+  @Test
+  fun `a search on a device that cannot search ends at once without a task`() {
+    val controller = SearchController(host, canSearch = false) { events += it }
+    controller.onDocumentChanged(startNothing)
+    controller.onViewAttached()
+    controller.search("lorem")
+
+    val event = events.single()
+    assertEquals("lorem", event.query)
+    assertEquals(0.0, event.matchCount, 0.0)
+    assertTrue(event.isComplete)
+    assertFalse(event.isSupported)
+
+    controller.onViewDetached()
+    controller.onViewAttached()
+    assertEquals(1, events.size)
+  }
+
+  @Test
+  fun `a search on a device that cannot search, while the view is detached, ends at once`() {
+    val controller = SearchController(host, canSearch = false) { events += it }
+    controller.onDocumentChanged(startNothing)
+    controller.search("lorem")
+
+    assertTrue(events.single().isComplete)
+    assertFalse(events.single().isSupported)
+    controller.onViewAttached()
+    assertEquals(1, events.size)
   }
 }
