@@ -68,12 +68,17 @@ class FixtureContentProvider : ContentProvider() {
     val padded = File(context!!.cacheDir, "padded-${file.name}")
     if (!padded.exists()) {
       val temp = File.createTempFile("${padded.name}-", ".tmp", padded.parentFile)
-      temp.outputStream().use { output ->
-        output.write(ByteArray(PADDING))
-        file.inputStream().use { it.copyTo(output) }
-        output.write(ByteArray(PADDING))
+      try {
+        temp.outputStream().use { output ->
+          output.write(ByteArray(PADDING))
+          file.inputStream().use { it.copyTo(output) }
+          output.write(ByteArray(PADDING))
+        }
+        if (!temp.renameTo(padded)) throw FileNotFoundException("Could not rename ${temp.name} to ${padded.name}")
+      } finally {
+        // A no-op once the rename has moved it.
+        temp.delete()
       }
-      if (!temp.renameTo(padded)) temp.delete()
     }
     return AssetFileDescriptor(ParcelFileDescriptor.open(padded, ParcelFileDescriptor.MODE_READ_ONLY), PADDING.toLong(), file.length())
   }
