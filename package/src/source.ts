@@ -128,8 +128,13 @@ function describeValue(value: unknown): string {
       return value.toString();
     case 'function':
       return 'a function';
-    case 'object':
-      return Array.isArray(value) ? 'an array' : 'an object';
+    case 'object': {
+      if (Array.isArray(value)) return 'an array';
+      const name = Object.getPrototypeOf(value)?.constructor?.name;
+      return typeof name === 'string' && name !== 'Object'
+        ? `a ${name}`
+        : 'an object';
+    }
     default:
       return typeof value;
   }
@@ -206,11 +211,8 @@ export function validateSourceItem(
     };
   }
   if ('uri' in obj) {
-    if (typeof obj.uri === 'string') {
-      const error = uriOptionError(obj);
-      if (error !== undefined) return { ok: false, error };
-      return { ok: true, source: normalizeUriSource(source as PdfUriSource) };
-    }
+    const { uri } = obj;
+    if (typeof uri === 'string') return uriSourceResult(uri, obj);
     return {
       ok: false,
       error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
@@ -223,66 +225,90 @@ export function validateSourceItem(
 }
 
 /**
- * The first invalid option of a URI source, described for `invalid-source`.
- * Checked here because Nitro's converters throw on a value of the wrong
- * type. `null` is absent, like `undefined`.
+ * The native shape of a URI source, or why its options are invalid: Nitro's
+ * converters throw on a value of the wrong type. Reads each option once and
+ * copies `headers`, so neither a getter nor later mutation of the caller's
+ * object can change what was checked. `null` options are absent.
  */
-function uriOptionError(source: Record<string, unknown>): string | undefined {
+function uriSourceResult(
+  uri: string,
+  source: Record<string, unknown>,
+):
+  | { ok: true; source: Omit<NativePdfSource, 'base64'> }
+  | { ok: false; error: string } {
   const { headers, cache, maxAgeMs, cacheKey } = source;
+  const normalized: Omit<NativePdfSource, 'base64'> = { uri };
   if (headers != null) {
-    if (typeof headers !== 'object' || Array.isArray(headers)) {
-      return `source.headers must be an object of strings; got ${describeValue(headers)}`;
+    const prototype =
+      typeof headers === 'object' ? Object.getPrototypeOf(headers) : undefined;
+    if (prototype !== Object.prototype && prototype !== null) {
+      return {
+        ok: false,
+        error: `source.headers must be an object of strings; got ${describeValue(headers)}`,
+      };
     }
-    for (const [name, value] of Object.entries(headers)) {
+    const copy: Record<string, string> = {};
+    for (const [name, value] of Object.entries(headers as object)) {
       if (typeof value !== 'string') {
-        return `source.headers[${JSON.stringify(name)}] must be a string; got ${describeValue(value)}`;
+        return {
+          ok: false,
+          error: `source.headers[${JSON.stringify(name)}] must be a string; got ${describeValue(value)}`,
+        };
       }
+      copy[name] = value;
     }
+    normalized.headers = copy;
   }
-  if (cache != null && cache !== 'session' && cache !== 'persistent') {
-    return `source.cache must be 'session' or 'persistent'; got ${describeValue(cache)}`;
+  if (cache != null) {
+    if (cache !== 'session' && cache !== 'persistent') {
+      return {
+        ok: false,
+        error: `source.cache must be 'session' or 'persistent'; got ${describeValue(cache)}`,
+      };
+    }
+    normalized.cache = cache;
   }
-  if (
-    maxAgeMs != null &&
-    !(
-      typeof maxAgeMs === 'number' &&
-      Number.isFinite(maxAgeMs) &&
-      maxAgeMs >= 0
-    )
-  ) {
-    return `source.maxAgeMs must be a finite number of at least 0; got ${describeValue(maxAgeMs)}`;
+  if (maxAgeMs != null) {
+    if (
+      typeof maxAgeMs !== 'number' ||
+      !Number.isFinite(maxAgeMs) ||
+      maxAgeMs < 0
+    ) {
+      return {
+        ok: false,
+        error: `source.maxAgeMs must be a finite number of at least 0; got ${describeValue(maxAgeMs)}`,
+      };
+    }
+    normalized.maxAgeMs = maxAgeMs;
   }
-  if (cacheKey != null && typeof cacheKey !== 'string') {
-    return `source.cacheKey must be a string; got ${describeValue(cacheKey)}`;
+  if (cacheKey != null) {
+    if (typeof cacheKey !== 'string') {
+      return {
+        ok: false,
+        error: `source.cacheKey must be a string; got ${describeValue(cacheKey)}`,
+      };
+    }
+    normalized.cacheKey = cacheKey;
   }
-  return undefined;
+  return { ok: true, source: normalized };
 }
 
-/**
- * The native shape of a URI source. Copies `headers` so later mutation of
- * the caller's object cannot leak into native code, and leaves absent
- * options absent.
- */
+/** The native shape of a URI source; throws when it is invalid. */
 export function normalizeUriSource(
   source: PdfUriSource,
 ): Omit<NativePdfSource, 'base64'> {
-  if (
-    source == null ||
-    typeof source !== 'object' ||
-    typeof (source as { uri?: unknown }).uri !== 'string'
-  ) {
+  const uri = (source as { uri?: unknown } | null | undefined)?.uri;
+  if (source == null || typeof source !== 'object' || typeof uri !== 'string') {
     throw new Error(
       `source must be an object with uri; got ${describeSourceType(source, true)}`,
     );
   }
-  const error = uriOptionError(source as unknown as Record<string, unknown>);
-  if (error !== undefined) throw new Error(error);
-  const normalized: Omit<NativePdfSource, 'base64'> = { uri: source.uri };
-  if (source.headers != null) normalized.headers = { ...source.headers };
-  if (source.cache != null) normalized.cache = source.cache;
-  if (source.maxAgeMs != null) normalized.maxAgeMs = source.maxAgeMs;
-  if (source.cacheKey != null) normalized.cacheKey = source.cacheKey;
-  return normalized;
+  const result = uriSourceResult(
+    uri,
+    source as unknown as Record<string, unknown>,
+  );
+  if (!result.ok) throw new Error(result.error);
+  return result.source;
 }
 
 /** The source's own password, if it has one (bundled assets cannot). */

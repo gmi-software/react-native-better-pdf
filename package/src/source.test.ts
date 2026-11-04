@@ -113,6 +113,10 @@ describe('validateSourceItem', () => {
         'source.headers must be an object of strings; got an array',
       ],
       [
+        { uri, headers: new Map([['Authorization', 'x']]) },
+        'source.headers must be an object of strings; got a Map',
+      ],
+      [
         { uri, headers: { 'X-User': 7 } },
         'source.headers["X-User"] must be a string; got 7',
       ],
@@ -156,6 +160,31 @@ describe('validateSourceItem', () => {
       });
       expect(() => normalizeUriSource(source as never)).toThrow(error);
     }
+  });
+
+  test('reads each option once, so a getter cannot change it after the check', () => {
+    let reads = 0;
+    const headers = {
+      get Authorization() {
+        reads += 1;
+        return reads === 1 ? 'Bearer 1' : (7 as never);
+      },
+    };
+    let headersReads = 0;
+    const source = {
+      uri: 'https://x.test/a.pdf',
+      get headers() {
+        headersReads += 1;
+        return headersReads === 1 ? headers : (7 as never);
+      },
+    };
+    expect(validateSourceItem(source, resolveAsset)).toEqual({
+      ok: true,
+      source: {
+        uri: 'https://x.test/a.pdf',
+        headers: { Authorization: 'Bearer 1' },
+      },
+    });
   });
 });
 
