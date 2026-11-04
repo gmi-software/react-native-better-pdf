@@ -47,7 +47,11 @@ the document.
 A source must be a `require()` asset number or an object with `uri`, `filePath`
 or `base64`. Anything else — a raw URL string (e.g. `'https://...'`), an empty
 object `{}`, property types that do not match (such as `{ uri: 42 }`), or list
-items that are not objects (such as `[null]`) — is malformed:
+items that are not objects (such as `[null]`) — is malformed. So is a URI
+source with an option of the wrong type: `headers` that is not an object of
+strings (a header whose value is `undefined` included), `cache` other than
+`'session'` or `'persistent'`, `maxAgeMs` that is not a finite number of at
+least 0, or `cacheKey` that is not a string. `null` options count as absent.
 
 - In `PdfView`: it never throws during render. Nothing is sent to native, and
   `onError` is called once with `code: 'invalid-source'` and an explanatory

@@ -172,6 +172,19 @@ describe('PdfDocument.open', () => {
     }
   });
 
+  test('rejects options of the wrong type before creating the native object', async () => {
+    const error = await PdfDocument.open({
+      uri: 'https://x.test/a.pdf',
+      cacheKey: 42,
+    } as never).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PdfOpenError);
+    expect(error).toMatchObject({
+      code: 'invalid-source',
+      message: 'source.cacheKey must be a string; got 42',
+    });
+    expect(natives).toEqual([]);
+  });
+
   test("a source's own password takes precedence over the option", async () => {
     void PdfDocument.open(
       { uri: '/docs/a.pdf', password: 'own' },

@@ -87,6 +87,76 @@ describe('validateSourceItem', () => {
   test('unresolvable assets become an empty uri, which native reports as invalid-source', () => {
     expect(validatedSource(99)).toEqual({ uri: '' });
   });
+
+  test('null options are absent', () => {
+    expect(
+      validatedSource({
+        uri: 'https://x.test/a.pdf',
+        headers: null,
+        cache: null,
+        maxAgeMs: null,
+        cacheKey: null,
+      }),
+    ).toEqual({ uri: 'https://x.test/a.pdf' });
+  });
+
+  test('reports options of the wrong type, naming the option', () => {
+    const uri = 'https://x.test/a.pdf';
+    const cases: [Record<string, unknown>, string][] = [
+      [{ uri, cacheKey: 42 }, 'source.cacheKey must be a string; got 42'],
+      [
+        { uri, headers: 'Authorization: x' },
+        'source.headers must be an object of strings; got a string',
+      ],
+      [
+        { uri, headers: ['x'] },
+        'source.headers must be an object of strings; got an array',
+      ],
+      [
+        { uri, headers: { 'X-User': 7 } },
+        'source.headers["X-User"] must be a string; got 7',
+      ],
+      [
+        { uri, headers: { Authorization: undefined } },
+        'source.headers["Authorization"] must be a string; got undefined',
+      ],
+      [
+        { uri, headers: { Authorization: null } },
+        'source.headers["Authorization"] must be a string; got null',
+      ],
+      [
+        { uri, cache: 'Persistent' },
+        "source.cache must be 'session' or 'persistent'; got a string",
+      ],
+      [
+        { uri, cache: true },
+        "source.cache must be 'session' or 'persistent'; got true",
+      ],
+      [
+        { uri, maxAgeMs: '0' },
+        'source.maxAgeMs must be a finite number of at least 0; got a string',
+      ],
+      [
+        { uri, maxAgeMs: -1 },
+        'source.maxAgeMs must be a finite number of at least 0; got -1',
+      ],
+      [
+        { uri, maxAgeMs: Number.NaN },
+        'source.maxAgeMs must be a finite number of at least 0; got NaN',
+      ],
+      [
+        { uri, maxAgeMs: Number.POSITIVE_INFINITY },
+        'source.maxAgeMs must be a finite number of at least 0; got Infinity',
+      ],
+    ];
+    for (const [source, error] of cases) {
+      expect(validateSourceItem(source, resolveAsset)).toEqual({
+        ok: false,
+        error,
+      });
+      expect(() => normalizeUriSource(source as never)).toThrow(error);
+    }
+  });
 });
 
 describe('sourceKey', () => {

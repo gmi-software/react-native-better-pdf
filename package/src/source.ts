@@ -120,6 +120,8 @@ function describeValue(value: unknown): string {
       return 'a string';
     case 'number':
       return Number.isNaN(value) ? 'NaN' : String(value);
+    case 'boolean':
+      return String(value);
     case 'bigint':
       return `${value}n`;
     case 'symbol':
@@ -205,6 +207,8 @@ export function validateSourceItem(
   }
   if ('uri' in obj) {
     if (typeof obj.uri === 'string') {
+      const error = uriOptionError(obj);
+      if (error !== undefined) return { ok: false, error };
       return { ok: true, source: normalizeUriSource(source as PdfUriSource) };
     }
     return {
@@ -216,6 +220,42 @@ export function validateSourceItem(
     ok: false,
     error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
   };
+}
+
+/**
+ * The first invalid option of a URI source, described for `invalid-source`.
+ * Checked here because Nitro's converters throw on a value of the wrong
+ * type. `null` is absent, like `undefined`.
+ */
+function uriOptionError(source: Record<string, unknown>): string | undefined {
+  const { headers, cache, maxAgeMs, cacheKey } = source;
+  if (headers != null) {
+    if (typeof headers !== 'object' || Array.isArray(headers)) {
+      return `source.headers must be an object of strings; got ${describeValue(headers)}`;
+    }
+    for (const [name, value] of Object.entries(headers)) {
+      if (typeof value !== 'string') {
+        return `source.headers[${JSON.stringify(name)}] must be a string; got ${describeValue(value)}`;
+      }
+    }
+  }
+  if (cache != null && cache !== 'session' && cache !== 'persistent') {
+    return `source.cache must be 'session' or 'persistent'; got ${describeValue(cache)}`;
+  }
+  if (
+    maxAgeMs != null &&
+    !(
+      typeof maxAgeMs === 'number' &&
+      Number.isFinite(maxAgeMs) &&
+      maxAgeMs >= 0
+    )
+  ) {
+    return `source.maxAgeMs must be a finite number of at least 0; got ${describeValue(maxAgeMs)}`;
+  }
+  if (cacheKey != null && typeof cacheKey !== 'string') {
+    return `source.cacheKey must be a string; got ${describeValue(cacheKey)}`;
+  }
+  return undefined;
 }
 
 /**
@@ -235,6 +275,8 @@ export function normalizeUriSource(
       `source must be an object with uri; got ${describeSourceType(source, true)}`,
     );
   }
+  const error = uriOptionError(source as unknown as Record<string, unknown>);
+  if (error !== undefined) throw new Error(error);
   const normalized: Omit<NativePdfSource, 'base64'> = { uri: source.uri };
   if (source.headers != null) normalized.headers = { ...source.headers };
   if (source.cache != null) normalized.cache = source.cache;
