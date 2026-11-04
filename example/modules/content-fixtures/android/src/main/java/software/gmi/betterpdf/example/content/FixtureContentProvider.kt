@@ -67,11 +67,13 @@ class FixtureContentProvider : ContentProvider() {
     // the document opens only when the offset is honoured.
     val padded = File(context!!.cacheDir, "padded-${file.name}")
     if (!padded.exists()) {
-      padded.outputStream().use { output ->
+      val temp = File.createTempFile("${padded.name}-", ".tmp", padded.parentFile)
+      temp.outputStream().use { output ->
         output.write(ByteArray(PADDING))
         file.inputStream().use { it.copyTo(output) }
         output.write(ByteArray(PADDING))
       }
+      if (!temp.renameTo(padded)) temp.delete()
     }
     return AssetFileDescriptor(ParcelFileDescriptor.open(padded, ParcelFileDescriptor.MODE_READ_ONLY), PADDING.toLong(), file.length())
   }
