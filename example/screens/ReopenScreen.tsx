@@ -24,9 +24,10 @@ async function resolveSource(source: ReopenSource): Promise<PdfSource> {
 
 /**
  * Opens a document `count` times in a row, closing each viewer right after
- * its load event, the way a list of documents is browsed quickly. On iOS 26,
- * each viewer closed while PDFKit still analyzes its page leaves a thread
- * blocked for good; the viewer must keep loading documents regardless.
+ * its load event, the way a list of documents is browsed quickly. The next
+ * viewer opens at once, so PDFKit's page analyses overlap, which on iOS 26
+ * can leave a thread blocked for good; the viewer must keep loading
+ * documents regardless.
  */
 export function ReopenScreen({
   count,

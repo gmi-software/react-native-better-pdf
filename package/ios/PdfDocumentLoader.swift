@@ -13,11 +13,11 @@ final class PdfDocumentLoader {
   // Serial, like every queue here: GCD runs a serial queue on its overcommit
   // threads. A concurrent queue shares the process's constrained threads
   // (`kern.wq_max_constrained_threads`, 64 or more depending on the machine),
-  // and iOS 26 PDFKit blocks one of them for good per PDFView closed while
-  // it analyzes a page (PDFPageAnalyzerV2 → Vision). Once all are blocked, no
-  // work on a concurrent queue ever starts again, so no document would load.
-  // Overcommit threads run out too (`kern.wq_max_threads`), much later: this
-  // delays the stall, it does not remove it.
+  // and iOS 26 PDFKit can block one of them for good whenever page analyses
+  // in different PDFViews overlap (PDFPageAnalyzerV2 → Vision). Once all are
+  // blocked, no work on a concurrent queue ever starts again, so no document
+  // would load. Overcommit threads run out too (`kern.wq_max_threads`), much
+  // later: this delays the stall, it does not remove it.
   private static let workQueue = DispatchQueue(label: "com.betterpdf.load", qos: .userInitiated)
 
   /// Loads the document. `progress` (remote downloads only, throttled) and
