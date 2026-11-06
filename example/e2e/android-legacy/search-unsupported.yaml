@@ -1,0 +1,21 @@
+# Search on Android devices without the renderer's newer API (the API 34
+# emulator image, SDK extension 7): every search reports isSupported: false
+# ("n/a"), and the document stays usable. Devices with the newer API run
+# viewer-search instead.
+#   maestro --device <id> test example/e2e/android-legacy/search-unsupported.yaml
+appId: software.gmi.betterpdf.example
+---
+- runFlow: ../_start.yaml
+- tapOn: "Viewer"
+- tapOn: "Bundled sample.*"
+- extendedWaitUntil: { visible: "1 / 3", timeout: 15000 }
+- tapOn: "Find"
+- tapOn: { id: "search-input" }
+- inputText: "a"
+- extendedWaitUntil: { visible: { id: "search-status", text: "n/a" }, timeout: 5000 }
+- inputText: "b"
+- extendedWaitUntil: { visible: { id: "search-status", text: "n/a" }, timeout: 5000 }
+- tapOn: "Find"
+- tapOn: "Last"
+- extendedWaitUntil: { visible: "3 / 3", timeout: 5000 }
+- tapOn: "‹ Back"

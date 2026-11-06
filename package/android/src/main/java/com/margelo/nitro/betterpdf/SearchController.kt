@@ -13,6 +13,7 @@ internal typealias SearchStart =
  */
 internal class SearchController(
   private val view: Host,
+  private val canSearch: Boolean = DocumentRenderer.supportsSearch,
   private val emit: (PdfSearchChangeEvent) -> Unit,
 ) : PdfSearchTask.Listener {
   interface Host {
@@ -67,8 +68,10 @@ internal class SearchController(
     view.searchResults = results
     startPage = view.currentPageIndex
     searchedPages = 0
-    isSupported = true
-    isComplete = false
+    // Without the renderer's text API a task would only open the document
+    // and a page to find out.
+    isSupported = canSearch
+    isComplete = !canSearch
     runTask()
     emitNow()
   }
