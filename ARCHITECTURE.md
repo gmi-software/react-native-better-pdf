@@ -85,7 +85,7 @@ package/
     LruByteCache.kt                pure: byte-budgeted LRU
     BitmapPool.kt                  bitmap reuse + eager recycling
     MemoryBudgets.kt               pure: bitmap pool budget
-    PdfSourceResolver.kt           source → seekable ParcelFileDescriptor (base64: write, open, delete)
+    PdfSourceResolver.kt           source → seekable ParcelFileDescriptor (base64, streamed content://: write, open, delete)
     NativeBase64Document.kt        JNI entry: base64 text in a native buffer → decoded into a file
     DocumentCache.kt               fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.kt          copies on disk: session/persistent dirs, metadata
@@ -129,7 +129,7 @@ the render thread, once per render (see "Cache strategy").
 | `getFormFields`                             | main: the changed fields' values → `com.betterpdf.read` queue: separate `PDFDocument` filled in with them, every widget page read | main → the document's `BetterPdf-render` thread (form work in call order) |
 | `setFormFieldValues`, the reader's form edits | main: PDFKit's widgets of the fields' pages only (field → pages index from the page dictionaries) | main → `BetterPdf-render` thread (form work in call order); results on main |
 | Remote download (`DocumentCache`)           | lookup on `com.betterpdf.cache`; transfer and store on the `URLSession` delegate queue | lookup and transfer on `BetterPdf-download` threads (`HttpURLConnection`); the document worker waits |
-| Download progress (throttle ≤ 10/s)         | throttled on the delegate queue → main | throttled on the download thread → main         |
+| Download progress (throttle ≤ 10/s)         | throttled on the delegate queue → main | throttled on the download thread → main (`content://` copies: the resolving thread) |
 | `PdfCache` (`getEntry`, `remove`, `clear`, `getByteSize`) | `com.betterpdf.cache.api` queue, disk only | `Promise.parallel` thread, disk only |
 | `PdfDocument.open`                          | as the view's open (`PdfDocumentLoader`), plain `PDFDocument` | `BetterPdf-document` thread: source, then a renderer to count pages (closed) |
 | `PdfDocument` reads (in call order)         | the document's `com.betterpdf.document` serial queue, its own `PDFDocument` | the document's `BetterPdf-document` thread (exits when idle), `DocumentReads` on duplicated FDs |

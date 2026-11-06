@@ -40,7 +40,7 @@ Every component, object and type is exported from the package root. The
 | `searchHighlightColor` | `ColorValue` | `'rgba(255, 214, 0, 0.4)'` | background of search matches; use a translucent colour |
 | `searchCurrentHighlightColor` | `ColorValue` | `'rgba(255, 140, 0, 0.6)'` | background of the current match |
 | `onLoad` | `({ pageCount, firstPageWidth, firstPageHeight, filePath?, isStale, sources }) => void` | | first page's size in PDF points, as displayed (crop box, rotation applied); `filePath`: the local file being displayed (downloaded copy, local file or extracted asset; not for `{ base64 }`, `content://` or several sources); `isStale`: an outdated stored copy shown because the server could not be reached (see [Offline reading and caching](guides/offline-and-caching.md)); `sources`: each source's `{ pageCount, firstPage, filePath?, isStale }` |
-| `onLoadProgress` | `({ loadedBytes, totalBytes? }) => void` | | remote downloads only (not when a stored copy is used); at most every 100 ms plus once on completion |
+| `onLoadProgress` | `({ loadedBytes, totalBytes? }) => void` | | remote downloads (not when a stored copy is used) and, on Android, `content://` documents that are copied (see [Sources and loading](guides/sources-and-loading.md#content-uris-on-android)); at most every 100 ms plus once on completion |
 | `onPageChange` | `({ page, pageCount }) => void` | | zero-based |
 | `onError` | `(error: PdfLoadError \| PdfPageError) => void` | | without `error.page`: the load failed and nothing is shown; with `error.page` (Android only): a page could not be rendered after `onLoad`, and the document stays open; see [Errors](#errors) |
 | `onLinkPress` | `({ url }) => void` | | tap on a URL link; the viewer never opens URLs itself |
