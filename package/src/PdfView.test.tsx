@@ -1162,6 +1162,27 @@ describe('PdfView', () => {
     ]);
   });
 
+  test('source options of the wrong type call onError once and send nothing to native', () => {
+    const errors: unknown[] = [];
+    render(
+      <PdfView
+        source={[
+          { uri: 'https://x.test/a.pdf' },
+          { uri: 'https://x.test/b.pdf', headers: { 'X-User': 7 } } as never,
+        ]}
+        onError={(err) => errors.push(err)}
+      />,
+    );
+    expect(hostRenders.length).toBe(0);
+    expect(errors).toEqual([
+      {
+        code: 'invalid-source',
+        message: 'source.headers["X-User"] must be a string; got 7',
+        sourceIndex: 1,
+      },
+    ]);
+  });
+
   test('promise methods reject with coded PdfMethodErrors', async () => {
     const ref = createRef<PdfViewRef>();
     render(<PdfView ref={ref} source={{ uri: 'x' }} />);

@@ -241,4 +241,21 @@ describe('PdfCache', () => {
       await expect(removePromise!).rejects.toThrow();
     }
   });
+
+  test('download, getEntry and remove reject options of the wrong type before native code', async () => {
+    const source = { uri: 'https://x.test/a.pdf', cacheKey: 42 } as never;
+    const error = await PdfCache.download(source).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(PdfDownloadError);
+    expect(error).toMatchObject({
+      code: 'invalid-source',
+      message: 'source.cacheKey must be a string; got 42',
+    });
+    await expect(PdfCache.getEntry(source)).rejects.toThrow(
+      'source.cacheKey must be a string; got 42',
+    );
+    await expect(PdfCache.remove(source)).rejects.toThrow(
+      'source.cacheKey must be a string; got 42',
+    );
+    expect(downloads).toEqual([]);
+  });
 });
