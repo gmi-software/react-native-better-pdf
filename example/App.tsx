@@ -8,6 +8,7 @@ import { BenchmarkScreen, type BenchRequest } from './screens/BenchmarkScreen';
 import { DocumentsScreen } from './screens/DocumentsScreen';
 import { EmbeddedScreen } from './screens/EmbeddedScreen';
 import { OfflineScreen } from './screens/OfflineScreen';
+import { ReopenScreen, type ReopenSource } from './screens/ReopenScreen';
 import {
   SHOWCASE_FEATURES,
   ShowcaseScreen,
@@ -60,6 +61,25 @@ function parseShowcaseLink(url: string | null): ShowcaseFeature | null {
   return SHOWCASE_FEATURES.find((name) => name === feature) ?? null;
 }
 
+/**
+ * `betterpdfexample://reopen?count=150[&source=bundled|file|remote]` opens a
+ * document `count` times in a row.
+ */
+function parseReopenLink(
+  url: string | null,
+): { count: number; source: ReopenSource; key: number } | null {
+  const match = url == null ? null : /^[a-z]+:\/\/reopen\?(.*)$/.exec(url);
+  if (match == null) return null;
+  const params = new URLSearchParams(match[1]);
+  const count = Number(params.get('count') ?? 150);
+  const source = params.get('source') ?? 'bundled';
+  if (!Number.isSafeInteger(count) || count <= 0) return null;
+  if (source !== 'bundled' && source !== 'file' && source !== 'remote') {
+    return null;
+  }
+  return { count, source, key: Date.now() };
+}
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('viewer');
   const [autoRun, setAutoRun] = useState<BenchRequest | null>(null);
@@ -67,9 +87,18 @@ export default function App() {
     feature: ShowcaseFeature;
     key: number;
   } | null>(null);
+  const [reopen, setReopen] =
+    useState<ReturnType<typeof parseReopenLink>>(null);
 
   useEffect(() => {
     const handle = (url: string | null) => {
+      const reopenRequest = parseReopenLink(url);
+      if (reopenRequest != null) {
+        setShowcase(null);
+        setReopen(reopenRequest);
+        return;
+      }
+      setReopen(null);
       const feature = parseShowcaseLink(url);
       if (feature != null) {
         setShowcase({ feature, key: Date.now() });
@@ -87,6 +116,21 @@ export default function App() {
     );
     return () => subscription.remove();
   }, []);
+
+  if (reopen != null) {
+    return (
+      <SafeAreaProvider>
+        <SafeAreaView style={styles.fill} edges={['top', 'bottom']}>
+          <StatusBar style="dark" />
+          <ReopenScreen
+            key={reopen.key}
+            count={reopen.count}
+            source={reopen.source}
+          />
+        </SafeAreaView>
+      </SafeAreaProvider>
+    );
+  }
 
   if (showcase != null) {
     return (

@@ -49,7 +49,8 @@ final class DocumentCache {
 
   let store: DocumentCacheStore
   private let clock: () -> Int64
-  private let workQueue = DispatchQueue(label: "com.betterpdf.cache", qos: .userInitiated, attributes: .concurrent)
+  // Serial on purpose; see PdfDocumentLoader.workQueue.
+  private let workQueue = DispatchQueue(label: "com.betterpdf.cache", qos: .userInitiated)
   private let lock = NSLock()
   private var inFlight: [String: SharedDownload] = [:]
 
