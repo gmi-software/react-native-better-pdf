@@ -92,7 +92,7 @@ body:
     attributes:
       label: Can you build the example app?
       description: >
-        Try to build the example app (`example/`, see [Example app](https://github.com/gmi-software/react-native-better-pdf#example-app)).
+        Try to build the example app (`example/`, see [Example app](https://github.com/gmi-software/react-native-better-pdf/tree/main/example)).
         **Note:** this separates a problem in the library from a problem in your app's native setup, and is the single most useful thing you can report here.
       options:
         - I didn't try (⚠️ your issue may take much longer to get looked at)
@@ -109,7 +109,7 @@ body:
         - label: I am using Expo with a development build
         - label: I have the New Architecture enabled
         - label: I retried after a clean build (`expo prebuild --clean`, deleted `ios/Pods` and `android/build`)
-        - label: I checked [Common problems](https://github.com/gmi-software/react-native-better-pdf#common-problems) and my issue is not listed there.
+        - label: I checked [Common problems](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/troubleshooting.md) and my issue is not listed there.
           required: true
         - label: I searched for [similar issues in this repository](https://github.com/gmi-software/react-native-better-pdf/issues) and found none.
           required: true

@@ -64,7 +64,7 @@ body:
       label: Device
       description: >
         Which device shows the problem? Give the full name plus the OS version, and say whether it is a simulator/emulator or a physical device.
-        On Android 12–14, say whether the device has SDK extension 13 (see the [capability matrix](https://github.com/gmi-software/react-native-better-pdf#capability-matrix)).
+        On Android 12–14, say whether the device has SDK extension 13 (see the [capability matrix](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/compatibility.md#capability-matrix)).
         If you tested several, list them comma separated.
       placeholder: ex. iPhone 16 Pro (iOS 26.1, simulator), Pixel 7 (Android 14, SDK extension 13, physical)
     validations:
@@ -99,7 +99,7 @@ body:
     attributes:
       label: Can you reproduce this in the example app?
       description: >
-        Run the example app (`example/`, see [Example app](https://github.com/gmi-software/react-native-better-pdf#example-app)) with your document and check whether the problem shows up there too.
+        Run the example app (`example/`, see [Example app](https://github.com/gmi-software/react-native-better-pdf/tree/main/example)) with your document and check whether the problem shows up there too.
         **Note:** an issue that does not reproduce in the example app and ships no reproduction is much harder to act on.
       options:
         - I didn't try (⚠️ your issue may take much longer to get looked at)
@@ -117,7 +117,7 @@ body:
         - label: The document is downloaded (a remote `uri`)
         - label: The document is password protected
         - label: I am using `PdfCache` or a `cache` option
-        - label: I checked [Common problems](https://github.com/gmi-software/react-native-better-pdf#common-problems) and [Limitations](https://github.com/gmi-software/react-native-better-pdf#limitations), and my issue is not listed there.
+        - label: I checked [Common problems](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/troubleshooting.md) and [Limitations](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/limitations.md), and my issue is not listed there.
           required: true
         - label: I searched for [similar issues in this repository](https://github.com/gmi-software/react-native-better-pdf/issues) and found none.
           required: true

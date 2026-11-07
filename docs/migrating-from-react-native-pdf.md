@@ -8,21 +8,9 @@ read from react-native-pdf 7.0.5's source, not from its README.
 
 ## Common react-native-pdf issues
 
-How this library handles what react-native-pdf users report most:
-
-| Reported in react-native-pdf | react-native-better-pdf |
-| --- | --- |
-| Android 16 KB page size ([#960](https://github.com/wonday/react-native-pdf/issues/960) and others) | Native library 16 KB aligned |
-| New Architecture / Fabric ([#878](https://github.com/wonday/react-native-pdf/issues/878) and others) | Built for Fabric on Nitro Views |
-| `react-native-blob-util` crashes and setup ([#796](https://github.com/wonday/react-native-pdf/issues/796) and others) | Not used: downloads are native |
-| Android "Already closed" crashes ([#830](https://github.com/wonday/react-native-pdf/issues/830) and others) | Closing a document while it renders, searches or exports is handled and stress-tested |
-| Link taps on Android ([#983](https://github.com/wonday/react-native-pdf/issues/983) and others) | Every link form on every Android version (password-protected documents: see [Limitations](limitations.md)) |
-| Search ([#555](https://github.com/wonday/react-native-pdf/issues/555) and others) | Built in, with highlights (Android: see the [capability matrix](../README.md#capability-matrix)) |
-| Viewport events, restoring the position ([#492](https://github.com/wonday/react-native-pdf/issues/492) and others) | `onViewportChange`, `initialViewport`, `goToViewport` |
-| Filling in and saving forms ([#748](https://github.com/wonday/react-native-pdf/issues/748) and others) | Fill, read and export (Android: see the [capability matrix](../README.md#capability-matrix)) |
-| Cache control and offline reading ([#952](https://github.com/wonday/react-native-pdf/issues/952) and others) | Cache options on the source, `PdfCache` |
-
-The full list, with reaction counts, is in
+How this library handles what react-native-pdf users report most is in
+[Fixes over react-native-pdf](../README.md#fixes-over-react-native-pdf); the
+full list, with reaction counts, is in
 [community-requests.md](community-requests.md).
 
 ## Before you start
