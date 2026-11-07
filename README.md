@@ -17,6 +17,12 @@ A replacement for **[react-native-pdf](https://github.com/wonday/react-native-pd
 
 </div>
 
+<div align="center">
+  <img src="./assets/montage.gif" alt="Two side-by-side scenes on Android, react-native-better-pdf 1.2 against react-native-pdf 7.0.5. Opening a 1,000-page scan: the first page is on screen 0.3 s after the tap against 4.5 s. Scrolling it: 99 to 138 MB of memory in use against 877 to 900 MB" width="540" />
+  <br />
+  <sub>react-native-better-pdf 1.2.0 (built from 1c286a8, which has the same Android code) and react-native-pdf 7.0.5 in the same app, release builds on the Android emulator (API 37), with the same 1,000-page scan, already in the disk cache: opening it, then scrolling it with the app's memory (PSS) sampled about every 0.7 s. Each side is the median of 3 takes. The first scene plays at real speed and the second at 2×; the times shown are real seconds. Recorded on 2026-11-06: that day's benchmark runs took 1.6 to 4.6 s for react-native-pdf to open this document, against 0.6 s in the table below.</sub>
+</div>
+
 ## Benchmark
 
 The same app, the same documents and the same layout for both libraries. Medians of 3 runs of release builds on the Android emulator (API 37), both libraries in one session, from the [benchmark harness](docs/benchmarks.md):
