@@ -5,6 +5,7 @@
 | The viewer does not appear in Expo Go | Use a development build (`npx expo run:ios` / `run:android`); Expo Go cannot load native modules. |
 | An error about `BetterPdfView` right after installing | Rebuild the native app: `pod install` and a new build on iOS, a new build on Android. |
 | Errors about the legacy architecture | Enable the New Architecture; Nitro Views need Fabric. |
+| The viewer stays blank | The load failed, or is still running (there is no built-in spinner). Pass `onError` and read `error.code`; without it, a development build prints a warning such as `[react-native-better-pdf] file-not-found: …` in Metro. |
 | A password-protected document fails with `unsupported-pdf` on Android | The device is below Android 15 without SDK extension 13, where the platform renderer cannot open protected files. |
 | Search reports `isSupported: false`, long presses select nothing | Same devices as above; see the [capability matrix](../README.md#capability-matrix). |
 | On Android, `onError` arrives while the document is shown | It has `error.page`: one page could not be rendered after `onLoad` (`page-render-failed`, or `out-of-memory`), and the document stays open. Keep the viewer on screen; only `onError` without `page` ends the load. See [Errors](api.md#errors). |

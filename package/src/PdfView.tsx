@@ -49,6 +49,7 @@ import type { NativePdfSource } from './types/NativePdfSource';
 import type { PdfColorScheme } from './types/PdfColorScheme';
 import type { PdfContentInset } from './types/PdfContentInset';
 import type { PdfError, PdfLoadError, PdfPageError } from './types/PdfError';
+import type { PdfErrorCode } from './types/PdfErrorCode';
 import type { PdfExportOptions } from './types/PdfExportOptions';
 import type { PdfExportResult } from './types/PdfExportResult';
 import type { PdfFitPolicy } from './types/PdfFitPolicy';
@@ -82,6 +83,33 @@ const NativeBetterPdfView = getHostComponent<NativeProps, PdfViewMethods>(
 );
 
 type NativeRef = HybridRef<NativeProps, PdfViewMethods>;
+
+// React Native's global, missing elsewhere (tests); the library builds without
+// React Native's global types.
+declare const __DEV__: boolean | undefined;
+
+function isDevelopment(): boolean {
+  return typeof __DEV__ !== 'undefined' && __DEV__ === true;
+}
+
+const warnedErrorCodes = new WeakMap<object, Set<PdfErrorCode>>();
+
+/**
+ * In development, warns about an error the app has no `onError` for: once
+ * per `sources` and code when given.
+ */
+function warnUnhandledError(error: PdfError, sources?: object): void {
+  if (!isDevelopment()) return;
+  if (sources !== undefined) {
+    const codes = warnedErrorCodes.get(sources) ?? new Set();
+    if (codes.has(error.code)) return;
+    warnedErrorCodes.set(sources, codes.add(error.code));
+  }
+  const failures = error.page === undefined ? 'load' : 'page';
+  console.warn(
+    `[react-native-better-pdf] ${error.code}: ${error.message}. Pass onError to handle ${failures} failures.`,
+  );
+}
 
 /** `rgba(255, 214, 0, 0.4)` and `rgba(255, 140, 0, 0.6)` as ARGB. */
 const DEFAULT_SEARCH_HIGHLIGHT_COLOR = 0x66ffd600;
@@ -429,6 +457,8 @@ export interface PdfViewProps extends ViewProps {
    *   loaded again (e.g. a new `key`); each page is reported once.
    *   `out-of-memory`: the viewer frees memory and tries the page again
    *   later; reported once per document.
+   *
+   * Without it, development builds print a warning naming the code instead.
    */
   onError?: (error: PdfLoadError | PdfPageError) => void;
   onPageChange?: (event: PdfPageChangeEvent) => void;
@@ -653,9 +683,14 @@ export function PdfView({
         handlers.current.onLoadProgress?.(event),
       ),
       // Native sets `page` only for page failures.
-      onError: callback((error: PdfError) =>
-        handlers.current.onError?.(error as PdfLoadError | PdfPageError),
-      ),
+      onError: callback((error: PdfError) => {
+        const onError = handlers.current.onError;
+        if (onError === undefined) {
+          warnUnhandledError(error, latestSources.current);
+        } else {
+          onError(error as PdfLoadError | PdfPageError);
+        }
+      }),
       onPageChange: callback((event: PdfPageChangeEvent) =>
         handlers.current.onPageChange?.(event),
       ),
@@ -773,7 +808,10 @@ export function PdfView({
   // entirely for the others. Once subscribed, an event stays subscribed (the
   // handler ref makes a removed handler a no-op): unsubscribing would send
   // `null`, which Nitro rejects. That takes reading the set during render.
-  const subscribed = useRef(new Set<keyof Handlers>());
+  // In development `onError` is always subscribed, to warn when it is missing.
+  const subscribed = useRef(
+    new Set<keyof Handlers>(isDevelopment() ? ['onError'] : []),
+  );
   const subscription = <K extends keyof Handlers>(name: K) => {
     if (renderedHandlers[name] !== undefined) subscribed.current.add(name);
     return subscribed.current.has(name) ? nativeCallbacks[name] : undefined;
@@ -796,11 +834,17 @@ export function PdfView({
     }
     if (reportedInvalidSource.current === invalidSourceKey) return;
     reportedInvalidSource.current = invalidSourceKey;
-    handlers.current.onError?.({
+    const error: PdfLoadError = {
       code: 'invalid-source',
       message: invalidMessage!,
       sourceIndex: invalidSourceIndex,
-    });
+    };
+    const onError = handlers.current.onError;
+    if (onError === undefined) {
+      warnUnhandledError(error);
+    } else {
+      onError(error);
+    }
   }, [invalidMessage, invalidSourceIndex, invalidSourceKey]);
 
   useEffect(() => {
