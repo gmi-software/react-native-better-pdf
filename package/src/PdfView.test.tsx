@@ -1291,7 +1291,7 @@ describe('PdfView without onError', () => {
     ]);
   });
 
-  test('warns in development without the query or fragment of URLs, where signed URLs keep their token', () => {
+  test('warns in development without the user info, query or fragment of URLs', () => {
     globals.__DEV__ = true;
     const errors: PdfError[] = [];
     const renderer = render(<PdfView source={{ uri: 'https://x.test/a' }} />);
@@ -1303,16 +1303,22 @@ describe('PdfView without onError', () => {
     });
     emitError({
       code: 'invalid-source',
-      message: 'Unsupported PDF source: "ftp://x.test/a.pdf?token=secret"',
+      message:
+        'Unsupported PDF source: "ftp://user:p@ss@x.test/a@b.pdf?token=secret"',
     });
     emitError({
       code: 'network-error',
       message: 'Downloading https://x.test/a.pdf#token=secret failed',
     });
+    emitError({
+      code: 'file-not-found',
+      message: 'Downloading https://user:secret@x.test/a.pdf failed',
+    });
     expect(warnings).toEqual([
       '[react-native-better-pdf] http-error: Downloading https://cdn.x.test/a.pdf?… failed with HTTP 500. Pass onError to handle load failures.',
-      '[react-native-better-pdf] invalid-source: Unsupported PDF source: "ftp://x.test/a.pdf?…". Pass onError to handle load failures.',
+      '[react-native-better-pdf] invalid-source: Unsupported PDF source: "ftp://…@x.test/a@b.pdf?…". Pass onError to handle load failures.',
       '[react-native-better-pdf] network-error: Downloading https://x.test/a.pdf#… failed. Pass onError to handle load failures.',
+      '[react-native-better-pdf] file-not-found: Downloading https://…@x.test/a.pdf failed. Pass onError to handle load failures.',
     ]);
 
     // The app's handler gets the message as it is.

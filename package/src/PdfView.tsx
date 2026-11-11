@@ -94,9 +94,18 @@ function isDevelopment(): boolean {
 
 const warnedErrorCodes = new WeakMap<object, Set<PdfErrorCode>>();
 
-// Native messages name the source URL, and a signed URL's token is in its query.
-const URL_QUERY_OR_FRAGMENT =
-  /(\b[a-z][a-z\d+.-]*:\/\/[^\s?#"]*)([?#])[^\s"]*/gi;
+// Native messages name the source URL. Its user info can hold a password, and
+// a signed URL's token is in its query.
+const URL_PARTS =
+  /(\b[a-z][a-z\d+.-]*:\/\/)([^\s/?#"]*@)?([^\s?#"]*)([?#][^\s"]*)?/gi;
+
+function redactUrls(message: string): string {
+  return message.replace(
+    URL_PARTS,
+    (_url, scheme: string, userInfo?: string, path = '', tail?: string) =>
+      `${scheme}${userInfo ? '…@' : ''}${path}${tail ? `${tail[0]}…` : ''}`,
+  );
+}
 
 /**
  * In development, warns about an error the app has no `onError` for: once
@@ -110,7 +119,7 @@ function warnUnhandledError(error: PdfError, sources?: object): void {
     warnedErrorCodes.set(sources, codes.add(error.code));
   }
   const failures = error.page === undefined ? 'load' : 'page';
-  const message = error.message.replace(URL_QUERY_OR_FRAGMENT, '$1$2…');
+  const message = redactUrls(error.message);
   console.warn(
     `[react-native-better-pdf] ${error.code}: ${message}. Pass onError to handle ${failures} failures.`,
   );
