@@ -94,6 +94,10 @@ function isDevelopment(): boolean {
 
 const warnedErrorCodes = new WeakMap<object, Set<PdfErrorCode>>();
 
+// Native messages name the source URL, and a signed URL's token is in its query.
+const URL_QUERY_OR_FRAGMENT =
+  /(\b[a-z][a-z\d+.-]*:\/\/[^\s?#"]*)([?#])[^\s"]*/gi;
+
 /**
  * In development, warns about an error the app has no `onError` for: once
  * per `sources` and code when given.
@@ -106,8 +110,9 @@ function warnUnhandledError(error: PdfError, sources?: object): void {
     warnedErrorCodes.set(sources, codes.add(error.code));
   }
   const failures = error.page === undefined ? 'load' : 'page';
+  const message = error.message.replace(URL_QUERY_OR_FRAGMENT, '$1$2…');
   console.warn(
-    `[react-native-better-pdf] ${error.code}: ${error.message}. Pass onError to handle ${failures} failures.`,
+    `[react-native-better-pdf] ${error.code}: ${message}. Pass onError to handle ${failures} failures.`,
   );
 }
 

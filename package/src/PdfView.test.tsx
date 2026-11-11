@@ -1291,6 +1291,48 @@ describe('PdfView without onError', () => {
     ]);
   });
 
+  test('warns in development without the query or fragment of URLs, where signed URLs keep their token', () => {
+    globals.__DEV__ = true;
+    const errors: PdfError[] = [];
+    const renderer = render(<PdfView source={{ uri: 'https://x.test/a' }} />);
+    emitError({
+      code: 'http-error',
+      message:
+        'Downloading https://cdn.x.test/a.pdf?X-Amz-Signature=secret&X-Amz-Expires=60 failed with HTTP 500',
+      httpStatus: 500,
+    });
+    emitError({
+      code: 'invalid-source',
+      message: 'Unsupported PDF source: "ftp://x.test/a.pdf?token=secret"',
+    });
+    emitError({
+      code: 'network-error',
+      message: 'Downloading https://x.test/a.pdf#token=secret failed',
+    });
+    expect(warnings).toEqual([
+      '[react-native-better-pdf] http-error: Downloading https://cdn.x.test/a.pdf?… failed with HTTP 500. Pass onError to handle load failures.',
+      '[react-native-better-pdf] invalid-source: Unsupported PDF source: "ftp://x.test/a.pdf?…". Pass onError to handle load failures.',
+      '[react-native-better-pdf] network-error: Downloading https://x.test/a.pdf#… failed. Pass onError to handle load failures.',
+    ]);
+
+    // The app's handler gets the message as it is.
+    act(() =>
+      renderer.update(
+        <PdfView
+          source={{ uri: 'https://x.test/a' }}
+          onError={(error) => errors.push(error)}
+        />,
+      ),
+    );
+    emitError({
+      code: 'network-error',
+      message: 'Downloading https://x.test/a.pdf?token=secret failed',
+    });
+    expect(errors.map((error) => error.message)).toEqual([
+      'Downloading https://x.test/a.pdf?token=secret failed',
+    ]);
+  });
+
   test('warns in development about an invalid source once', () => {
     globals.__DEV__ = true;
     const renderer = render(<PdfView source={{} as never} />);
