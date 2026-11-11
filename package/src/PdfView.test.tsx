@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, mock, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 import { createRef, useEffect, type ReactNode } from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
@@ -1227,5 +1227,177 @@ describe('PdfView', () => {
     await expect(
       view.setFormFieldValues({ age: 42 } as unknown as Record<string, string>),
     ).rejects.toMatchObject({ code: 'invalid-argument' });
+  });
+});
+
+describe('PdfView without onError', () => {
+  const globals = globalThis as { __DEV__?: boolean };
+  const warn = console.warn;
+  let warnings: string[] = [];
+
+  beforeEach(() => {
+    warnings = [];
+    console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+  });
+
+  afterEach(() => {
+    console.warn = warn;
+    delete globals.__DEV__;
+  });
+
+  const emitError = (error: PdfError) =>
+    (lastHost().onError as { f: (error: PdfError) => void }).f(error);
+
+  test('warns in development about a load failure, once per source and code', () => {
+    globals.__DEV__ = true;
+    const renderer = render(<PdfView source={{ uri: 'file:///a.pdf' }} />);
+    const missing = {
+      code: 'file-not-found',
+      message: 'No file at /a.pdf',
+    } as const;
+    emitError({ ...missing, sourceIndex: 0 });
+    emitError({ ...missing, sourceIndex: 0 });
+    expect(warnings).toEqual([
+      '[react-native-better-pdf] file-not-found: No file at /a.pdf. Pass onError to handle load failures.',
+    ]);
+
+    emitError({ code: 'invalid-pdf', message: 'Not a PDF', sourceIndex: 0 });
+    act(() => renderer.update(<PdfView source={{ uri: 'file:///a.pdf' }} />));
+    emitError({ ...missing, sourceIndex: 0 });
+    expect(warnings).toHaveLength(2);
+    expect(warnings[1]).toContain('invalid-pdf: Not a PDF.');
+
+    act(() => renderer.update(<PdfView source={{ uri: 'file:///b.pdf' }} />));
+    emitError({ code: 'file-not-found', message: 'No file at /b.pdf' });
+    expect(warnings).toHaveLength(3);
+    expect(warnings[2]).toContain('file-not-found: No file at /b.pdf.');
+  });
+
+  test('warns in development about page failures once per document, not per page', () => {
+    globals.__DEV__ = true;
+    render(<PdfView source={{ uri: 'file:///a.pdf' }} />);
+    emitError({
+      code: 'page-render-failed',
+      message: 'Rendering page 1 failed',
+      page: 1,
+    });
+    emitError({
+      code: 'page-render-failed',
+      message: 'Rendering page 4 failed',
+      page: 4,
+    });
+    expect(warnings).toEqual([
+      '[react-native-better-pdf] page-render-failed: Rendering page 1 failed. Pass onError to handle page failures.',
+    ]);
+  });
+
+  test('warns in development without the user info, query or fragment of URLs', () => {
+    globals.__DEV__ = true;
+    const errors: PdfError[] = [];
+    const renderer = render(<PdfView source={{ uri: 'https://x.test/a' }} />);
+    emitError({
+      code: 'http-error',
+      message:
+        'Downloading https://cdn.x.test/a.pdf?X-Amz-Signature=secret&X-Amz-Expires=60 failed with HTTP 500',
+      httpStatus: 500,
+    });
+    emitError({
+      code: 'invalid-source',
+      message:
+        'Unsupported PDF source: "ftp://user:p@ss@x.test/a@b.pdf?token=secret"',
+    });
+    emitError({
+      code: 'network-error',
+      message: 'Downloading https://x.test/a.pdf#token=secret failed',
+    });
+    emitError({
+      code: 'file-not-found',
+      message: 'Downloading https://user:secret@x.test/a.pdf failed',
+    });
+    expect(warnings).toEqual([
+      '[react-native-better-pdf] http-error: Downloading https://cdn.x.test/a.pdf?… failed with HTTP 500. Pass onError to handle load failures.',
+      '[react-native-better-pdf] invalid-source: Unsupported PDF source: "ftp://…@x.test/a@b.pdf?…". Pass onError to handle load failures.',
+      '[react-native-better-pdf] network-error: Downloading https://x.test/a.pdf#… failed. Pass onError to handle load failures.',
+      '[react-native-better-pdf] file-not-found: Downloading https://…@x.test/a.pdf failed. Pass onError to handle load failures.',
+    ]);
+
+    // The app's handler gets the message as it is.
+    act(() =>
+      renderer.update(
+        <PdfView
+          source={{ uri: 'https://x.test/a' }}
+          onError={(error) => errors.push(error)}
+        />,
+      ),
+    );
+    emitError({
+      code: 'network-error',
+      message: 'Downloading https://x.test/a.pdf?token=secret failed',
+    });
+    expect(errors.map((error) => error.message)).toEqual([
+      'Downloading https://x.test/a.pdf?token=secret failed',
+    ]);
+  });
+
+  test('warns in development about an invalid source once', () => {
+    globals.__DEV__ = true;
+    const renderer = render(<PdfView source={{} as never} />);
+    act(() => renderer.update(<PdfView source={{} as never} />));
+    expect(warnings).toEqual([
+      '[react-native-better-pdf] invalid-source: source must be a require() result or an object with uri, filePath or base64; got {}. Pass onError to handle load failures.',
+    ]);
+  });
+
+  test('warns in development once the app removes its onError', () => {
+    globals.__DEV__ = true;
+    const errors: PdfError[] = [];
+    const renderer = render(
+      <PdfView
+        source={{ uri: 'file:///a.pdf' }}
+        onError={(error) => errors.push(error)}
+      />,
+    );
+    const failure = { code: 'invalid-pdf', message: 'Not a PDF' } as const;
+    emitError(failure);
+    expect(errors).toEqual([failure]);
+    expect(warnings).toEqual([]);
+
+    act(() => renderer.update(<PdfView source={{ uri: 'file:///a.pdf' }} />));
+    emitError(failure);
+    expect(errors).toHaveLength(1);
+    expect(warnings).toHaveLength(1);
+  });
+
+  test('does not warn when the app passes onError', () => {
+    globals.__DEV__ = true;
+    const errors: PdfError[] = [];
+    render(<PdfView source={{} as never} onError={(e) => errors.push(e)} />);
+    render(
+      <PdfView
+        source={{ uri: 'file:///a.pdf' }}
+        onError={(e) => errors.push(e)}
+      />,
+    );
+    emitError({ code: 'file-not-found', message: 'No file at /a.pdf' });
+    expect(errors.map((error) => error.code)).toEqual([
+      'invalid-source',
+      'file-not-found',
+    ]);
+    expect(warnings).toEqual([]);
+  });
+
+  test('release builds neither subscribe to onError nor warn', () => {
+    globals.__DEV__ = false;
+    render(<PdfView source={{ uri: 'file:///a.pdf' }} />);
+    expect(lastHost().onError).toBeUndefined();
+    render(<PdfView source={{} as never} />);
+
+    // Subscribed for a handler the app then removed.
+    const renderer = render(
+      <PdfView source={{ uri: 'file:///a.pdf' }} onError={() => {}} />,
+    );
+    act(() => renderer.update(<PdfView source={{ uri: 'file:///a.pdf' }} />));
+    emitError({ code: 'file-not-found', message: 'No file at /a.pdf' });
+    expect(warnings).toEqual([]);
   });
 });

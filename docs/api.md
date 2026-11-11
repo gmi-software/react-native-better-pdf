@@ -157,6 +157,9 @@ open and the other pages keep working:
 `error.page !== undefined` tells them apart (it narrows the type to
 `PdfPageError`). iOS reports load failures only (PDFKit draws the pages).
 
+Without `onError`, development builds warn about failures with
+`console.warn`, once per source and code; release builds print nothing.
+
 ### Method errors
 
 The ref's promise methods (`getOutline`, `getPageSizes`, `renderPage`,
