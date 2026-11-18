@@ -13,7 +13,7 @@ From the repository root:
 ```bash
 bun install
 bun run fixtures                        # test documents (~650 MB), served by the next line
-node benchmarks/serve-fixtures.mjs      # on :8090 (Android: adb reverse tcp:8090 tcp:8090)
+node benchmarks/serve-fixtures.mjs      # on :8090; keep it running in its own terminal (Android: adb reverse tcp:8090 tcp:8090)
 cd example && bunx expo run:ios         # or run:android
 ```
 

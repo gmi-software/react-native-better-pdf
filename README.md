@@ -55,7 +55,7 @@ Remove `react-native-pdf` (and `react-native-blob-util`, unless something else i
 - <Pdf
 -   source={{ uri: 'https://example.com/file.pdf', cache: true }}
 + <PdfView
-+   source={{ uri: 'https://example.com/file.pdf' }}
++   source={{ uri: 'https://example.com/file.pdf', cache: 'persistent' }}
 -   onLoadComplete={(numberOfPages) => setPageCount(numberOfPages)}
 -   onPageChanged={(page, numberOfPages) => setPage(page)}
 -   onError={(error) => console.warn(error)}
@@ -132,7 +132,7 @@ export function Reader() {
 | [Page overlays](docs/guides/page-overlays.md) | React views attached to points of a page, moved natively while it scrolls and zooms |
 | [Page images and documents without a view](docs/guides/page-images-and-documents.md) | Page images, covers and metadata with `PdfDocument` |
 | [Printing](docs/guides/printing.md) | The system print dialog |
-| [Accessibility](docs/guides/accessibility.md) | VoiceOver and TalkBack read each page |
+| [Accessibility](docs/guides/accessibility.md) | VoiceOver and TalkBack read each page's text (on Android below 15 without SDK extension 13, its label only) |
 | [Compatibility](docs/compatibility.md) | Requirements, tested versions and what each Android version supports |
 | [Migrating from react-native-pdf](docs/migrating-from-react-native-pdf.md) | Every prop, callback and method, what changes silently, and common migrations |
 | [Limitations](docs/limitations.md) | Known platform constraints and what's next |
