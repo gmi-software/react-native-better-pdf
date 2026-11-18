@@ -424,7 +424,7 @@ session and, without `maxAgeMs`, does not check it again:
 
 | react-native-pdf | react-native-better-pdf |
 | --- | --- |
-| no `cache` | `maxAgeMs: 0`: the server is asked on every open (an unchanged document is not downloaded again) |
+| no `cache` | `maxAgeMs: 0`: the server is asked on every open (when it sends `ETag` or `Last-Modified`, an unchanged document is not downloaded again) |
 | `cache: true` | `cache: 'persistent'` |
 | `cache: true, expiration: n` (`n > 0`) | `cache: 'persistent', maxAgeMs: n * 1000` |
 | `cache: true, expiration: 0` (or none) | `cache: 'persistent'`, no `maxAgeMs` |
