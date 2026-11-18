@@ -93,7 +93,7 @@ users see.
 | Topic | react-native-pdf | react-native-better-pdf | What to do |
 | --- | --- | --- | --- |
 | **Page numbers** | 1-based `page`, `setPage`, `onPageChanged` and `onPageSingleTap` (on Android the current page, not the tapped one); `tableContents` `pageIdx` 0-based | 0-based everywhere | Add or subtract 1 at the boundary, except for the outline. |
-| **Remote documents without `cache`** | Downloaded again on every mount: a URL whose content changes showed the new content on every open | Kept for the app session and not checked again: the first download is shown until the app restarts | Add `maxAgeMs: 0`: the server is asked on every open, and when it sends `ETag` or `Last-Modified`, an unchanged document is not downloaded again. See [Caching](#caching). |
+| **Remote documents without `cache`** | Downloaded again on every mount: a URL whose content changes showed the new content on every open | Kept for the app session and not checked again: the first download is shown until the app restarts | Add `maxAgeMs: 0`: the server is asked on every open, and when it answers `304 Not Modified` (which needs an `ETag` or `Last-Modified` from it), the document is not downloaded again. See [Caching](#caching). |
 | **`expiration: 0`** | `0` (or no `expiration`) never expires | `maxAgeMs: 0` checks with the server on every open | Convert only `expiration > 0` to `maxAgeMs`; leave `maxAgeMs` out for `0`. |
 | **`page` prop** | Applied whenever it changed | `initialPage` is read once per loaded document | Navigate with `ref.goToPage()`; give recycled list cells `key={page}`. See [Thumbnails](#thumbnails). |
 | **`onError` after loading (Android)** | Errors came only from loading | A page that cannot be rendered is reported with `error.page` set, after `onLoad`, and the document stays open | Show an error screen only when `error.page === undefined`. See [Errors](#errors). |
@@ -424,7 +424,7 @@ session and, without `maxAgeMs`, does not check it again:
 
 | react-native-pdf | react-native-better-pdf |
 | --- | --- |
-| no `cache` | `maxAgeMs: 0`: the server is asked on every open (when it sends `ETag` or `Last-Modified`, an unchanged document is not downloaded again) |
+| no `cache` | `maxAgeMs: 0`: the server is asked on every open (when it answers `304 Not Modified`, the document is not downloaded again) |
 | `cache: true` | `cache: 'persistent'` |
 | `cache: true, expiration: n` (`n > 0`) | `cache: 'persistent', maxAgeMs: n * 1000` |
 | `cache: true, expiration: 0` (or none) | `cache: 'persistent'`, no `maxAgeMs` |
