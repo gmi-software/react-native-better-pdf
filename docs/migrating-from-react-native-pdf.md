@@ -93,7 +93,7 @@ users see.
 | Topic | react-native-pdf | react-native-better-pdf | What to do |
 | --- | --- | --- | --- |
 | **Page numbers** | 1-based `page`, `setPage`, `onPageChanged` and `onPageSingleTap` (on Android the current page, not the tapped one); `tableContents` `pageIdx` 0-based | 0-based everywhere | Add or subtract 1 at the boundary, except for the outline. |
-| **Remote documents without `cache`** | Downloaded again on every mount: a URL whose content changes showed the new content on every open | Kept for the app session and not checked again: the first download is shown until the app restarts | Add `maxAgeMs: 0`: the server is asked on every open, and an unchanged document is not downloaded again. See [Caching](#caching). |
+| **Remote documents without `cache`** | Downloaded again on every mount: a URL whose content changes showed the new content on every open | Kept for the app session and not checked again: the first download is shown until the app restarts | Add `maxAgeMs: 0`: the server is asked on every open, and when it sends `ETag` or `Last-Modified`, an unchanged document is not downloaded again. See [Caching](#caching). |
 | **`expiration: 0`** | `0` (or no `expiration`) never expires | `maxAgeMs: 0` checks with the server on every open | Convert only `expiration > 0` to `maxAgeMs`; leave `maxAgeMs` out for `0`. |
 | **`page` prop** | Applied whenever it changed | `initialPage` is read once per loaded document | Navigate with `ref.goToPage()`; give recycled list cells `key={page}`. See [Thumbnails](#thumbnails). |
 | **`onError` after loading (Android)** | Errors came only from loading | A page that cannot be rendered is reported with `error.page` set, after `onLoad`, and the document stays open | Show an error screen only when `error.page === undefined`. See [Errors](#errors). |
@@ -296,6 +296,7 @@ useEffect(() => {
 +   return (
 +     <View style={{ flex: 1 }}>
 +       <PdfView
++         style={{ flex: 1 }}
 +         source={{ uri }}
 +         onLoadProgress={({ loadedBytes, totalBytes }) =>
 +           setProgress(totalBytes === undefined ? undefined : loadedBytes / totalBytes)
@@ -374,7 +375,10 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
 
 `page` is `undefined` for entries that only group others or link
 elsewhere. `getOutline()` rejects on Android for encrypted documents (their
-titles are encrypted), so handle the rejection.
+titles are encrypted), so handle the rejection. When `source` changes,
+give the component that holds `toc` a `key`, as in
+[Download progress](#download-progress): a load that fails keeps no old
+outline, and a late result for the previous document is dropped.
 
 ### Selected text
 
