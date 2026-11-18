@@ -1258,19 +1258,21 @@ describe('PdfView without onError', () => {
     emitError({ ...missing, sourceIndex: 0 });
     emitError({ ...missing, sourceIndex: 0 });
     expect(warnings).toEqual([
-      '[react-native-better-pdf] file-not-found: No file at /a.pdf. Pass onError to handle load failures.',
+      '[react-native-better-pdf] file-not-found. Pass onError to handle load failures; error.message says why.',
     ]);
 
     emitError({ code: 'invalid-pdf', message: 'Not a PDF', sourceIndex: 0 });
     act(() => renderer.update(<PdfView source={{ uri: 'file:///a.pdf' }} />));
     emitError({ ...missing, sourceIndex: 0 });
     expect(warnings).toHaveLength(2);
-    expect(warnings[1]).toContain('invalid-pdf: Not a PDF.');
+    expect(warnings[1]).toStartWith('[react-native-better-pdf] invalid-pdf.');
 
     act(() => renderer.update(<PdfView source={{ uri: 'file:///b.pdf' }} />));
     emitError({ code: 'file-not-found', message: 'No file at /b.pdf' });
     expect(warnings).toHaveLength(3);
-    expect(warnings[2]).toContain('file-not-found: No file at /b.pdf.');
+    expect(warnings[2]).toStartWith(
+      '[react-native-better-pdf] file-not-found.',
+    );
   });
 
   test('warns in development about page failures once per document, not per page', () => {
@@ -1287,41 +1289,42 @@ describe('PdfView without onError', () => {
       page: 4,
     });
     expect(warnings).toEqual([
-      '[react-native-better-pdf] page-render-failed: Rendering page 1 failed. Pass onError to handle page failures.',
+      '[react-native-better-pdf] page-render-failed. Pass onError to handle page failures; error.message says why.',
     ]);
   });
 
-  test('warns in development without the user info, query or fragment of URLs', () => {
+  test('leaves native messages, which can hold source URLs and their tokens, out of the warning', () => {
     globals.__DEV__ = true;
     const errors: PdfError[] = [];
     const renderer = render(<PdfView source={{ uri: 'https://x.test/a' }} />);
-    emitError({
-      code: 'http-error',
-      message:
-        'Downloading https://cdn.x.test/a.pdf?X-Amz-Signature=secret&X-Amz-Expires=60 failed with HTTP 500',
-      httpStatus: 500,
-    });
-    emitError({
-      code: 'invalid-source',
-      message:
-        'Unsupported PDF source: "ftp://user:p@ss@x.test/a@b.pdf?token=secret"',
-    });
-    emitError({
-      code: 'network-error',
-      message: 'Downloading https://x.test/a.pdf#token=secret failed',
-    });
-    emitError({
-      code: 'file-not-found',
-      message: 'Downloading https://user:secret@x.test/a.pdf failed',
-    });
-    expect(warnings).toEqual([
-      '[react-native-better-pdf] http-error: Downloading https://cdn.x.test/a.pdf?… failed with HTTP 500. Pass onError to handle load failures.',
-      '[react-native-better-pdf] invalid-source: Unsupported PDF source: "ftp://…@x.test/a@b.pdf?…". Pass onError to handle load failures.',
-      '[react-native-better-pdf] network-error: Downloading https://x.test/a.pdf#… failed. Pass onError to handle load failures.',
-      '[react-native-better-pdf] file-not-found: Downloading https://…@x.test/a.pdf failed. Pass onError to handle load failures.',
-    ]);
+    const secretMessages: PdfError[] = [
+      {
+        code: 'http-error',
+        message:
+          'Downloading https://cdn.x.test/a.pdf?X-Amz-Signature=secret failed with HTTP 500',
+        httpStatus: 500,
+      },
+      {
+        code: 'invalid-source',
+        message: 'Unsupported PDF source: "ftp://x.test/a b.pdf?token=secret"',
+      },
+      {
+        code: 'network-error',
+        message: 'Downloading https://user:secret@x.test/a.pdf failed',
+      },
+      {
+        code: 'file-not-found',
+        message: 'No file at /data/secret-token/a.pdf',
+      },
+    ];
+    secretMessages.forEach(emitError);
+    expect(warnings).toEqual(
+      secretMessages.map(
+        ({ code }) =>
+          `[react-native-better-pdf] ${code}. Pass onError to handle load failures; error.message says why.`,
+      ),
+    );
 
-    // The app's handler gets the message as it is.
     act(() =>
       renderer.update(
         <PdfView
@@ -1330,13 +1333,8 @@ describe('PdfView without onError', () => {
         />,
       ),
     );
-    emitError({
-      code: 'network-error',
-      message: 'Downloading https://x.test/a.pdf?token=secret failed',
-    });
-    expect(errors.map((error) => error.message)).toEqual([
-      'Downloading https://x.test/a.pdf?token=secret failed',
-    ]);
+    secretMessages.forEach(emitError);
+    expect(errors).toEqual(secretMessages);
   });
 
   test('warns in development about an invalid source once', () => {
