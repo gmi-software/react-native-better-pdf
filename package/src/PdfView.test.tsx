@@ -1337,12 +1337,17 @@ describe('PdfView without onError', () => {
     expect(errors).toEqual(secretMessages);
   });
 
-  test('warns in development about an invalid source once', () => {
+  test('warns in development about an invalid source once, without its message', () => {
     globals.__DEV__ = true;
-    const renderer = render(<PdfView source={{} as never} />);
-    act(() => renderer.update(<PdfView source={{} as never} />));
+    // The message quotes header names, which can be anything.
+    const source = {
+      uri: 'https://x.test/a.pdf',
+      headers: { 'https://user:secret@x.test/a.pdf?token=secret': undefined },
+    } as never;
+    const renderer = render(<PdfView source={source} />);
+    act(() => renderer.update(<PdfView source={source} />));
     expect(warnings).toEqual([
-      '[react-native-better-pdf] invalid-source: source must be a require() result or an object with uri, filePath or base64; got {}. Pass onError to handle load failures.',
+      '[react-native-better-pdf] invalid-source. Pass onError to handle load failures; error.message says why.',
     ]);
   });
 

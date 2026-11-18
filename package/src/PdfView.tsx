@@ -94,20 +94,24 @@ function isDevelopment(): boolean {
 
 const warnedErrorCodes = new WeakMap<object, Set<PdfErrorCode>>();
 
+// Without the error's message: messages can quote the source's URL, header
+// names and their tokens.
+function warnUnhandled(code: PdfErrorCode, failures: 'load' | 'page'): void {
+  console.warn(
+    `[react-native-better-pdf] ${code}. Pass onError to handle ${failures} failures; error.message says why.`,
+  );
+}
+
 /**
  * In development, warns about a native error the app has no `onError` for,
- * once per `sources` and code. Without its message: native messages can name
- * the source URL, with its tokens.
+ * once per `sources` and code.
  */
 function warnUnhandledError(error: PdfError, sources: object): void {
   if (!isDevelopment()) return;
   const codes = warnedErrorCodes.get(sources) ?? new Set();
   if (codes.has(error.code)) return;
   warnedErrorCodes.set(sources, codes.add(error.code));
-  const failures = error.page === undefined ? 'load' : 'page';
-  console.warn(
-    `[react-native-better-pdf] ${error.code}. Pass onError to handle ${failures} failures; error.message says why.`,
-  );
+  warnUnhandled(error.code, error.page === undefined ? 'load' : 'page');
 }
 
 /** `rgba(255, 214, 0, 0.4)` and `rgba(255, 140, 0, 0.6)` as ARGB. */
@@ -841,10 +845,7 @@ export function PdfView({
         sourceIndex: invalidSourceIndex,
       });
     } else if (isDevelopment()) {
-      // Unlike native messages, these never quote the source's strings.
-      console.warn(
-        `[react-native-better-pdf] invalid-source: ${invalidMessage}. Pass onError to handle load failures.`,
-      );
+      warnUnhandled('invalid-source', 'load');
     }
   }, [invalidMessage, invalidSourceIndex, invalidSourceKey]);
 

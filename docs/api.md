@@ -159,8 +159,8 @@ open and the other pages keep working:
 
 Without `onError`, development builds warn about failures with
 `console.warn`, once per source and code; release builds print nothing.
-The warning names the code but leaves out native messages, which can
-contain the source URL and its tokens.
+The warning names the code but leaves out the message, which can quote the
+source URL, header names and their tokens.
 
 ### Method errors
 
