@@ -1,7 +1,7 @@
 # API reference
 
 Every component, object and type is exported from the package root. The
-[guides](../README.md#guides) show each feature in use.
+[guides](../README.md#documentation) show each feature in use.
 
 ## Components
 

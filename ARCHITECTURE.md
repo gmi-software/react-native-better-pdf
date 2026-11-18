@@ -31,6 +31,15 @@ Public API rationale: [`docs/api-design.md`](docs/api-design.md).
 └────────────────────────────────────────┘ └─────────────────────────────────────┘
 ```
 
+## Principles
+
+1. The main and JS threads never wait on document I/O or rendering.
+2. No per-frame JS: no `onScroll`/`onZoom` events, no React-managed pages.
+3. Memory is bounded by the viewport, not the document or the zoom level.
+4. Claims come from measurements. [docs/benchmarks.md](docs/benchmarks.md)
+   describes the method and publishes the numbers, including where this
+   library is not faster.
+
 ## Source layout
 
 ```text

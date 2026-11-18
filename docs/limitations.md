@@ -1,7 +1,7 @@
 # Limitations
 
 For an overview of what each platform supports, see the
-[capability matrix](../README.md#capability-matrix).
+[capability matrix](compatibility.md#capability-matrix).
 
 - **Not implemented yet**: editing annotations (forms are filled in, not
   restructured); facing pages in horizontal or paged layouts, or right to

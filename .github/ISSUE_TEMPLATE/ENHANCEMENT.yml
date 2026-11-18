@@ -14,7 +14,7 @@ body:
       label: Which platforms should this cover?
       description: >
         The platform renderers differ in what they support, and on Android it also depends on the Android version, so a feature may land on one before the other.
-        See the [capability matrix](https://github.com/gmi-software/react-native-better-pdf#capability-matrix).
+        See the [capability matrix](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/compatibility.md#capability-matrix).
       multiple: true
       options:
         - iOS
@@ -36,7 +36,7 @@ body:
       options:
         - label: I checked the [README](https://github.com/gmi-software/react-native-better-pdf#readme) and the [docs](https://github.com/gmi-software/react-native-better-pdf/tree/main/docs) and this feature does not exist yet.
           required: true
-        - label: I checked [What's next](https://github.com/gmi-software/react-native-better-pdf#whats-next) and [Community requests](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/community-requests.md), and it is not already listed there.
+        - label: I checked [What's next](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/limitations.md#whats-next) and [Community requests](https://github.com/gmi-software/react-native-better-pdf/blob/main/docs/community-requests.md), and it is not already listed there.
         - label: I can open a pull request to implement this. (See [Contributing](https://github.com/gmi-software/react-native-better-pdf/blob/main/CONTRIBUTING.md))
         - label: I searched for [similar issues in this repository](https://github.com/gmi-software/react-native-better-pdf/issues) and found none.
           required: true

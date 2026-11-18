@@ -7,7 +7,7 @@
 | Errors about the legacy architecture | Enable the New Architecture; Nitro Views need Fabric. |
 | The viewer stays blank | The load failed, or is still running (there is no built-in spinner). Pass `onError` and read `error.code` and `error.message`; without it, a development build prints a warning such as `[react-native-better-pdf] file-not-found. …` in Metro. |
 | A password-protected document fails with `unsupported-pdf` on Android | The device is below Android 15 without SDK extension 13, where the platform renderer cannot open protected files. |
-| Search reports `isSupported: false`, long presses select nothing | Same devices as above; see the [capability matrix](../README.md#capability-matrix). |
+| Search reports `isSupported: false`, long presses select nothing | Same devices as above; see the [capability matrix](compatibility.md#capability-matrix). |
 | On Android, `onError` arrives while the document is shown | It has `error.page`: one page could not be rendered after `onLoad` (`page-render-failed`, or `out-of-memory`), and the document stays open. Keep the viewer on screen; only `onError` without `page` ends the load. See [Errors](api.md#errors). |
 | A remote document fails with `invalid-pdf` | The server answered with something else, often a login page: check the URL and `headers`. |
 | A remote document fails with `invalid-source` | Check that the URL is `http(s)://` and the `headers`: often a token read with a trailing newline. `error.message` names the header. |
