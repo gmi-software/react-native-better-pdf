@@ -15,10 +15,14 @@ internal fun String.redactedUri(): String {
   return scheme.value + substring(hostStart, pathEnd) + query
 }
 
-/** This text with every `scheme://` URI in it replaced by its [redactedUri]. */
+/**
+ * This text with every `scheme://` URI in it replaced by its [redactedUri]. A
+ * URI runs to the next whitespace: quotes may be part of its query or
+ * user-info, so a closing quote after a query is dropped with it.
+ */
 internal fun String.redactingUris(): String = URI.replace(this) { it.value.redactedUri() }
 
-private val URI = Regex("[A-Za-z][A-Za-z0-9+.-]*://[^\\s\"'<>]+")
+private val URI = Regex("[A-Za-z][A-Za-z0-9+.-]*://\\S+")
 
 private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
 

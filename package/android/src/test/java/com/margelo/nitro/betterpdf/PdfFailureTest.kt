@@ -19,8 +19,20 @@ class PdfFailureTest {
       nativeDescription("Permission Denial: reading com.app.Provider uri content://com.app.provider/doc/1?token=t from pid=1"),
     )
     assertEquals(
-      "SecurityException: No content at \"https://host/x.pdf?…\", then (http://other/a)",
+      "SecurityException: No content at \"https://host/x.pdf?… then (http://other/a)",
       nativeDescription("No content at \"https://u:p@host/x.pdf?sig=s\", then (http://other/a)"),
+    )
+  }
+
+  @Test
+  fun `a URI is redacted up to the next whitespace, quotes included`() {
+    assertEquals(
+      "SecurityException: No content at content://com.app.provider/doc/1?… from pid=1",
+      nativeDescription("No content at content://com.app.provider/doc/1?token=abc'SECRET\"x<y> from pid=1"),
+    )
+    assertEquals(
+      "SecurityException: No content at https://host/x.pdf from pid=1",
+      nativeDescription("No content at https://u'x:p\"w@host/x.pdf from pid=1"),
     )
   }
 
