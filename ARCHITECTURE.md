@@ -204,7 +204,8 @@ touched per frame.
 viewport change (main)
   └─ PrefetchPlanner.plan(visible, center, direction)
        └─ requests = planned pages not cached at the current width
-                     (+ zoom tiles for visible pages when settled)
+                     (+ zoom tiles for visible pages when settled,
+                        unless the tile on screen has the same geometry)
             └─ session.submit(requests)   // replaces the queue
                  └─ render thread: pop highest priority → openPage → render → close
                       └─ post(main): cache.put / tiles.put → invalidate

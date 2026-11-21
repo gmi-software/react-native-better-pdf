@@ -27,7 +27,6 @@ import android.view.animation.DecelerateInterpolator
 import androidx.core.view.ViewCompat
 import android.widget.OverScroller
 import kotlin.math.abs
-import kotlin.math.ceil
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -291,7 +290,7 @@ class PdfDocumentView(context: Context) :
     onEvict = { _, bitmap -> releaseAfterFrame(bitmap) },
   )
 
-  private class Tile(val bitmap: Bitmap, val contentRect: RectF, val usedWidth: Int, val usedHeight: Int)
+  private class Tile(val bitmap: Bitmap, val contentRect: RectF, val request: RenderRequest.Tile)
 
   private val tiles = HashMap<Int, Tile>()
   /** After memory pressure, render only visible pages until this uptime. */
@@ -304,6 +303,8 @@ class PdfDocumentView(context: Context) :
   /** Whether every page of the last plan is grey coverage, or expected to be ([pageFormats]). */
   private var plannedGrey = false
   private var tileGeneration = 0
+  /** The viewport of the last settle; the tile generation changes when it moves. */
+  private var settledTileViewport: TileViewport? = null
 
   // endregion
 
@@ -1007,7 +1008,7 @@ class PdfDocumentView(context: Context) :
           request.contentLeft + request.usedWidth / request.viewScale,
           request.contentTop + request.usedHeight / request.viewScale,
         )
-        tiles.put(request.page, Tile(bitmap, contentRect, request.usedWidth, request.usedHeight))
+        tiles.put(request.page, Tile(bitmap, contentRect, request))
           ?.let { releaseAfterFrame(it.bitmap) }
       }
     }
@@ -1142,7 +1143,7 @@ class PdfDocumentView(context: Context) :
         canvas.drawRect(drawRect, placeholderPaint)
       }
       tiles[page]?.let { tile ->
-        tileSource.set(0, 0, tile.usedWidth, tile.usedHeight)
+        tileSource.set(0, 0, tile.request.usedWidth, tile.request.usedHeight)
         canvas.drawBitmap(tile.bitmap, tileSource, tile.contentRect, paintFor(tile.bitmap))
       }
       drawSearchMatches(canvas, layout, page)
@@ -1449,7 +1450,11 @@ class PdfDocumentView(context: Context) :
       listener?.onScaleSettled(scale)
     }
     reportViewport()
-    tileGeneration++
+    val tileViewport = TileViewport(offsetX, offsetY, scale, width, height)
+    if (tileViewport != settledTileViewport) {
+      settledTileViewport = tileViewport
+      tileGeneration++
+    }
     val visible = visiblePages()
     tiles.keys.filter { it !in visible }.forEach { page -> tiles.remove(page)?.let { releaseAfterFrame(it.bitmap) } }
     requestRenders(force = true)
@@ -1550,38 +1555,16 @@ class PdfDocumentView(context: Context) :
 
   private fun tileRequest(layout: PdfDocumentLayout, page: Int): RenderRequest.Tile? {
     if (!renderFailures.allowsTile(page)) return null
-    // A page without a base bitmap may still have an estimated size; its tile
-    // geometry would be wrong. Tiles follow once the base layer is in.
-    val base = cache.get(page) ?: return null
-    // Pixels of base bitmap per unzoomed content pixel.
-    val baseResolution = base.width / layout.pageWidth(page)
-    if (scale <= baseResolution * TILE_THRESHOLD) {
-      tiles.remove(page)?.let { releaseAfterFrame(it.bitmap) }
-      return null
+    val viewport = TileViewport(offsetX, offsetY, scale, width, height)
+    val plan = TilePlanner.plan(layout, page, cache.get(page)?.width, viewport, tileGeneration, tiles[page]?.request, TILE_THRESHOLD)
+    return when (plan) {
+      TilePlanner.Plan.None -> null
+      TilePlanner.Plan.Drop -> {
+        tiles.remove(page)?.let { releaseAfterFrame(it.bitmap) }
+        null
+      }
+      is TilePlanner.Plan.Render -> plan.request
     }
-    val viewLeft = offsetX / scale
-    val viewTop = offsetY / scale
-    val left = max(layout.pageLeft(page), viewLeft)
-    val top = max(layout.pageTop(page), viewTop)
-    val right = min(layout.pageRight(page), viewLeft + width / scale)
-    val bottom = min(layout.pageBottom(page), viewTop + height / scale)
-    if (right <= left || bottom <= top) return null
-    val usedWidth = min(width, ceil((right - left) * scale).toInt())
-    val usedHeight = min(height, ceil((bottom - top) * scale).toInt())
-    return RenderRequest.Tile(
-      page = page,
-      generation = tileGeneration,
-      bitmapWidth = width,
-      bitmapHeight = height,
-      usedWidth = usedWidth,
-      usedHeight = usedHeight,
-      scale = layout.pointsToPixels(page) * scale,
-      dx = (layout.pageLeft(page) - left) * scale,
-      dy = (layout.pageTop(page) - top) * scale,
-      contentLeft = left,
-      contentTop = top,
-      viewScale = scale,
-    )
   }
 
   // endregion

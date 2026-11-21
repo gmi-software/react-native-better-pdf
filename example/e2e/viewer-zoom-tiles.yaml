@@ -1,0 +1,63 @@
+# Android zoom tiles: plain taps on a zoomed page render nothing again (the
+# Stats "rendered" count stays), and a pan renders the new tile. iOS has no
+# render counter (n/a). The optional waits are fixed pauses: Maestro has no
+# sleep.
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+- tapOn: "Viewer"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "medium.*" } }
+- extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - tapOn: "2.5×"
+      - waitForAnimationToEnd
+      # Time for the tile and the look-ahead pages to finish.
+      - runFlow:
+          optional: true
+          commands:
+            - extendedWaitUntil: { visible: "never shown by the example", timeout: 3000 }
+      - tapOn: "Stats"
+      - copyTextFrom: { text: "pages .*" }
+      - evalScript: ${output.before = maestro.copiedText.match(/rendered (\d+)/)[1]}
+      - evalScript: ${console.log('rendered before ' + output.before)}
+      - tapOn: { text: "pages .*" }
+      # Spaced beyond the double-tap window, away from the Stats corner.
+      - tapOn: { point: "50%, 60%" }
+      - runFlow:
+          optional: true
+          commands:
+            - extendedWaitUntil: { visible: "never shown by the example", timeout: 1000 }
+      - tapOn: { point: "40%, 65%" }
+      - runFlow:
+          optional: true
+          commands:
+            - extendedWaitUntil: { visible: "never shown by the example", timeout: 1000 }
+      - tapOn: { point: "60%, 55%" }
+      - runFlow:
+          optional: true
+          commands:
+            - extendedWaitUntil: { visible: "never shown by the example", timeout: 3000 }
+      - tapOn: "Stats"
+      - copyTextFrom: { text: "pages .*" }
+      - evalScript: ${output.afterTaps = maestro.copiedText.match(/rendered (\d+)/)[1]}
+      - evalScript: ${console.log('rendered afterTaps ' + output.afterTaps)}
+      - assertTrue:
+          condition: ${output.afterTaps == output.before}
+          label: "Plain taps render nothing"
+      - tapOn: { text: "pages .*" }
+      # A pan changes the viewport: its tile renders.
+      - swipe: { start: "50%, 70%", end: "50%, 45%", duration: 400 }
+      - runFlow:
+          optional: true
+          commands:
+            - extendedWaitUntil: { visible: "never shown by the example", timeout: 3000 }
+      - tapOn: "Stats"
+      - copyTextFrom: { text: "pages .*" }
+      - evalScript: ${output.afterPan = maestro.copiedText.match(/rendered (\d+)/)[1]}
+      - evalScript: ${console.log('rendered afterPan ' + output.afterPan)}
+      - assertTrue:
+          condition: ${Number(output.afterPan) > Number(output.afterTaps)}
+          label: "A pan renders the new tile"
+- tapOn: "‹ Back"
