@@ -223,6 +223,11 @@ export function ViewerScreen() {
     );
   }
 
+  const contentInset =
+    entry.insetAfterLoad === true && loadCount === 0
+      ? undefined
+      : entry.contentInset;
+
   const logEvent = (name: string) => {
     if (eventOrder.current.length >= 3) return;
     eventOrder.current.push(name);
@@ -534,7 +539,8 @@ export function ViewerScreen() {
             enableDoubleTapZoom={doubleTapZoom}
             enableTextSelection={textSelection}
             enableFormFilling={formFilling}
-            contentInset={entry.contentInset}
+            contentInset={contentInset}
+            minScale={entry.minScale}
             onFormChange={(event) =>
               setLastEvent(`form: ${describeField(event.field)}`)
             }
@@ -614,14 +620,11 @@ export function ViewerScreen() {
             )}
           </PdfView>
         )}
-        {entry.contentInset != null && (
+        {contentInset != null && (
           <>
             <View
               pointerEvents="none"
-              style={[
-                styles.insetBar,
-                { top: 0, height: entry.contentInset.top },
-              ]}
+              style={[styles.insetBar, { top: 0, height: contentInset.top }]}
             >
               <Text style={styles.insetText}>Header</Text>
             </View>
@@ -629,7 +632,7 @@ export function ViewerScreen() {
               pointerEvents="none"
               style={[
                 styles.insetBar,
-                { bottom: 0, height: entry.contentInset.bottom },
+                { bottom: 0, height: contentInset.bottom },
               ]}
             >
               <Text style={styles.insetText}>Toolbar</Text>

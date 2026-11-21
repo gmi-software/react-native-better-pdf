@@ -429,7 +429,7 @@ class PdfDocumentView(context: Context) :
     }
 
     override fun onDoubleTap(e: MotionEvent): Boolean {
-      val target = if (scale > minScale * 1.05f) minScale else min(maxScale, max(minScale * 2f, 2f))
+      val target = FitZoom.doubleTapTarget(scale, minScale, maxScale)
       animateZoom(target, e.x, e.y)
       return true
     }
@@ -589,10 +589,11 @@ class PdfDocumentView(context: Context) :
    */
   fun setContentInset(topPx: Float, bottomPx: Float) {
     if (topPx == contentInsetTop && bottomPx == contentInsetBottom) return
+    val oldClearTop = clearTop
     contentInsetTop = topPx
     contentInsetBottom = bottomPx
     // Keeps the reader's place at the top of the area, and fits pages into it.
-    rebuildLayout()
+    rebuildLayout(anchorClearTop = oldClearTop)
   }
 
   /** The space kept clear at the bottom now, in view pixels. */
@@ -1187,7 +1188,8 @@ class PdfDocumentView(context: Context) :
 
   // region Geometry
 
-  private fun rebuildLayout() {
+  /** [anchorClearTop]: the top clearance the current offset was laid out with. */
+  private fun rebuildLayout(anchorClearTop: Float = clearTop) {
     if (width <= 0 || (layoutDependsOnHeight && height <= 0) || pageSizes.isEmpty()) {
       layout = null
       invalidate()
@@ -1202,7 +1204,7 @@ class PdfDocumentView(context: Context) :
       old.isReversed == (isRightToLeft && isHorizontal) &&
       old.spread == (if (axis == PdfDocumentLayout.Axis.VERTICAL && !isPaged) spread else PdfDocumentLayout.Spread.NONE)
     if (old != null && sameMode && old.pageCount == pageSizes.size) {
-      val position = areaStart / scale
+      val position = (mainOffset + anchorClearTop) / scale
       anchorPage = old.slotAt(position)
       anchorFraction = (position - old.slotStart(anchorPage)) / (old.slotEnd(anchorPage) - old.slotStart(anchorPage))
     }
@@ -1277,7 +1279,7 @@ class PdfDocumentView(context: Context) :
   /** The vertical centre of the area between the clearances, in view pixels. */
   private val areaCenterY: Float get() = clearTop + (height - clearTop - clearBottom) / 2f
 
-  private val isZoomedIn: Boolean get() = scale > minScale * 1.01f
+  private val isZoomedIn: Boolean get() = FitZoom.isZoomedIn(scale, minScale, maxScale)
 
   private val minimumPagingFlingVelocity: Float = ViewConfiguration.get(context).scaledMinimumFlingVelocity * 4f
 

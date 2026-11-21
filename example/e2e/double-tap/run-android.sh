@@ -26,4 +26,7 @@ double_tap # zoom on (default): zooms
 step assert-zoomed.yaml
 double_tap # zoom off: two page taps, no zoom
 step assert-not-zoomed.yaml
+step open-min-scale.yaml
+double_tap # minScale={0.5} at 1×: zooms in
+step assert-min-scale-zoomed-in.yaml
 echo "PASS  double-tap (android)"
