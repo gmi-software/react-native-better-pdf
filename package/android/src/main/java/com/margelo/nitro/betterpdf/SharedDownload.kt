@@ -54,7 +54,7 @@ internal class SharedDownload(
       val failure = if (e is IllegalArgumentException) {
         PdfFailure(PdfErrorCode.INVALID_SOURCE, "Downloading $shownUrl failed: the request was rejected")
       } else {
-        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $shownUrl failed", cause = e, uri = url)
+        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $shownUrl failed", cause = e)
       }
       DownloadOutcome.Failed(failure, isServerUnreachable = false)
     }
@@ -110,7 +110,7 @@ internal class SharedDownload(
     } catch (e: IOException) {
       if (cancelled) throw InterruptedException()
       return DownloadOutcome.Failed(
-        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $shownUrl failed", cause = e, uri = url),
+        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $shownUrl failed", cause = e),
         isServerUnreachable = true,
       )
     } finally {

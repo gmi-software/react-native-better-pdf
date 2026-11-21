@@ -15,6 +15,11 @@ internal fun String.redactedUri(): String {
   return scheme.value + substring(hostStart, pathEnd) + query
 }
 
+/** This text with every `scheme://` URI in it replaced by its [redactedUri]. */
+internal fun String.redactingUris(): String = URI.replace(this) { it.value.redactedUri() }
+
+private val URI = Regex("[A-Za-z][A-Za-z0-9+.-]*://[^\\s\"'<>]+")
+
 private val SCHEME = Regex("^[A-Za-z][A-Za-z0-9+.-]*://")
 
 private const val NOT_A_URI = "<not a URI>"

@@ -92,9 +92,9 @@ class PdfSourceResolver(private val context: Context) {
       context.contentResolver.openAssetFileDescriptor(uri, "r", contentCancellation)
         ?: throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at ${uri.toString().redactedUri()}")
     } catch (e: FileNotFoundException) {
-      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at ${uri.toString().redactedUri()}", cause = e, uri = uri.toString())
+      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at ${uri.toString().redactedUri()}", cause = e)
     } catch (e: SecurityException) {
-      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No permission to read ${uri.toString().redactedUri()}", cause = e, uri = uri.toString())
+      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No permission to read ${uri.toString().redactedUri()}", cause = e)
     } catch (_: OperationCanceledException) {
       throw InterruptedException()
     }
