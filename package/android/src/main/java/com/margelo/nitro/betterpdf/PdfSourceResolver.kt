@@ -250,7 +250,7 @@ class PdfSourceResolver(private val context: Context) {
     } catch (failure: PdfFailure) {
       // Another open discarded the copy after the cache delivered it.
       if (failure.code != PdfErrorCode.FILE_NOT_FOUND || !retriesMissingCopy) throw failure
-      return openRemote(source, onProgress, retriesMissingCopy = false)
+      return openRemote(source.refetching(copy.mode), onProgress, retriesMissingCopy = false)
     }
     // The path may lead to a newer copy by the time it is discarded.
     val opened = try {
