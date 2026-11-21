@@ -84,8 +84,9 @@ appId: software.gmi.betterpdf.example
 - extendedWaitUntil: { visible: "5 / 5", timeout: 5000 }
 - tapOn: "‹ Back"
 
-# A base64 source among files, with its own password: equal sources in new
-# objects ("Same") do not reload, new base64 content ("Swap") does.
+# A base64 source next to a signed remote one, with its own password: equal
+# sources in new objects ("Same") do not reload, new base64 content ("Swap")
+# does.
 - runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Several sources, base64.*" } }
 - extendedWaitUntil: { visible: "1 / 5", timeout: 15000 }
 - assertVisible: "sources: p1\\+2 p3\\+3"
@@ -95,6 +96,15 @@ appId: software.gmi.betterpdf.example
 - tapOn: "Last"
 - extendedWaitUntil: { visible: "5 / 5", timeout: 5000 }
 - assertVisible: "loads: 1"
+# A new signed URL for the cacheKey source ("Rotate") keeps the document and
+# the base64 source's buffer: no second load, and the page stays.
+- tapOn: "Rotate"
+- runFlow:
+    optional: true
+    commands:
+      - extendedWaitUntil: { visible: "loads: 2", timeout: 10000 }
+- assertVisible: "loads: 1"
+- assertVisible: "5 / 5"
 - tapOn: "Swap"
 - extendedWaitUntil: { visible: "loads: 2", timeout: 15000 }
 - extendedWaitUntil: { visible: "1 / 15", timeout: 5000 }

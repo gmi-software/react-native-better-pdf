@@ -465,6 +465,19 @@ export function ViewerScreen() {
               )
             }
           />
+          {state.kind === 'loaded' && hasCacheKey(state.source) && (
+            <Button
+              title="Rotate"
+              // A new signed URL for every cacheKey source: no reload either.
+              onPress={() =>
+                setState((current) =>
+                  current.kind === 'loaded'
+                    ? { ...current, source: rotateSignatures(current.source) }
+                    : current,
+                )
+              }
+            />
+          )}
           <Text testID="load-count" style={styles.pageLabel}>
             {`loads: ${loadCount}`}
           </Text>
@@ -765,6 +778,26 @@ function copySource(source: DocumentSource): DocumentSource {
   const copy = (item: PdfSource) =>
     typeof item === 'object' ? { ...item } : item;
   return Array.isArray(source) ? source.map(copy) : copy(source as PdfSource);
+}
+
+function hasCacheKey(source: DocumentSource): boolean {
+  return (Array.isArray(source) ? source : [source]).some(
+    (item) => typeof item === 'object' && item.cacheKey != null,
+  );
+}
+
+/** The source with `sig=N` raised by one in every cacheKey source's URI. */
+function rotateSignatures(source: DocumentSource): DocumentSource {
+  const rotate = (item: PdfSource) =>
+    typeof item === 'object' && 'uri' in item && item.cacheKey != null
+      ? {
+          ...item,
+          uri: item.uri.replace(/sig=(\d+)/, (_, n) => `sig=${Number(n) + 1}`),
+        }
+      : item;
+  return Array.isArray(source)
+    ? source.map(rotate)
+    : rotate(source as PdfSource);
 }
 
 /** "p 3 · y 120 · 1.00x", plus "· end" once the end is on screen. */

@@ -3,7 +3,6 @@ import {
   inspectSources,
   normalizeUriSource,
   sourceKey,
-  sourcesKey,
   validateSourceItem,
 } from './source';
 
@@ -221,9 +220,15 @@ describe('sourceKey', () => {
   test('marks base64 sources without their content', () => {
     const key = sourceKey({ uri: '', base64: 'JVBERi0xLjQK' });
     expect(key).not.toContain('JVBERi0xLjQK');
-    // The content is compared separately (see useStableSource).
+    // The content is compared separately (see useStableSources).
     expect(sourceKey({ uri: '', base64: 'b3RoZXI=' })).toBe(key);
     expect(sourceKey({ uri: '' })).not.toBe(key);
+  });
+
+  test('depends on the password', () => {
+    expect(sourceKey({ uri: 'a', password: 'p' })).not.toBe(
+      sourceKey({ uri: 'a' }),
+    );
   });
 
   test('cannot be spoofed by a uri containing the separator', () => {
@@ -290,24 +295,6 @@ describe('inspectSources', () => {
       status: 'valid',
       sources: [],
     });
-  });
-});
-
-describe('sourcesKey', () => {
-  test('leaves base64 text out', () => {
-    const key = sourcesKey([{ uri: '', base64: 'JVBERi0xLjQK' }]);
-    expect(key).not.toContain('JVBERi0xLjQK');
-    expect(sourcesKey([{ uri: '', base64: 'JVBERi0xLjcK' }])).toBe(key);
-  });
-
-  test('differs when the order, a source or a password differs', () => {
-    const base = sourcesKey([{ uri: 'a' }, { uri: 'b' }]);
-    expect(sourcesKey([{ uri: 'a' }, { uri: 'b' }])).toBe(base);
-    expect(sourcesKey([{ uri: 'b' }, { uri: 'a' }])).not.toBe(base);
-    expect(sourcesKey([{ uri: 'a' }])).not.toBe(base);
-    expect(sourcesKey([{ uri: 'a' }, { uri: 'b', password: 'p' }])).not.toBe(
-      base,
-    );
   });
 });
 

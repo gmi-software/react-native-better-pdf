@@ -2,6 +2,7 @@
 #include "Base64Document.hpp"
 
 #include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <fbjni/ByteBuffer.h>
 #include <fbjni/fbjni.h>
@@ -45,11 +46,18 @@ namespace {
     return nullptr;
   }
 
+  jlong bufferAddress(jni::alias_ref<jni::JClass>, jni::alias_ref<jni::JByteBuffer> buffer) {
+    return static_cast<jlong>(reinterpret_cast<uintptr_t>(buffer->getDirectAddress()));
+  }
+
 } // namespace
 
 void registerNativeBase64Document() {
   jni::findClassStatic("com/margelo/nitro/betterpdf/NativeBase64Document")
-      ->registerNatives({makeNativeMethod("writeDecoded", writeDecoded)});
+      ->registerNatives({
+          makeNativeMethod("writeDecoded", writeDecoded),
+          makeNativeMethod("bufferAddress", bufferAddress),
+      });
 }
 
 } // namespace margelo::nitro::betterpdf

@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
-import { createRef, useEffect, type ReactNode } from 'react';
+import {
+  createRef,
+  startTransition,
+  Suspense,
+  useEffect,
+  type ReactNode,
+} from 'react';
 import { act, create, type ReactTestRenderer } from 'react-test-renderer';
 
 (
@@ -252,6 +258,71 @@ describe('PdfView', () => {
     );
     expect(lastHost().sources).not.toBe(first);
     expect(base64Text(lastSources()[1], 'b')).toBe('JVBERi0xLjcK');
+  });
+
+  test('keeps a base64 source when another source in the list changes', () => {
+    const cover = 'JVBERi0xLjQK';
+    const signed = (sig: number) => [
+      { base64: cover },
+      { uri: `https://x.test/a.pdf?sig=${sig}`, cacheKey: 'doc' },
+    ];
+    const renderer = render(<PdfView source={signed(1)} />);
+    const first = lastSources();
+    act(() => renderer.update(<PdfView source={signed(2)} />));
+    const next = lastSources();
+    expect(next).not.toBe(first);
+    expect(next[0]).toBe(first[0]);
+    expect(next[1]).toEqual({
+      uri: 'https://x.test/a.pdf?sig=2',
+      cacheKey: 'doc',
+      password: '',
+    });
+  });
+
+  test('keeps the native sources of repeated and reordered sources', () => {
+    const a = { base64: 'JVBERi0xLjQK' };
+    const b = { uri: 'file:///b.pdf' };
+    const renderer = render(<PdfView source={[{ ...b }, { ...b }, a]} />);
+    const first = lastSources();
+    act(() => renderer.update(<PdfView source={[{ ...b }, { ...b }, a]} />));
+    expect(lastSources()).toBe(first);
+    act(() => renderer.update(<PdfView source={[a, { ...b }]} />));
+    expect(lastSources()[0]).toBe(first[2]);
+    expect(lastSources()[1]).toBe(first[1]);
+  });
+
+  test('keeps the committed sources when a transition render is discarded', async () => {
+    const a = [{ base64: 'JVBERi0xLjQK' }, { uri: 'file:///a.pdf' }];
+    const b = [{ base64: 'JVBERi0xLjcK' }, { uri: 'file:///b.pdf' }];
+    const never = new Promise<never>(() => {});
+    function Suspend(): ReactNode {
+      throw never;
+    }
+    const app = (source: typeof a, suspend = false) => (
+      <Suspense fallback={null}>
+        <PdfView source={source} />
+        {suspend && <Suspend />}
+      </Suspense>
+    );
+    // A concurrent root, which can throw a render away (the option is not in
+    // the types).
+    const concurrent = {
+      createNodeMock: () => null,
+      unstable_isConcurrent: true,
+    };
+    let renderer: ReactTestRenderer | undefined;
+    await act(async () => {
+      renderer = create(app(a), concurrent);
+    });
+    const first = lastSources();
+    await act(async () => {
+      startTransition(() => renderer?.update(app(b, true)));
+    });
+    // B was rendered, then thrown away: the transition suspended.
+    expect(base64Text(lastSources()[0])).toBe('JVBERi0xLjcK');
+    await act(async () => renderer?.update(app([...a])));
+    expect(lastSources()).toBe(first);
+    act(() => renderer?.unmount());
   });
 
   test('resolves require() assets', () => {
