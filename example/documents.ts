@@ -399,10 +399,12 @@ export const DOCUMENTS: DocumentEntry[] = [
   {
     id: 'sources-base64',
     title: 'Several sources, base64',
-    subtitle: "{ base64 } of encrypted ('secret') + links; Swap: outline",
+    subtitle:
+      "{ base64 } of encrypted ('secret') + signed links; Swap: outline",
     resolve: async () => [
       { ...(await base64Fixture('encrypted')), password: 'secret' },
-      { uri: (await ensureFixture('links')).uri },
+      // "Rotate" changes the signature; the cacheKey keeps the document.
+      { uri: `${FIXTURE_SERVER}/links.pdf?sig=1`, cacheKey: 'signed-links' },
     ],
     alternate: async () => [
       await base64Fixture('outline'),

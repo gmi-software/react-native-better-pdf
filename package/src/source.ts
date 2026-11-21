@@ -381,8 +381,3 @@ export function sourceKey(source: NormalizedSource): string {
     source.password ?? null,
   ]);
 }
-
-/** Value identity of several normalized sources, in order. */
-export function sourcesKey(sources: readonly NormalizedSource[]): string {
-  return JSON.stringify(sources.map(sourceKey));
-}

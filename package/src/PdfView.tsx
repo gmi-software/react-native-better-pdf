@@ -35,7 +35,7 @@ import { defaultPrintJobName } from './printJobName';
 import { toNativeSource } from './nativeSource';
 import {
   inspectSources,
-  sourcesKey,
+  sourceKey,
   type NormalizedSource,
   type PdfSource,
 } from './source';
@@ -558,32 +558,63 @@ function useInitialPosition(
 
 const EMPTY_NORMALIZED_SOURCES: readonly NormalizedSource[] = [];
 
+interface StableSources {
+  keys: readonly string[];
+  base64: readonly (string | undefined)[];
+  value: NativePdfSource[];
+}
+
+/**
+ * The native sources for `sources`, reusing `previous`'s native object (and
+ * base64 buffer) for every source whose key and base64 text are unchanged.
+ * Returns `previous` itself when nothing changed.
+ */
+function reuseSources(
+  sources: readonly NormalizedSource[],
+  previous: StableSources | null,
+): StableSources {
+  const keys = sources.map(sourceKey);
+  const base64 = sources.map((source) => source.base64);
+  if (previous == null) {
+    return { keys, base64, value: sources.map(toNativeSource) };
+  }
+  const matches = (index: number, at: number) =>
+    previous.keys[at] === keys[index] &&
+    Object.is(previous.base64[at], base64[index]);
+  const value = sources.map((source, index) => {
+    // The same index first, so duplicate sources keep their own objects.
+    const at = matches(index, index)
+      ? index
+      : previous.keys.findIndex((_, i) => matches(index, i));
+    return at === -1 ? toNativeSource(source) : previous.value[at]!;
+  });
+  if (
+    previous.value.length === value.length &&
+    value.every((item, index) => item === previous.value[index])
+  ) {
+    return previous;
+  }
+  return { keys, base64, value };
+}
+
 /**
  * Keeps the native sources prop referentially stable while its value is
- * unchanged. Nitro diffs props by JS identity, so without this an inline
- * `source={{ uri }}` would re-send the source to native on every render.
+ * unchanged, and each source's native object while that source is unchanged.
+ * Nitro diffs props by JS identity, and both platforms compare base64
+ * sources by buffer: a new buffer reloads the document.
  */
 function useStableSources(
   sources: readonly NormalizedSource[],
 ): NativePdfSource[] {
-  const key = sourcesKey(sources);
-  const base64 = sources.map((item) => item.base64);
-  const cached = useRef<{
-    key: string;
-    base64: (string | undefined)[];
-    value: NativePdfSource[];
-  } | null>(null);
-  // A ref rather than useMemo, which may drop its cache: a new object would
-  // re-send the source. Reading it during render is the point.
-  /* eslint-disable react-hooks/refs */
-  if (
-    cached.current?.key !== key ||
-    cached.current.base64.some((text, index) => !Object.is(text, base64[index]))
-  ) {
-    cached.current = { key, base64, value: sources.map(toNativeSource) };
-  }
-  return cached.current.value;
-  /* eslint-enable react-hooks/refs */
+  const committed = useRef<StableSources | null>(null);
+  // Read during render but written on commit only, so a render that never
+  // commits (a suspended transition) cannot replace the committed buffers.
+  // eslint-disable-next-line react-hooks/refs
+  const next = reuseSources(sources, committed.current);
+  useLayoutEffect(() => {
+    committed.current = next;
+  }, [next]);
+  return next.value;
 }
 
 /**
