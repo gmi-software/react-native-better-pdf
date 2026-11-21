@@ -369,9 +369,10 @@ matches to the main thread; a new query or document cancels it. So does
 detaching the view (a screen hidden under another), so that a hidden
 viewer does not compete for PDFium with the one on screen: a new task goes
 on from the next page once the view is attached again. The
-renderer is reopened every 48 pages to cap PDFium's per-page cache. The
-platform serialises all `PdfRenderer` calls in a process on one lock, so
-the search interleaves with rendering page by page. `SearchResults` keeps
+renderer is reopened every 48 pages to cap PDFium's per-page cache. All
+renderer calls in a process take one lock (the platform's from Android
+7.1.1, the library's `RendererLock` on API 24–25), so the search
+interleaves with rendering page by page. `SearchResults` keeps
 matches by page; `PdfDocumentView` draws the highlights of visible pages
 and scrolls the current match into view (0.3 of the viewport from the top
 unless it is already fully visible).
@@ -506,9 +507,12 @@ fetch(source) ──► stored copy fresh for source.maxAgeMs? ──yes──�
 ## Known platform constraints
 
 - **Android PdfRenderer serializes all documents in a process** on a static
-  PDFium lock (`PdfProcessor.sPdfiumLock`, API 35+). Two visible `PdfView`s
-  render one page at a time between them, and a closing document's in-flight
-  render can delay the next document's first page by one render.
+  PDFium lock (`PdfRenderer.sPdfiumLock` from Android 7.1.1,
+  `PdfProcessor.sPdfiumLock` from API 35). Android 7.0 and 7.1.0 take none,
+  so on API 24–25 the library takes its own (`RendererLock`). Two visible
+  `PdfView`s render one page at a time between them, and a closing
+  document's in-flight render can delay the next document's first page by
+  one render.
 - **Passwords on Android need API 35+, or API 31–34 with SDK extension 13**
   (`LoadParams` with `PdfRenderer` or `PdfRendererPreV`, chosen by
   `DocumentRenderer.open`). Other devices report `unsupported-pdf`.

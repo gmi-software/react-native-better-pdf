@@ -1129,11 +1129,12 @@ Requested in react-native-pdf as thumbnail export (#998, #43, #457, #811).
   4096 × 4096 pixels so a tall page cannot exhaust memory) and reject
   rather than clamp: a silently smaller image would be a surprise.
 - **Separate renderer, off the main thread.** Android opens a short-lived
-  renderer on a duplicate of the file descriptor (PDFium serialises renders
-  process-wide, so this costs the view at most one page's render), renders
-  on white like the view, and closes it, so nothing stays cached. iOS draws
-  with PDFKit on a separate `PDFDocument` on the read queue (PDFKit objects
-  are not thread-safe). Measured on the simulator / emulator: 3–15 ms
+  renderer on a duplicate of the file descriptor (renders are serialised
+  process-wide, by the platform from Android 7.1.1 and by the library's own
+  lock on API 24–25, so this costs the view at most one page's render),
+  renders on white like the view, and closes it, so nothing stays cached.
+  iOS draws with PDFKit on a separate `PDFDocument` on the read queue
+  (PDFKit objects are not thread-safe). Measured on the simulator / emulator: 3–15 ms
   for a 300 px PNG of a one-line text page, file write included (scanned
   or dense pages take longer: their render time).
 - **On the view's ref**, because the view owns the open document (and its

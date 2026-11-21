@@ -74,7 +74,9 @@ internal interface DocumentRenderer : AutoCloseable {
      */
     fun open(descriptor: ParcelFileDescriptor, password: String?): DocumentRenderer =
       try {
-        if (hasPreV) PreVDocumentRenderer.open(descriptor, password) else PlatformDocumentRenderer.open(descriptor, password)
+        RendererLock.platform.open {
+          if (hasPreV) PreVDocumentRenderer.open(descriptor, password) else PlatformDocumentRenderer.open(descriptor, password)
+        }
       } catch (error: Throwable) {
         // API 35+ renderers close it themselves when they fail; older ones
         // keep it open, one descriptor leaked per failure.
