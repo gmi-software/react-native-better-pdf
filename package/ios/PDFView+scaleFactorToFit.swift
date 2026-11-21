@@ -1,13 +1,13 @@
 import PDFKit
 
 extension PDFView {
-  /// The scale at which the document's first page fits the view by
+  /// The scale at which page `index` (the first by default) fits the view by
   /// `policy`, within the page break margins; 0 before layout. PDFKit applies
   /// one scale to every page. `columns`: pages side by side (2 with facing
   /// pages), each fitting its share of the width. `clearance`: height kept
   /// clear above and below the pages (content insets).
-  func scaleFactorToFit(_ policy: PdfFitPolicy, columns: Int = 1, clearance: CGFloat = 0) -> CGFloat {
-    guard let page = document?.page(at: 0) else { return 0 }
+  func scaleFactorToFit(_ policy: PdfFitPolicy, page index: Int = 0, columns: Int = 1, clearance: CGFloat = 0) -> CGFloat {
+    guard let page = document?.page(at: index) else { return 0 }
     var size = page.bounds(for: displayBox).size
     if page.rotation % 180 != 0 { swap(&size.width, &size.height) }
     let margins = displaysPageBreaks ? pageBreakMargins : .zero

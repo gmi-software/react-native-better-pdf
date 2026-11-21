@@ -489,8 +489,10 @@ fitPolicy?: 'width' | 'height' | 'page';
     whole document: `'width'` in a vertical layout uses PDFKit's size-to-fit
     (the widest page fits); other fits are computed from the first page. On
     documents with uniform page sizes the platforms match.
-  - iOS paging (PDFKit's page view controller) turns the page on any swipe,
-    also inside a page longer than the view; such a page is read by zooming.
+  - iOS paging (PDFKit's page view controller) fits each page whole as it
+    arrives, whatever `fitPolicy` says, and turns the page on any swipe;
+    a page longer than the view is read by zooming. Zoom there is relative
+    to the page shown (`zoomTo(1)` shows it whole).
 
 ## Single page
 
@@ -643,12 +645,20 @@ onScaleChange?: (event: { scale: number }) => void;
   itself, with insets that differ from the continuous layout (measured: a
   226×3000 pt page at 0.1939 vs 0.1918 computed — enough for a spurious
   "1.01"). The scale PDFKit shows a page at when it arrives is taken as that
-  page's 1.0, and the check waits out page turns (during one, `currentPage`
+  page's 1.0 for `zoomTo`, `minScale`/`maxScale`, `goToViewport` and this
+  event, and the check waits out page turns (during one, `currentPage`
   and `scaleFactor` briefly disagree — measured as a spurious "3.52").
+  PDFKit does not refit a page on a resize: the wrapper refits the current
+  page itself, keeping the relative zoom. A `zoomTo` there zooms the page's
+  own scroll view, which posts no scale notification, so it restarts the
+  wait itself. Up to 1.2 `zoomTo` and the limits used the first page's fit,
+  a rotation sent an event, and a paged `zoomTo` sent none.
 - **Tested** (`viewer-scale-change`): an animated `zoomTo(2.5)` yields exactly
   one event (a counter in the example app), scrolling while zoomed and
-  repeating the same zoom yield none, double tap yields one, and paging
-  through pages of different sizes yields none. The Nitro
+  repeating the same zoom yield none, double tap yields one, paging
+  through pages of different sizes and rotating yield none, and in a paged
+  layout `zoomTo(2.5)` then `zoomTo(1)` on the last, square page report
+  2.50 and 1.00. The Nitro
   boundary test lists it as reviewed (name matches its per-frame guard).
 - **Measured difference:** iOS's double tap zooms to PDFKit's own step (1.70
   for an A4 page on an iPhone 17 Pro simulator); Android's to 2×.
@@ -688,9 +698,14 @@ onScaleChange?: (event: { scale: number }) => void;
   a scrolling form. Android no longer blocks parent interception on touch
   down (only once a pinch starts); iOS disables panning on every PDFKit
   scroll view (including the page view controller's) and re-applies it when
-  the layout mode replaces them. The e2e flow `viewer-scroll-enabled`
-  checks both directions: with `false` a drag on the document scrolls the
-  form, with `true` the same drag scrolls the document and not the form.
+  the layout mode replaces them and on every page change: the page view
+  controller creates a scroll view per page as pages show (measured: up to
+  1.2 a page reached later panned once zoomed). The indicator props and the
+  inset adjustment are applied the same way. The e2e flow
+  `viewer-scroll-enabled` checks both directions: with `false` a drag on the
+  document scrolls the form, and a zoomed page reached after the prop was
+  set does not pan; with `true` the same drag scrolls the document and not
+  the form.
 
 ## Text selection
 

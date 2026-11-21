@@ -105,4 +105,19 @@ appId: software.gmi.betterpdf.example
 - extendedWaitUntil:
     visible: { id: "viewport-status", text: "${maestro.copiedText}" }
     timeout: 5000
+# Zoomed: the zoom comes back on the other page.
+- tapOn: "2.5×"
+- extendedWaitUntil:
+    visible: { id: "viewport-status", text: "p 1[12] · .* · 2\\.50x.*" }
+    timeout: 5000
+- tapOn: "Mark"
+- tapOn: "First"
+- extendedWaitUntil:
+    visible: { id: "viewport-status", text: "p 1 · .*" }
+    timeout: 5000
+- tapOn: "Return"
+- extendedWaitUntil:
+    visible: { id: "viewport-status", text: "p 1[12] · .* · 2\\.50x.*" }
+    timeout: 5000
+- tapOn: "1×"
 - tapOn: "‹ Back"

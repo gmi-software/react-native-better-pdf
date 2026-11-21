@@ -430,7 +430,11 @@ double-tap, page virtualization and background tile rendering. The wrapper:
 - maps `minScale`/`maxScale` (relative to the fitted page; one scale for the
   whole document, see `fitPolicy`) to PDFKit's absolute
   `minScaleFactor`/`maxScaleFactor`, re-deriving on layout changes and keeping
-  the user's relative zoom across rotation;
+  the user's relative zoom across rotation. In paged layouts PDFKit's page
+  view controller fits every page whole as it arrives, so there the
+  reference is the current page's arrival scale: zoom, limits, viewport and
+  scale events follow it, the limits move on every page change, and a resize
+  refits the current page;
 - applies `initialPage` after the first layout with a non-zero fit scale
   (`go(to:)` before layout is ignored by PDFKit);
 - reports `PDFViewPageChanged` as `onPageChange`, de-duplicated;

@@ -32,7 +32,7 @@ Every component, object and type is exported from the package root. The
 | `enablePaging` | `boolean` | `false` | one page per swipe, along the `horizontal` axis |
 | `enableRTL` | `boolean` | `false` | horizontal layouts run right to left (iOS: with `enablePaging` only) |
 | `singlePage` | `boolean` | `false` | one static page (`initialPage`, switched by `goToPage`) for thumbnails; ignores touches |
-| `fitPolicy` | `'width' \| 'height' \| 'page'` | `'width'`, or `'page'` with `horizontal` / `enablePaging` | how pages are scaled at zoom 1 |
+| `fitPolicy` | `'width' \| 'height' \| 'page'` | `'width'`, or `'page'` with `horizontal` / `enablePaging` | how pages are scaled at zoom 1; iOS paging fits each page whole whatever this says |
 | `spreadMode` | `'none' \| 'pairs' \| 'book'` | `'none'` | facing pages side by side in the vertical continuous layout; see [Facing pages](guides/layout-and-appearance.md#facing-pages) |
 | `colorScheme` | `'light' \| 'dark'` (or `useColorScheme()`'s value) | `'light'` | `'dark'` shows pages with lightness inverted and hues kept; see [Dark pages](guides/layout-and-appearance.md#dark-pages) |
 | `contentInset` | `{ top?, bottom? }` | none | dp / pt that pages scroll under, e.g. a translucent header; see [Translucent bars](guides/layout-and-appearance.md#translucent-bars) |
