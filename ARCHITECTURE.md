@@ -55,13 +55,15 @@ package/
     source.ts                      PdfSource union (or a list) → native [{ uri, base64, headers, cache options, password }]
     nativeSource.ts                base64 text → native-owned ArrayBuffer (once per distinct text)
   test/base64/                     the C++ and Swift base64 decoders against shared cases, and each other
+  test/loader/                     iOS's loader, cache and downloads, built for macOS, against a local server
   nitrogen/generated/              Nitrogen output (committed; regenerate with `bun run specs`)
   ios/
     HybridBetterPdfView.swift      PDFView host, scale mapping, events, lifecycle
     PdfContainerView.swift         taps, links, text selection settle / disable
     PdfSearchController.swift      PDFKit async find, highlights, next/previous
     SettleDebouncer.swift          "viewport stopped moving" for scale and viewport events
-    PdfDocumentLoader.swift        source resolution, cache fetch + pin, base64 → pin, PDFDocument open
+    PdfDocumentLoader.swift        source resolution, cache fetch + pin, base64 → pin, PDFDocument open,
+                                   an unreadable copy removed and downloaded once more
     Base64Document.swift           base64 decoding by the library's rules (same as Android's C++)
     DocumentSetLoader.swift        the view's sources in parallel; several assembled into one PDFDocument
     DisplayedDocument.swift        the displayed document and its sources (files, passwords, first pages)
@@ -95,6 +97,8 @@ package/
     BitmapPool.kt                  bitmap reuse + eager recycling
     MemoryBudgets.kt               pure: bitmap pool budget
     PdfSourceResolver.kt           source → seekable ParcelFileDescriptor (base64, streamed content://: write, open, delete)
+    ResolvedSource+readOrRefetch.kt
+                                   an unreadable copy removed and downloaded once more (view and document)
     NativeBase64Document.kt        JNI entry: base64 text in a native buffer → decoded into a file
     DocumentCache.kt               fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.kt          copies on disk: session/persistent dirs, metadata

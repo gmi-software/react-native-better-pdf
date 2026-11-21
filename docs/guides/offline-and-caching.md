@@ -35,6 +35,14 @@ const source: PdfUriSource = {
   document: a new URL or token does not reload the view.
 - A response that is not a PDF (a login page, a captive portal) fails with
   `invalid-pdf` and is never stored.
+- A response that starts like a PDF but cannot be opened (cut short, or
+  damaged on the server) is not kept either. The open fails with
+  `invalid-pdf` and removes the copy, so the next open asks the server
+  again. A copy that was already stored when the open began (by
+  `PdfCache.download` or an earlier version, also one the server has just
+  confirmed unchanged) is removed and the document downloaded once more
+  within the same open, which fails only if that copy cannot be opened
+  either. A copy that needs a password stays.
 
 `PdfCache` manages the copies without a view, with the same source object:
 
@@ -63,6 +71,9 @@ await PdfCache.clear();          // e.g. on sign-out
   `PdfView`): the file is downloaded once. Unlike the view, it never falls
   back to an old copy — it rejects (`PdfDownloadError` with a `code`, or an
   `AbortError` when cancelled) and the old copy stays.
+- `download` does not open the document: it only checks that the response
+  starts like a PDF. A damaged file is stored and returned as an entry,
+  until `PdfView` or `PdfDocument.open` finds it unreadable (see above).
 - Cancelling stops the download unless a `PdfView` is waiting for it too.
 - `remove` and `clear` do not disturb documents on screen and do not stop
   downloads in progress (those still store their result). Page images from

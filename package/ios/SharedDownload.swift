@@ -152,7 +152,7 @@ final class SharedDownload {
         etag: http.value(forHTTPHeaderField: "ETag") ?? existing.metadata.etag,
         lastModified: http.value(forHTTPHeaderField: "Last-Modified") ?? existing.metadata.lastModified
       )
-      return storing { try store.markValidated(existing, metadata: metadata) }
+      return storing(isDownloaded: false) { try store.markValidated(existing, metadata: metadata) }
     }
     guard (200..<300).contains(http.statusCode) else {
       let reason = RedirectPolicy.statuses.contains(http.statusCode) ? ": the redirect is not followed" : ""
@@ -178,14 +178,14 @@ final class SharedDownload {
       etag: http.value(forHTTPHeaderField: "ETag"),
       lastModified: http.value(forHTTPHeaderField: "Last-Modified")
     )
-    return storing { try store.commit(key: key, file: tempURL, mode: mode, metadata: metadata) }
+    return storing(isDownloaded: true) { try store.commit(key: key, file: tempURL, mode: mode, metadata: metadata) }
   }
 
   /// Runs a store write; a failure (e.g. a full disk) counts as unreachable,
   /// so a view can still show an existing copy.
-  private func storing(_ write: () throws -> CachedCopy) -> DownloadOutcome {
+  private func storing(isDownloaded: Bool, _ write: () throws -> CachedCopy) -> DownloadOutcome {
     do {
-      return .stored(try write())
+      return .stored(try write(), isDownloaded: isDownloaded)
     } catch {
       return .failed(PdfLoadFailure(
         code: .networkError,

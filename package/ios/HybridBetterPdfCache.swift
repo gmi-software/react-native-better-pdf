@@ -25,7 +25,7 @@ final class HybridBetterPdfCache: HybridBetterPdfCacheSpec {
           onProgress(PdfLoadProgressEvent(loadedBytes: Double(loadedBytes), totalBytes: totalBytes.map(Double.init)))
         }
       },
-      onReady: { [weak self] copy, _ in
+      onReady: { [weak self] copy, _, _ in
         self?.finish(requestId)
         promise.resolve(withResult: PdfDownloadResult(entry: copy.toPdfCacheEntry(), error: nil))
       },
