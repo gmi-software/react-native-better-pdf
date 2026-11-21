@@ -81,7 +81,9 @@ jobs:
           git diff --name-only --no-renames -z "$base" HEAD > "$RUNNER_TEMP/changed" ||
             build_anyway "Cannot diff against $base"
 
-          # %q: a file name can hold a newline followed by a workflow command.
+          # A file name can carry a workflow command. The runner reads `::` at
+          # the start of a line, after trimming whitespace, and `##[` anywhere:
+          # the prefix stops the first, %q the second and a newline in a name.
           native=false
           while IFS= read -r -d '' file; do
             for pattern in "${native_paths[@]}"; do
@@ -92,7 +94,7 @@ jobs:
                 continue 2
               fi
             done
-            printf '        %q\n' "$file"
+            printf 'other:  %q\n' "$file"
           done < "$RUNNER_TEMP/changed"
 
           echo "native=$native" >> "$GITHUB_OUTPUT"
