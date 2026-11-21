@@ -84,4 +84,33 @@ class RenderFailuresTest {
     assertTrue(failures.allowsBase(3))
     assertFalse(failures.onFailed(base(3)))
   }
+
+  @Test
+  fun `a page that ran out of memory is rendered once more`() {
+    assertTrue(failures.onOutOfMemory(base(3)))
+    assertFalse(failures.onOutOfMemory(base(3)))
+    assertTrue(failures.allowsBase(3))
+  }
+
+  @Test
+  fun `out-of-memory retries count base bitmaps and tiles apart`() {
+    assertTrue(failures.onOutOfMemory(base(3)))
+    assertTrue(failures.onOutOfMemory(tile(3)))
+    assertTrue(failures.onOutOfMemory(base(4)))
+    assertTrue(failures.allowsTile(3))
+  }
+
+  @Test
+  fun `a render that works allows another out-of-memory retry`() {
+    failures.onOutOfMemory(base(3))
+    failures.onRendered(base(3))
+    assertTrue(failures.onOutOfMemory(base(3)))
+  }
+
+  @Test
+  fun `clear forgets out-of-memory retries`() {
+    failures.onOutOfMemory(tile(3))
+    failures.clear()
+    assertTrue(failures.onOutOfMemory(tile(3)))
+  }
 }

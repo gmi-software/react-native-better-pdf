@@ -331,6 +331,7 @@ class PdfDocumentView(context: Context) :
   private val scroller = OverScroller(context)
   private var zoomAnimator: ValueAnimator? = null
   private val settleRunnable = Runnable { onSettled() }
+  private val retryAfterOutOfMemory = Runnable { requestRenders(force = true) }
 
   /** Nothing else ends the scroller or the zoom animation, or schedules the settle. */
   private val motion = ViewportMotion(object : ViewportMotion.Host {
@@ -1023,6 +1024,11 @@ class PdfDocumentView(context: Context) :
         reportedOutOfMemory = true
         listener?.onRenderFailed(failure)
       }
+      if (renderFailures.onOutOfMemory(request)) {
+        // After the frame that releases the trimmed bitmaps.
+        removeCallbacks(retryAfterOutOfMemory)
+        postDelayed(retryAfterOutOfMemory, OUT_OF_MEMORY_RETRY_DELAY_MS)
+      }
       return
     }
     if (renderFailures.onFailed(request)) {
@@ -1698,6 +1704,7 @@ class PdfDocumentView(context: Context) :
     const val PAGE_SNAP_DURATION_MS = 250
     /** How long to keep only visible pages after a memory-pressure signal. */
     const val MEMORY_PRESSURE_BACKOFF_MS = 30_000L
+    const val OUT_OF_MEMORY_RETRY_DELAY_MS = 250L
     /** Render zoom tiles once the screen shows 15% more pixels than the base layer has. */
     const val TILE_THRESHOLD = 1.15f
     const val MIN_CACHE_BYTES = 24L * 1024 * 1024
