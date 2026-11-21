@@ -230,6 +230,62 @@ class DocumentCacheTest {
 
   // endregion
 
+  // region Messages
+
+  /** [path] on [server], with user-info, a query and a fragment. */
+  private fun secretUrl(path: String = "/x.pdf") =
+    server.url("$path?sig=s#part").replace("http://", "http://u:p@")
+
+  private fun assertNoSecrets(failure: PdfFailure) {
+    val texts = listOfNotNull(failure.message, failure.toPdfError().nativeDescription)
+    for (text in texts) {
+      assertFalse(text, text.contains("u:p"))
+      assertFalse(text, text.contains("sig=s"))
+      assertFalse(text, text.contains("part"))
+    }
+  }
+
+  @Test
+  fun `an HTTP error names the URL without its user-info, query and fragment`() {
+    server.status = 404
+    val failure = fetch(source(secretUrl())).failure()
+    assertEquals(PdfErrorCode.HTTP_ERROR, failure.code)
+    assertEquals(404, failure.httpStatus)
+    assertEquals("Downloading ${server.url("/x.pdf")}?… failed with HTTP 404", failure.message)
+    assertNoSecrets(failure)
+  }
+
+  @Test
+  fun `other download failures name the URL the same way`() {
+    server.body = "<html>Sign in</html>".toByteArray()
+    val notPdf = fetch(source(secretUrl("/page.pdf"))).failure()
+    assertEquals(PdfErrorCode.INVALID_PDF, notPdf.code)
+    assertEquals("The server did not return a PDF document for ${server.url("/page.pdf")}?…", notPdf.message)
+    assertNoSecrets(notPdf)
+
+    redirectChain(hops = 11)
+    server.redirects["/hop0.pdf?sig=s"] = "/hop1.pdf"
+    val tooMany = fetch(source(secretUrl("/hop0.pdf"))).failure()
+    assertEquals(PdfErrorCode.NETWORK_ERROR, tooMany.code)
+    assertEquals("Downloading ${server.url("/hop0.pdf")}?… failed: more than 10 redirects", tooMany.message)
+    assertNoSecrets(tooMany)
+
+    server.refuseConnections()
+    val unreachable = fetch(source(secretUrl("/gone.pdf"))).failure()
+    assertEquals(PdfErrorCode.NETWORK_ERROR, unreachable.code)
+    assertEquals("Downloading ${server.url("/gone.pdf")}?… failed", unreachable.message)
+    assertNoSecrets(unreachable)
+  }
+
+  @Test
+  fun `a rejected source is named without its user-info and query`() {
+    val failure = fetch(source("ftp://u:p@127.0.0.1/x.pdf?sig=s#part")).failure()
+    assertEquals(PdfErrorCode.INVALID_SOURCE, failure.code)
+    assertNoSecrets(failure)
+  }
+
+  // endregion
+
   // region Copies that cannot be opened
 
   @Test

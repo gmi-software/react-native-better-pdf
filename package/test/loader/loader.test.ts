@@ -31,6 +31,7 @@ const SOURCES = [
   'URL+fileSize',
   'URL+hasPdfHeader',
   'URL+sourceUri',
+  'String+redactedUri',
 ];
 
 function build(args: string[]): void {
@@ -310,5 +311,87 @@ describe.skipIf(!isMac)('a copy that needs a password', () => {
       'loaded pages=1 stale=false',
     ]);
     expect(requests.length).toBe(1);
+  });
+});
+
+describe.skipIf(!isMac)('a failure message', () => {
+  beforeEach(() => {
+    answers = {};
+    requests = [];
+  });
+
+  /** `url(path)` with user-info, a query and a fragment. */
+  const secretUrl = (path: string) =>
+    url(`${path}?sig=s#part`).replace('http://', 'http://u:p@');
+
+  const expectNoSecrets = (line: string) => {
+    expect(line).not.toContain('u:p');
+    expect(line).not.toContain('sig=s');
+    expect(line).not.toContain('part');
+  };
+
+  test('of an HTTP error names the URL without its user-info, query and fragment', async () => {
+    const [line] = await launch(newHome(), [`error ${secretUrl('/x.pdf')}`]);
+    expect(line).toBe(
+      `http-error status=404 message=Downloading ${url('/x.pdf')}?… failed with HTTP 404 native=none`,
+    );
+  });
+
+  test('of other download failures names the URL the same way', async () => {
+    answers['/page.pdf'] = [Buffer.from('<html>Sign in</html>')];
+    const closed = Bun.serve({ port: 0, fetch: () => new Response() });
+    const port = closed.port;
+    closed.stop(true);
+    const gone = `http://u:p@127.0.0.1:${port}/gone.pdf?sig=s#part`;
+    const lines = await launch(newHome(), [
+      `error ${secretUrl('/page.pdf')}`,
+      `error ${gone}`,
+      'error ftp://u:p@127.0.0.1/x.pdf?sig=s#part',
+    ]);
+    expect(lines[0]).toBe(
+      `invalid-pdf status=none message=The server did not return a PDF document for ${url('/page.pdf')}?… native=none`,
+    );
+    expect(lines[1]).toStartWith(
+      `network-error status=none message=Downloading http://127.0.0.1:${port}/gone.pdf?… failed native=`,
+    );
+    expect(lines[2]).toBe(
+      'invalid-source status=none message=Unsupported PDF source: ftp://127.0.0.1/x.pdf?… native=none',
+    );
+    lines.forEach(expectNoSecrets);
+  });
+});
+
+describe.skipIf(!isMac)('a URI in a message', () => {
+  /** The same table as Android's, in StringRedactedUriTest.kt. */
+  const cases: [string, string][] = [
+    ['https://u:p@host/x.pdf?sig=s#part', 'https://host/x.pdf?…'],
+    ['https://u:p@ss@host:8443/a/b.pdf?x=1', 'https://host:8443/a/b.pdf?…'],
+    ['http://u:p@[::1]:8080/x.pdf?sig=s', 'http://[::1]:8080/x.pdf?…'],
+    ['https://host?sig=s', 'https://host?…'],
+    ['https://u:p@host', 'https://host'],
+    ['https://host/x.pdf#part?sig=s', 'https://host/x.pdf'],
+    ['https://host/x.pdf?', 'https://host/x.pdf?…'],
+    ['https://host/token-in-path/x.pdf', 'https://host/token-in-path/x.pdf'],
+    ['https://host/%C3%BC/ü.pdf?x', 'https://host/%C3%BC/ü.pdf?…'],
+    ['HTTPS://Host/X.pdf', 'HTTPS://Host/X.pdf'],
+    [
+      'content://com.app.provider/doc/1?token=t',
+      'content://com.app.provider/doc/1?…',
+    ],
+    ['ftp://u:p@127.0.0.1/x.pdf?sig=s#part', 'ftp://127.0.0.1/x.pdf?…'],
+    ['document.pdf', '<not a URI>'],
+    ['data:application/pdf;base64,JVBERi0=', '<not a URI>'],
+    ['http:host/x.pdf?sig=s', '<not a URI>'],
+    ['1http://host/x.pdf', '<not a URI>'],
+    ['u:p@host/x.pdf?sig=s', '<not a URI>'],
+    ['', '<not a URI>'],
+  ];
+
+  test('keeps scheme, host, port and path, and hides the rest', async () => {
+    const results = await launch(
+      newHome(),
+      cases.map(([uri]) => `redact ${uri}`.trimEnd()),
+    );
+    expect(results).toEqual(cases.map(([, expected]) => expected));
   });
 });
