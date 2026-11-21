@@ -204,7 +204,8 @@ touched per frame.
 viewport change (main)
   └─ PrefetchPlanner.plan(visible, center, direction)
        └─ requests = planned pages not cached at the current width
-                     (+ zoom tiles for visible pages when settled)
+                     (+ zoom tiles for visible pages when settled,
+                        unless the tile on screen has the same geometry)
             └─ session.submit(requests)   // replaces the queue
                  └─ render thread: pop highest priority → openPage → render → close
                       └─ post(main): cache.put / tiles.put → invalidate
@@ -240,7 +241,9 @@ viewport change (main)
   could not re-create its renderer). A page that fails twice in a row is reported
   once (`page-render-failed`), drawn as a placeholder and not requested
   again, so it never fails in a loop. Base bitmaps and zoom tiles are
-  counted apart: a page whose tiles fail keeps its base bitmap.
+  counted apart: a page whose tiles fail keeps its base bitmap. A render that
+  runs out of memory trims the cache to the visible pages and is requested
+  again once, 250 ms later; it is not counted as a failure.
 
 ### Page sizes and PDFium's document cache
 
