@@ -1781,7 +1781,10 @@ file path), and anchoring the dialog to the viewer on iPad.
   state, the one `AppState` reports as `active`. The result waits for the
   same state, within the 2 s it may wait for the job: the adapter's
   `onFinish` arrives before the Activity resumes (50 ms on API 37), and a
-  `print()` called from the result would be refused.
+  `print()` called from the result would be refused. The result is
+  decided before that wait, from the first state the job takes after
+  "created", so a job cancelled in the print queue meanwhile is submitted
+  whether or not the app was away.
 - **Permissions:** iOS refuses documents whose permissions forbid printing
   (`allowsPrinting`); Android's `PdfRenderer` exposes no permissions, so
   it prints them.

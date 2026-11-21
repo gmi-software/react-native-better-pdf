@@ -119,6 +119,45 @@ class PrintDialogTest {
   }
 
   @Test
+  fun `a job cancelled in the print queue afterwards was still submitted`() {
+    print()
+    host.isResumed = false
+    host.jobState = PrintJobInfo.STATE_QUEUED
+    host.adapters.single().onFinish()
+    host.jobState = PrintJobInfo.STATE_CANCELED
+    host.isResumed = true
+    runDelayed()
+
+    assertResolved(isSubmitted = true)
+  }
+
+  @Test
+  fun `a job that fails in the print queue afterwards was still submitted`() {
+    print()
+    host.isResumed = false
+    host.jobState = PrintJobInfo.STATE_STARTED
+    host.adapters.single().onFinish()
+    host.jobState = PrintJobInfo.STATE_FAILED
+    runDelayed()
+
+    assertResolved(isSubmitted = true)
+    assertEquals(2000L, waitedMs)
+  }
+
+  @Test
+  fun `a cancelled dialog and the wait for the app share the 2 s`() {
+    print()
+    host.isResumed = false
+    host.adapters.single().onFinish()
+    repeat(10) { delayed.removeFirst()() }
+    host.jobState = PrintJobInfo.STATE_CANCELED
+    runDelayed()
+
+    assertResolved(isSubmitted = false)
+    assertEquals(2000L, waitedMs)
+  }
+
+  @Test
   fun `a failed job rejects`() {
     print()
     host.jobState = PrintJobInfo.STATE_FAILED

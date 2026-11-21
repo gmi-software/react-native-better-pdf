@@ -28,11 +28,15 @@ if (result?.isSubmitted) showToast('Sent to the printer');
 - On Android a device cannot print when it has no print service (Android
   TV, for example) or when the system opens no dialog, as it does when a
   device policy disables printing. The app is in the foreground while
-  `AppState` is `active`; the result of a dialog arrives once the app is
-  there again (or 2 s after the dialog closed), so a `print()` called
-  from it opens the next dialog. When the system destroys the Activity
-  under the dialog, the dialog closes with it and the promise resolves,
-  with `isSubmitted: false` unless the job was already submitted.
+  `AppState` is `active`. The result of a dialog arrives once the app is
+  there again, so a `print()` called from it opens the next dialog. An
+  app still in the background 2 s after the dialog closed gets the result
+  anyway; a `print()` from it rejects with `busy` until `AppState` is
+  `active`. The result tells how the dialog ended: a job cancelled in the
+  print queue afterwards was still submitted. When the system destroys
+  the Activity under the dialog, the dialog closes with it and the
+  promise resolves, with `isSubmitted: false` unless the job was already
+  submitted.
 - Printing a file the app already has needs no viewer: `onLoad`'s
   `filePath` works with `expo-print` or `react-native-print`. This method
   adds what they cannot: protected documents, `content://` sources, and the

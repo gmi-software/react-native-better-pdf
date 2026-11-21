@@ -88,25 +88,36 @@ internal class PrintDialog(private val later: (delayMs: Long, task: () -> Unit) 
   }
 
   /**
-   * Settles once the job has left the state it is created in and the app is
-   * in the foreground again. When the dialog closes, a saved or printed job
-   * is already queued or completed, but a cancelled one is still "created"
-   * and turns cancelled a moment later (measured: under 500 ms on API 37).
-   * The Activity resumes after the dialog closes (measured: 50 ms later), and
-   * a `print()` called from this result needs it resumed.
+   * Decides the result once the job has left the state it is created in.
+   * When the dialog closes, a saved or printed job is already queued or
+   * completed, but a cancelled one is still "created" and turns cancelled a
+   * moment later (measured: under 500 ms on API 37). What the print queue
+   * does to the job after that is not the dialog's result.
    */
   private fun settle(host: PrintHost, state: () -> Int, done: (Result<PdfPrintResult>) -> Unit, polls: Int) {
     val current = state()
-    if (polls > 0 && (current == PrintJobInfo.STATE_CREATED || !host.isResumed)) {
+    if (current == PrintJobInfo.STATE_CREATED && polls > 0) {
       return later(SETTLE_INTERVAL_MS) { settle(host, state, done, polls - 1) }
     }
-    done(
-      when (current) {
-        PrintJobInfo.STATE_CREATED, PrintJobInfo.STATE_CANCELED -> Result.success(PdfPrintResult(isSubmitted = false))
-        PrintJobInfo.STATE_FAILED -> Result.failure(PdfMethodException(Code.IO_ERROR, "The print job failed"))
-        else -> Result.success(PdfPrintResult(isSubmitted = true))
-      },
-    )
+    val result = when (current) {
+      PrintJobInfo.STATE_CREATED, PrintJobInfo.STATE_CANCELED -> Result.success(PdfPrintResult(isSubmitted = false))
+      PrintJobInfo.STATE_FAILED -> Result.failure(PdfMethodException(Code.IO_ERROR, "The print job failed"))
+      else -> Result.success(PdfPrintResult(isSubmitted = true))
+    }
+    deliver(host, result, done, polls)
+  }
+
+  /**
+   * Hands over [result] once the app is in the foreground again: the
+   * Activity resumes after the dialog closes (measured: 50 ms later), and a
+   * `print()` called from the result needs it resumed.
+   */
+  private fun deliver(host: PrintHost, result: Result<PdfPrintResult>, done: (Result<PdfPrintResult>) -> Unit, polls: Int) {
+    if (polls > 0 && !host.isResumed) {
+      later(SETTLE_INTERVAL_MS) { deliver(host, result, done, polls - 1) }
+    } else {
+      done(result)
+    }
   }
 
   /** Saving as PDF names the file after the document; it needs the extension. */
