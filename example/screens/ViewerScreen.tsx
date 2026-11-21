@@ -180,15 +180,16 @@ export function ViewerScreen() {
   const swap = async (target: DocumentEntry) => {
     isAlternate.current = !isAlternate.current;
     sourceRequest.current += 1;
-    eventOrder.current = [];
-    loadedSources.current = [];
-    setEventLog('');
     const request = sourceRequest.current;
     const resolve = isAlternate.current ? target.alternate : target.resolve;
     if (resolve == null) return;
     try {
       const source = await resolve();
       if (request === sourceRequest.current) {
+        // Events of the outgoing document until here are not the swap's.
+        eventOrder.current = [];
+        loadedSources.current = [];
+        setEventLog('');
         setState({ kind: 'loading', source });
       }
     } catch (error) {
