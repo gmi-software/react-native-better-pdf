@@ -147,6 +147,11 @@ at:
 - repository: `gmi-software/react-native-better-pdf`
 - workflow: `release.yml`
 - environment: `npm`
+- allowed actions: `npm publish`
+
+The workflow publishes directly, and a new trusted publisher only allows
+`npm stage publish` unless `npm publish` is selected as well. Without it the
+publish step fails after the approval.
 
 A trusted publisher cannot be edited, only revoked and created again. A new one
 expires unless a real (not dry-run) publish succeeds with it within 2 days, so
