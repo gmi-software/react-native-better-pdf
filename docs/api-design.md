@@ -698,9 +698,14 @@ onScaleChange?: (event: { scale: number }) => void;
   a scrolling form. Android no longer blocks parent interception on touch
   down (only once a pinch starts); iOS disables panning on every PDFKit
   scroll view (including the page view controller's) and re-applies it when
-  the layout mode replaces them. The e2e flow `viewer-scroll-enabled`
-  checks both directions: with `false` a drag on the document scrolls the
-  form, with `true` the same drag scrolls the document and not the form.
+  the layout mode replaces them and on every page change: the page view
+  controller creates a scroll view per page as pages show (measured: up to
+  1.2 a page reached later panned once zoomed). The indicator props and the
+  inset adjustment are applied the same way. The e2e flow
+  `viewer-scroll-enabled` checks both directions: with `false` a drag on the
+  document scrolls the form, and a zoomed page reached after the prop was
+  set does not pan; with `true` the same drag scrolls the document and not
+  the form.
 
 ## Text selection
 

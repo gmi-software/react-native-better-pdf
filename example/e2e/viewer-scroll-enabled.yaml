@@ -1,5 +1,6 @@
 # scrollEnabled={false}: drags do not scroll the document (continuous and
-# paged), programmatic navigation and taps still work; inside a ScrollView
+# paged, also on a zoomed page reached later), programmatic navigation and
+# taps still work; inside a ScrollView
 # the drag scrolls the parent instead.
 appId: software.gmi.betterpdf.example
 ---
@@ -28,6 +29,21 @@ appId: software.gmi.betterpdf.example
 - swipe: { start: "50%, 80%", end: "50%, 20%", duration: 150 }
 - waitForAnimationToEnd
 - assertVisible: "11 / 100"
+# A page reached after the prop was set, zoomed in: a drag does not pan it.
+- tapOn: "+10"
+- extendedWaitUntil: { visible: "21 / 100", timeout: 5000 }
+- tapOn: "2.5×"
+- waitForAnimationToEnd
+- tapOn: { point: "50%, 60%" }
+- extendedWaitUntil: { visible: "tap: page 21 .*", timeout: 5000 }
+- copyTextFrom: { text: "tap: page 21 .*" }
+- swipe: { start: "50%, 75%", end: "50%, 35%", duration: 300 }
+- waitForAnimationToEnd
+- tapOn: { point: "50%, 60%" }
+- waitForAnimationToEnd
+- assertVisible: ${maestro.copiedText}
+- tapOn: "1×"
+- waitForAnimationToEnd
 
 # Back on: dragging scrolls again. Only the drags that must move the
 # document are sent again when Maestro drops them on a slow emulator.
@@ -37,7 +53,7 @@ appId: software.gmi.betterpdf.example
     maxRetries: 2
     commands:
       - swipe: { start: "50%, 80%", end: "50%, 20%", duration: 150 }
-      - extendedWaitUntil: { visible: "12 / 100", timeout: 5000 }
+      - extendedWaitUntil: { visible: "22 / 100", timeout: 5000 }
 - tapOn: "‹ Back"
 
 # Embedded in a ScrollView: the drag on the document scrolls the form.

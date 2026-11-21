@@ -87,13 +87,13 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
   var pageAccessibilityLabel: String?
   var scrollEnabled: Bool? {
-    didSet { applyScrollEnabled() }
+    didSet { configureScrollViews() }
   }
   var showsVerticalScrollIndicator: Bool? {
-    didSet { applyScrollIndicators() }
+    didSet { configureScrollViews() }
   }
   var showsHorizontalScrollIndicator: Bool? {
-    didSet { applyScrollIndicators() }
+    didSet { configureScrollViews() }
   }
   var enableTextSelection: Bool? {
     didSet { container.isTextSelectionEnabled = enableTextSelection ?? true }
@@ -1025,12 +1025,15 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private func reportIfSettled() {
     // Also wait out page turns: during one, the page view controller updates
     // `currentPage` and `scaleFactor` at different times.
-    if let scrollView,
-       scrollView.isZooming || scrollView.isZoomBouncing || scrollView.isTracking
-        || scrollView.isDragging || scrollView.isDecelerating {
+    // Paged: each page has its own scroll view, a new one can appear after the page change.
+    let scrollViews = isPagedLayout ? pdfView?.descendantScrollViews() ?? [] : [scrollView].compactMap { $0 }
+    if scrollViews.contains(where: {
+      $0.isZooming || $0.isZoomBouncing || $0.isTracking || $0.isDragging || $0.isDecelerating
+    }) {
       settle.noteMotion()
       return
     }
+    if isPagedLayout { configureScrollViews() }
     reportScale()
     reportViewport()
     // Page turns and resizes don't move the observed scroll view.
@@ -1303,9 +1306,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   /// crosses into JS when the page actually changes.
   private func observeScrollOffset() {
     scrollView = pdfView?.firstDescendantScrollView()
-    applyScrollIndicators()
-    applyScrollEnabled()
-    applyContentInsetAdjustment()
+    configureScrollViews()
     offsetObservation = scrollView?.observe(\.contentOffset, options: []) { [weak self] _, _ in
       self?.layoutOverlays()
       self?.reportCurrentPage()
@@ -1332,14 +1333,6 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
         self?.layoutOverlays()
       })
     }
-  }
-
-  /// No automatic safe-area insets, as on Android and in React Native's
-  /// ScrollView: PDFKit's page navigation ignores insets, so a view under
-  /// the status bar could show the first page partly behind it. Covers the page
-  /// view controller's scroll views like `applyScrollEnabled`.
-  private func applyContentInsetAdjustment() {
-    pdfView?.descendantScrollViews().forEach { $0.contentInsetAdjustmentBehavior = .never }
   }
 
   /// PDFKit centres a document shorter than the view; vertical continuous
@@ -1410,6 +1403,7 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
       pageChangeObserver = NotificationCenter.default.addObserver(
         forName: .PDFViewPageChanged, object: pdfView, queue: .main
       ) { [weak self] _ in
+        self?.configureScrollViews()
         self?.observeOverlayScrollViews()
         self?.layoutOverlays()
         self?.reportCurrentPage()
@@ -1434,19 +1428,21 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     }
   }
 
-  /// Panning only: UIScrollView keeps pinch-zooming with scrolling disabled,
-  /// and a disabled pan lets an enclosing scroll view take the drag. Covers
-  /// the page view controller's scroll views too; PDFKit replaces them when
-  /// the layout mode changes, so this is re-applied then.
-  private func applyScrollEnabled() {
+  /// The scroll props on every PDFKit scroll view; the page view controller
+  /// creates one per page as pages show. A disabled pan still pinch-zooms and
+  /// lets an enclosing scroll view take the drag. No automatic safe-area
+  /// insets, as in React Native's ScrollView: PDFKit's page navigation ignores
+  /// insets, so a view under the status bar could show a page behind it.
+  private func configureScrollViews() {
     let enabled = scrollEnabled ?? true
-    pdfView?.descendantScrollViews().forEach { $0.isScrollEnabled = enabled }
-  }
-
-  /// PDFView's scroll view exists once a document is set; also applied then.
-  private func applyScrollIndicators() {
-    scrollView?.showsVerticalScrollIndicator = showsVerticalScrollIndicator ?? true
-    scrollView?.showsHorizontalScrollIndicator = showsHorizontalScrollIndicator ?? true
+    let vertical = showsVerticalScrollIndicator ?? true
+    let horizontal = showsHorizontalScrollIndicator ?? true
+    for scrollView in pdfView?.descendantScrollViews() ?? [] {
+      scrollView.isScrollEnabled = enabled
+      scrollView.showsVerticalScrollIndicator = vertical
+      scrollView.showsHorizontalScrollIndicator = horizontal
+      scrollView.contentInsetAdjustmentBehavior = .never
+    }
   }
 
   private func reportPageTap(page: PDFPage, point: CGPoint) {
