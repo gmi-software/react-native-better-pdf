@@ -89,7 +89,7 @@ internal class DocumentCache(
     val source = subscriber.source
     val scheme = source.uri.substringBefore(':', "").lowercase()
     if (scheme != "http" && scheme != "https") {
-      return deliverFailure(subscriber, PdfFailure(PdfErrorCode.INVALID_SOURCE, "Not an http(s) URL: \"${source.uri}\""))
+      return deliverFailure(subscriber, PdfFailure(PdfErrorCode.INVALID_SOURCE, "Not an http(s) URL: ${source.uri.redactedUri()}"))
     }
     source.invalidHeaderFailure()?.let { return deliverFailure(subscriber, it) }
     val key = source.storeKey()

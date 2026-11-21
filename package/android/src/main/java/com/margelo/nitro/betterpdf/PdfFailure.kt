@@ -20,6 +20,7 @@ class PdfFailure(
       page = page?.toDouble(),
       sourceIndex = sourceIndex?.toDouble(),
       httpStatus = httpStatus?.toDouble(),
-      nativeDescription = cause?.let { "${it.javaClass.simpleName}: ${it.message}" },
+      // Platform texts may quote a source URI, not always as the app spelled it.
+      nativeDescription = cause?.let { "${it.javaClass.simpleName}: ${it.message}".redactingUris() },
     )
 }

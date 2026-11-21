@@ -138,7 +138,10 @@ A redirect that is not followed is an `http-error` with the redirect's
 status; see [Redirects](guides/sources-and-loading.md#redirects).
 
 `error.message` is human-readable and may change; `error.nativeDescription`
-carries the platform error for logging. Load failures carry
+carries the platform error for logging. A source URL in `error.message` is
+shown as `scheme://host[:port]/path`: the user-info, the query (shown as `?…`)
+and the fragment are left out, but the path is kept, so a token inside the
+path is still visible. Load failures carry
 `error.sourceIndex`, the source that could not be loaded (`0` for a single
 source; unset when the set failed as a whole, as when Android runs out of
 memory laying out many sources' pages).

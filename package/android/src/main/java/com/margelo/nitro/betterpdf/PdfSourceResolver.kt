@@ -90,11 +90,11 @@ class PdfSourceResolver(private val context: Context) {
   ): ResolvedSource {
     val asset = try {
       context.contentResolver.openAssetFileDescriptor(uri, "r", contentCancellation)
-        ?: throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at $uri")
+        ?: throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at ${uri.toString().redactedUri()}")
     } catch (e: FileNotFoundException) {
-      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at $uri", cause = e)
+      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No content at ${uri.toString().redactedUri()}", cause = e)
     } catch (e: SecurityException) {
-      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No permission to read $uri", cause = e)
+      throw PdfFailure(PdfErrorCode.FILE_NOT_FOUND, "No permission to read ${uri.toString().redactedUri()}", cause = e)
     } catch (_: OperationCanceledException) {
       throw InterruptedException()
     }
@@ -279,7 +279,7 @@ class PdfSourceResolver(private val context: Context) {
     context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
 
   private fun invalidSource(uri: String) =
-    PdfFailure(PdfErrorCode.INVALID_SOURCE, "Unsupported PDF source: \"$uri\"")
+    PdfFailure(PdfErrorCode.INVALID_SOURCE, "Unsupported PDF source: ${uri.redactedUri()}")
 
   private companion object {
     var isOpenDirectorySwept = false

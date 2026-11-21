@@ -22,7 +22,7 @@ struct PdfLoadFailure: Error {
   }
 
   static func invalidSource(_ uri: String) -> PdfLoadFailure {
-    return PdfLoadFailure(code: .invalidSource, message: "Unsupported PDF source: \"\(uri)\"")
+    return PdfLoadFailure(code: .invalidSource, message: "Unsupported PDF source: \(uri.redactedUri)")
   }
 
   static func fileNotFound(_ path: String) -> PdfLoadFailure {

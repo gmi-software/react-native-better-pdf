@@ -129,7 +129,7 @@ final class SharedDownload {
   }
 
   private func outcome(tempURL: URL?, response: URLResponse?, error: Error?) -> DownloadOutcome {
-    let url = self.url.absoluteString
+    let url = self.url.absoluteString.redactedUri
     if hasTooManyRedirects {
       return .failed(PdfLoadFailure(
         code: .networkError,

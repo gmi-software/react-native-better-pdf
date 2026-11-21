@@ -28,6 +28,8 @@ internal class SharedDownload(
   /** Guarded by the [DocumentCache]'s lock. */
   val subscribers = mutableListOf<DocumentCache.Subscriber>()
 
+  private val shownUrl = url.redactedUri()
+
   @Volatile private var cancelled = false
 
   @Volatile private var connection: HttpURLConnection? = null
@@ -50,9 +52,9 @@ internal class SharedDownload(
       // value, which may hold a token, so it is not passed on.
       if (cancelled) return
       val failure = if (e is IllegalArgumentException) {
-        PdfFailure(PdfErrorCode.INVALID_SOURCE, "Downloading $url failed: the request was rejected")
+        PdfFailure(PdfErrorCode.INVALID_SOURCE, "Downloading $shownUrl failed: the request was rejected")
       } else {
-        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $url failed", cause = e)
+        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $shownUrl failed", cause = e)
       }
       DownloadOutcome.Failed(failure, isServerUnreachable = false)
     }
@@ -75,7 +77,7 @@ internal class SharedDownload(
       if (status !in 200..299) {
         val reason = if (status in RedirectPolicy.STATUSES) ": the redirect is not followed" else ""
         return DownloadOutcome.Failed(
-          PdfFailure(PdfErrorCode.HTTP_ERROR, "Downloading $url failed with HTTP $status$reason", httpStatus = status),
+          PdfFailure(PdfErrorCode.HTTP_ERROR, "Downloading $shownUrl failed with HTTP $status$reason", httpStatus = status),
           isServerUnreachable = status >= 500,
         )
       }
@@ -93,22 +95,22 @@ internal class SharedDownload(
       if (cancelled) throw InterruptedException()
       if (!partial.hasPdfHeader()) {
         return DownloadOutcome.Failed(
-          PdfFailure(PdfErrorCode.INVALID_PDF, "The server did not return a PDF document for $url"),
+          PdfFailure(PdfErrorCode.INVALID_PDF, "The server did not return a PDF document for $shownUrl"),
           isServerUnreachable = false,
         )
       }
       return DownloadOutcome.Stored(store.commit(key, partial, mode, metadata), isDownloaded = true)
     } catch (e: PdfFailure) {
       return DownloadOutcome.Failed(e, isServerUnreachable = false)
-    } catch (e: MalformedURLException) {
+    } catch (_: MalformedURLException) {
       return DownloadOutcome.Failed(
-        PdfFailure(PdfErrorCode.INVALID_SOURCE, "Unsupported PDF source: \"$url\"", cause = e),
+        PdfFailure(PdfErrorCode.INVALID_SOURCE, "Unsupported PDF source: $shownUrl"),
         isServerUnreachable = false,
       )
     } catch (e: IOException) {
       if (cancelled) throw InterruptedException()
       return DownloadOutcome.Failed(
-        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $url failed", cause = e),
+        PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $shownUrl failed", cause = e),
         isServerUnreachable = true,
       )
     } finally {
@@ -132,7 +134,7 @@ internal class SharedDownload(
       when (val next = redirects.next(target, connection.getHeaderField("Location"))) {
         RedirectPolicy.Next.Refuse -> return connection
         RedirectPolicy.Next.TooMany ->
-          throw PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $url failed: more than ${RedirectPolicy.MAX_REDIRECTS} redirects")
+          throw PdfFailure(PdfErrorCode.NETWORK_ERROR, "Downloading $shownUrl failed: more than ${RedirectPolicy.MAX_REDIRECTS} redirects")
         is RedirectPolicy.Next.Follow -> {
           connection.disconnect()
           target = next.url

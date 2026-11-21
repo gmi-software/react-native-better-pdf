@@ -2,6 +2,8 @@
 // loader.test.ts: one command per line on stdin, one result line each.
 //
 //   load <uri> [cache=persistent] [maxAgeMs=<n>] [password=<p>]
+//   error <uri>
+//   redact [<uri>]
 //   download <uri> [cache=persistent] [maxAgeMs=<n>]
 //   entry <uri>
 //   replace <uri>
@@ -73,6 +75,14 @@ func run(_ words: [Substring], done: @escaping (String) -> Void) {
         done("failed \(failure.code.rawValue)")
       }
     }
+  case "error":
+    _ = PdfDocumentLoader.load(source: source(words), password: nil, isDisplayed: false, progress: { _, _ in }) { result in
+      guard case .failure(let failure) = result else { return done("loaded") }
+      let error = failure.toPdfError()
+      done("\(error.code.rawValue) status=\(error.httpStatus.map { String(Int($0)) } ?? "none") message=\(error.message) native=\(error.nativeDescription ?? "none")")
+    }
+  case "redact":
+    done(String(words.dropFirst().first ?? "").redactedUri)
   case "download":
     _ = DocumentCache.shared.fetch(source: source(words), allowStale: false, listener: .init(
       onProgress: { _, _, _ in },
