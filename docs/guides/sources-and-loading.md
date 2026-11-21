@@ -172,6 +172,8 @@ smaller than its base64 form.
 ## Several documents as one
 
 ```tsx
+const songs = useRef<PdfLoadedSource[]>([]);
+
 <PdfView
   source={[
     { uri: 'https://example.com/setlist/1.pdf' },
@@ -180,10 +182,18 @@ smaller than its base64 form.
   ]}
   horizontal
   enablePaging
-  onLoad={({ pageCount, sources }) => setSongs(sources)}
-  onPageChange={({ page }) => setSong(songAt(page))}
-/>
+  onLoad={({ sources }) => {
+    songs.current = sources;
+  }}
+  // The song the page belongs to, zero-based.
+  onPageChange={({ page }) =>
+    setSong(songs.current.filter((song) => song.firstPage <= page).length - 1)
+  }
+/>;
 ```
+
+`onLoad` comes before the first `onPageChange`, but both can run before a
+re-render, so a value set in `onLoad` is read from a ref, not from state.
 
 - The sources' pages follow one another in source order, and every page
   number counts across all of them: events, `initialPage`, `goToPage`,

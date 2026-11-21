@@ -13,6 +13,7 @@ import {
   PdfPageOverlay,
   PdfView,
   type PdfError,
+  type PdfLoadedSource,
   type PdfLoadProgressEvent,
   type PdfOutlineItem,
   type PdfPageImage,
@@ -119,6 +120,11 @@ export function ViewerScreen() {
   const isAlternate = useRef(false);
   /** The latest open or "Swap": only its source, or its failure, is applied. */
   const sourceRequest = useRef(0);
+  /** The first load and page events since the latest open or "Swap", in order. */
+  const eventOrder = useRef<string[]>([]);
+  const [eventLog, setEventLog] = useState('');
+  /** From onLoad, read by onPageChange as docs/guides/sources-and-loading.md does. */
+  const loadedSources = useRef<readonly PdfLoadedSource[]>([]);
   const [isCollapsed, setCollapsed] = useState(false);
   /** Counts onTextSelectionChange events: one per settled selection. */
   const selectionEvents = useRef(0);
@@ -150,6 +156,9 @@ export function ViewerScreen() {
       setLoadCount(0);
       isAlternate.current = false;
       sourceRequest.current += 1;
+      eventOrder.current = [];
+      loadedSources.current = [];
+      setEventLog('');
       const request = sourceRequest.current;
       scaleEvents.current = 0;
       selectionEvents.current = 0;
@@ -177,6 +186,10 @@ export function ViewerScreen() {
     try {
       const source = await resolve();
       if (request === sourceRequest.current) {
+        // Events of the outgoing document until here are not the swap's.
+        eventOrder.current = [];
+        loadedSources.current = [];
+        setEventLog('');
         setState({ kind: 'loading', source });
       }
     } catch (error) {
@@ -209,6 +222,12 @@ export function ViewerScreen() {
       </ScrollView>
     );
   }
+
+  const logEvent = (name: string) => {
+    if (eventOrder.current.length >= 3) return;
+    eventOrder.current.push(name);
+    setEventLog(eventOrder.current.join(', '));
+  };
 
   const unlock = (value: string) => {
     if (state.kind !== 'failed' || state.source == null) return;
@@ -449,6 +468,10 @@ export function ViewerScreen() {
           <Text testID="load-count" style={styles.pageLabel}>
             {`loads: ${loadCount}`}
           </Text>
+          {/* "p5 s1": page 5, in the first of onLoad's sources (s0: none yet). */}
+          <Text testID="event-order" style={styles.pageLabel}>
+            {eventLog}
+          </Text>
         </View>
       )}
 
@@ -511,6 +534,8 @@ export function ViewerScreen() {
               savedViewports.set(entry.id, event.viewport);
             }}
             onLoad={(event) => {
+              loadedSources.current = event.sources;
+              logEvent('load');
               setState({ kind: 'loaded', source, pageCount: event.pageCount });
               setLoadCount((count) => count + 1);
               setLoadedFilePath(event.filePath);
@@ -526,7 +551,13 @@ export function ViewerScreen() {
                 setTimeout(() => setCollapsed(false), 500);
               }
             }}
-            onPageChange={(event) => setPage(event.page)}
+            onPageChange={(event) => {
+              setPage(event.page);
+              const sourceNumber = loadedSources.current.filter(
+                (item) => item.firstPage <= event.page,
+              ).length;
+              logEvent(`p${event.page + 1} s${sourceNumber}`);
+            }}
             // A real app would validate the scheme and call Linking.openURL.
             onLinkPress={(event) => setLastEvent(`link: ${event.url}`)}
             onSearchChange={setSearch}
