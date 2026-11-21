@@ -220,13 +220,15 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   }
 
   func afterUpdate() {
-    if needsLayoutModeUpdate {
-      needsLayoutModeUpdate = false
-      applyLayoutMode()
-    }
+    // Reloading first leaves no document to relayout, so the outgoing one
+    // reports no page; present() applies the new layout to the incoming one.
     if needsReload {
       needsReload = false
       reload()
+    }
+    if needsLayoutModeUpdate {
+      needsLayoutModeUpdate = false
+      applyLayoutMode()
     }
     if needsScaleUpdate {
       needsScaleUpdate = false

@@ -208,6 +208,12 @@ class HybridBetterPdfView(
   // endregion
 
   override fun afterUpdate() {
+    // Reloading first leaves no document to relayout, so the outgoing one
+    // reports no page; setDocument lays out the incoming one in the new mode.
+    if (needsReload) {
+      needsReload = false
+      reload()
+    }
     if (needsLayoutModeUpdate) {
       needsLayoutModeUpdate = false
       val horizontal = horizontal ?: false
@@ -230,10 +236,6 @@ class HybridBetterPdfView(
     if (needsScaleUpdate) {
       needsScaleUpdate = false
       documentView.setScaleLimits(minScale, maxScale)
-    }
-    if (needsReload) {
-      needsReload = false
-      reload()
     }
   }
 
