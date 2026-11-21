@@ -1,0 +1,19 @@
+# contentInset set from onLoad, as a header measured after the document
+# appears would be: the page top moves below the new header.
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+- tapOn: "Viewer"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Inset after load.*" } }
+- extendedWaitUntil: { visible: "Header", timeout: 15000 }
+- waitForAnimationToEnd
+# Left under the header, the area's top would be well into the page.
+- runFlow:
+    optional: true
+    commands:
+      - extendedWaitUntil:
+          visible: { id: "viewport-status", text: "p 1 · y [0-9]{2,} · 1.00x" }
+          timeout: 3000
+- assertVisible: { id: "viewport-status", text: "p 1 · y -?[0-9] · 1.00x" }
+- takeScreenshot: inset-after-load
+- tapOn: "‹ Back"

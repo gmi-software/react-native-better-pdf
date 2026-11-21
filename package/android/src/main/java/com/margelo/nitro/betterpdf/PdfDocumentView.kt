@@ -589,10 +589,11 @@ class PdfDocumentView(context: Context) :
    */
   fun setContentInset(topPx: Float, bottomPx: Float) {
     if (topPx == contentInsetTop && bottomPx == contentInsetBottom) return
+    val oldClearTop = clearTop
     contentInsetTop = topPx
     contentInsetBottom = bottomPx
     // Keeps the reader's place at the top of the area, and fits pages into it.
-    rebuildLayout()
+    rebuildLayout(anchorClearTop = oldClearTop)
   }
 
   /** The space kept clear at the bottom now, in view pixels. */
@@ -1187,7 +1188,8 @@ class PdfDocumentView(context: Context) :
 
   // region Geometry
 
-  private fun rebuildLayout() {
+  /** [anchorClearTop]: the top clearance the current offset was laid out with. */
+  private fun rebuildLayout(anchorClearTop: Float = clearTop) {
     if (width <= 0 || (layoutDependsOnHeight && height <= 0) || pageSizes.isEmpty()) {
       layout = null
       invalidate()
@@ -1202,7 +1204,7 @@ class PdfDocumentView(context: Context) :
       old.isReversed == (isRightToLeft && isHorizontal) &&
       old.spread == (if (axis == PdfDocumentLayout.Axis.VERTICAL && !isPaged) spread else PdfDocumentLayout.Spread.NONE)
     if (old != null && sameMode && old.pageCount == pageSizes.size) {
-      val position = areaStart / scale
+      val position = (mainOffset + anchorClearTop) / scale
       anchorPage = old.slotAt(position)
       anchorFraction = (position - old.slotStart(anchorPage)) / (old.slotEnd(anchorPage) - old.slotStart(anchorPage))
     }

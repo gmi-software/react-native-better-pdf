@@ -70,6 +70,8 @@ export interface DocumentEntry {
   form?: boolean;
   /** Translucent bars over the viewer, which pages scroll under (`contentInset`). */
   contentInset?: { top: number; bottom: number };
+  /** Applies `contentInset` only after `onLoad`, as a measured header would. */
+  insetAfterLoad?: boolean;
   minScale?: number;
   /** Another source for "Swap"; also shows "Same" and the onLoad count. */
   alternate?: () => Promise<DocumentSource>;
@@ -253,6 +255,14 @@ export const DOCUMENTS: DocumentEntry[] = [
     subtitle: 'contentInset under translucent bars',
     resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
     contentInset: { top: 80, bottom: 60 },
+  },
+  {
+    id: 'medium-inset-after-load',
+    title: 'Inset after load',
+    subtitle: 'contentInset set in onLoad, bars 80 / 60',
+    resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
+    contentInset: { top: 80, bottom: 60 },
+    insetAfterLoad: true,
   },
   {
     id: 'medium-min-scale',
