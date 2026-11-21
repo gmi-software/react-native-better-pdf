@@ -148,10 +148,13 @@ perf(android): build the library with hidden symbols
 ## Pull requests
 
 `main` is protected: every change lands through a reviewed pull request, and
-the `quality` and `commitlint` checks must pass. Native changes also run the
-iOS and Android compile jobs (`.github/workflows/native.yml`). The same jobs
-build the example on the minimum supported Expo SDK weekly
-(`.github/workflows/native-minimum.yml`).
+three checks have to pass: `quality`, `commitlint` and `native-gate`.
+
+`native-gate` runs on every pull request. When the change touches a native
+path, it waits for the iOS and Android builds and the Kotlin unit tests;
+otherwise it passes within a minute. The native paths are listed in
+`.github/workflows/native.yml`. The same builds run on the minimum supported
+Expo SDK weekly (`.github/workflows/native-minimum.yml`).
 
 ## Releasing
 

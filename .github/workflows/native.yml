@@ -1,57 +1,130 @@
 name: Native
 
-# Thin trigger for the native compile jobs. They live in a reusable workflow so
-# release.yml can gate the publish on exactly the same definition, and `paths:`
-# filters have to sit on the triggering workflow — ci.yml deliberately has none.
+# Compiles the library for iOS and Android and runs the Kotlin unit tests when a
+# change touches a native path. The jobs live in a reusable workflow so
+# release.yml gates the publish on exactly the same definition.
 #
-# These checks are intentionally not part of the required status checks. A
-# required check that a `paths:` filter skips reports as permanently pending and
-# blocks the pull request, so promoting them means either dropping the filter or
-# adding an always-running gate job. Until then release.yml is the hard gate.
-#
-# The two lists below are identical; GitHub Actions does not support YAML anchors.
+# `native-gate` is the check for branch protection to require. A required check
+# behind a `paths:` filter stays pending on every pull request the filter skips
+# and blocks it, so the filter is the `changes` job instead: the workflow always
+# runs and `native-gate` always reports.
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/native.yml'
-      - '.github/workflows/native-build.yml'
-      - 'package/ios/**'
-      - 'package/android/**'
-      - 'package/test/**'
-      - 'package/nitrogen/**'
-      - 'package/NitroBetterPdf.podspec'
-      - 'package/nitro.json'
-      - 'package/package.json'
-      - 'package/react-native.config.js'
-      - 'example/app.json'
-      - 'example/package.json'
-      - 'bun.lock'
   pull_request:
     branches: [main]
-    paths:
-      - '.github/workflows/native.yml'
-      - '.github/workflows/native-build.yml'
-      - 'package/ios/**'
-      - 'package/android/**'
-      - 'package/test/**'
-      - 'package/nitrogen/**'
-      - 'package/NitroBetterPdf.podspec'
-      - 'package/nitro.json'
-      - 'package/package.json'
-      - 'package/react-native.config.js'
-      - 'example/app.json'
-      - 'example/package.json'
-      - 'bun.lock'
 
 concurrency:
-  group: native-${{ github.event.pull_request.number || github.ref }}
-  # Only on pull requests. Cancelling on main would let one merge discard the
-  # previous merge's result, leaving a commit on main with no native verdict.
+  # One group per commit on main. A group shared by the branch holds a single
+  # pending run, so a third merge in a row would cancel the second one's run
+  # before it starts and leave that commit without a native verdict.
+  group: native-${{ github.event.pull_request.number || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      native: ${{ steps.detect.outputs.native }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The commit and its parents, which is all the diff below reads.
+          fetch-depth: 2
+          persist-credentials: false
+
+      - name: Detect native changes
+        id: detect
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          # The paths whose change can break the native build. `**` crosses
+          # directories.
+          native_paths=(
+            '.github/workflows/native.yml'
+            '.github/workflows/native-build.yml'
+            'package/ios/**'
+            'package/android/**'
+            'package/test/**'
+            'package/nitrogen/**'
+            'package/NitroBetterPdf.podspec'
+            'package/nitro.json'
+            'package/package.json'
+            'package/react-native.config.js'
+            'example/modules/**'
+            'example/app.json'
+            'example/package.json'
+            'bun.lock'
+          )
+
+          # Any doubt about the base ends in a build, never in a skip.
+          build_anyway() {
+            echo "::notice::$1, so the native build runs."
+            echo "native=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
+            # A pull request is checked out as its merge commit, whose first
+            # parent is the base branch.
+            git rev-parse --quiet --verify 'HEAD^2' > /dev/null ||
+              build_anyway 'The checkout is not a merge commit'
+            base='HEAD^1'
+          else
+            base="$BEFORE"
+          fi
+
+          # --no-renames: a file moved out of a native path still counts.
+          git diff --name-only --no-renames -z "$base" HEAD > "$RUNNER_TEMP/changed" ||
+            build_anyway "Cannot diff against $base"
+
+          # %q: a file name can hold a newline followed by a workflow command.
+          native=false
+          while IFS= read -r -d '' file; do
+            for pattern in "${native_paths[@]}"; do
+              # shellcheck disable=SC2053 # the right side is a glob on purpose
+              if [[ $file == $pattern ]]; then
+                native=true
+                printf 'native: %q\n' "$file"
+                continue 2
+              fi
+            done
+            printf '        %q\n' "$file"
+          done < "$RUNNER_TEMP/changed"
+
+          echo "native=$native" >> "$GITHUB_OUTPUT"
+
   native:
+    needs: changes
+    if: needs.changes.outputs.native == 'true'
     permissions:
       contents: read
     uses: ./.github/workflows/native-build.yml
+
+  native-gate:
+    needs: [changes, native]
+    # Without always(), a failed or cancelled `native` skips this job, and a
+    # skipped required check counts as passed.
+    if: always()
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - name: Check the native result
+        env:
+          CHANGES: ${{ needs.changes.result }}
+          NEEDED: ${{ needs.changes.outputs.native }}
+          NATIVE: ${{ needs.native.result }}
+        run: |
+          echo "changes: $CHANGES, native build needed: $NEEDED, native: $NATIVE"
+          if [ "$CHANGES" = success ] && [ "$NEEDED" = true ] && [ "$NATIVE" = success ]; then
+            exit 0
+          fi
+          if [ "$CHANGES" = success ] && [ "$NEEDED" = false ] && [ "$NATIVE" = skipped ]; then
+            echo 'No native path changed, so there is nothing to build.'
+            exit 0
+          fi
+          echo '::error::This needs a successful native build, or a change that touches no native path.'
+          exit 1
