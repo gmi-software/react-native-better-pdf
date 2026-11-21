@@ -14,8 +14,8 @@ commit pushed by a bot.
 Only a reviewed commit on `main` is meant to reach npm:
 
 - **Branch protection.** `main` takes changes only through a pull request with
-  an approving review and green `commitlint` and `quality` checks.
-  Administrators are held to it too.
+  an approving review and green `commitlint`, `quality` and `native-gate`
+  checks. Administrators are held to it too.
 - **Tag rule.** Only the maintainers on the bypass list of the `Release tags`
   ruleset can create, move or delete a `v*` tag.
 - **Ancestry check.** The workflow stops within seconds when the tagged commit
@@ -123,8 +123,8 @@ repository. Nothing in git records them, so check them when the maintainers
 change:
 
 - **Branch protection on `main`**: a pull request with one approval, the status
-  checks `commitlint` and `quality`, and **Do not allow bypassing the above
-  settings**.
+  checks `commitlint`, `quality` and `native-gate`, and **Do not allow
+  bypassing the above settings**.
 - **Ruleset `Release tags`**: targets tags matching `v*`, restricts creations,
   updates and deletions, and has the release maintainers on its bypass list.
 - **Environment `npm`**: required reviewers, deployment tags limited to `v*`,

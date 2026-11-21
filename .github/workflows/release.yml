@@ -55,8 +55,9 @@ jobs:
             echo "::warning::$GITHUB_SHA is not on main. The rehearsal continues, but a tag on this commit would be rejected."
           fi
 
-  # Native pull request runs are `paths:`-filtered and advisory, so this is the
-  # step that actually stops a broken native build from being published.
+  # `native-gate` holds pull requests to this build, but it skips changes that
+  # touch no native path and runs before the merge. This builds the tagged
+  # commit itself.
   native:
     needs: [on-main]
     permissions:
