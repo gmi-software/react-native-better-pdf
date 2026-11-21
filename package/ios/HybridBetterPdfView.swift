@@ -786,6 +786,11 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
   private func reload() {
     loadTask?.cancel()
     loadTask = nil
+    // They would report a page of the outgoing document, or the incoming
+    // one's before onLoad; applyLayoutMode observes the new document.
+    offsetObservation = nil
+    if let pageChangeObserver { NotificationCenter.default.removeObserver(pageChangeObserver) }
+    pageChangeObserver = nil
     pdfView?.document = nil
     // The search and the form would keep the old document while the next
     // one loads, or for the life of the view if it fails to load.
@@ -855,10 +860,14 @@ final class HybridBetterPdfView: HybridBetterPdfViewSpec {
     }
     pdfView.document = document
     setStatsPageCount(pageCount)
+    // onLoad comes first; layoutDidChange below reports the first page.
+    let wasRelayingOut = isRelayingOut
+    isRelayingOut = true
     // A new document starts at initialPage, not at the previous one's page.
     applyLayoutMode(keepingCurrentPage: false)
     container.applyDoubleTapZoom()
     container.applyTextSelection()
+    isRelayingOut = wasRelayingOut
 
     let firstPage = document.page(at: 0)?.displaySize ?? .zero
     onLoad?(PdfLoadEvent(

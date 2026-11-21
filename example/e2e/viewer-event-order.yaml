@@ -1,0 +1,38 @@
+# onLoad comes first, then one onPageChange for the first page, after a
+# mount and after a source change. `event-order` lists the first three load
+# and page events since the entry was opened or swapped: "p5 s1" is page 5,
+# in the first of onLoad's sources ("s0": onLoad had not come yet).
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+- tapOn: "Viewer"
+
+# initialPage, on mount and on every source change.
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Swap at page 5.*" } }
+- extendedWaitUntil: { visible: { id: "event-order", text: ".*load.*" }, timeout: 60000 }
+- waitForAnimationToEnd
+- assertVisible: { id: "event-order", text: "load, p5 s1" }
+- assertVisible: "5 / 100"
+- tapOn: "Swap"
+- extendedWaitUntil: { visible: "loads: 2", timeout: 15000 }
+- waitForAnimationToEnd
+- assertVisible: { id: "event-order", text: "load, p5 s1" }
+- assertVisible: "5 / 12"
+- tapOn: "Swap"
+- extendedWaitUntil: { visible: "loads: 3", timeout: 15000 }
+- waitForAnimationToEnd
+- assertVisible: { id: "event-order", text: "load, p5 s1" }
+- assertVisible: "5 / 100"
+- tapOn: "‹ Back"
+
+# Several sources: the first page change can read onLoad's sources.
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Several sources, base64.*" } }
+- extendedWaitUntil: { visible: { id: "event-order", text: ".*load.*" }, timeout: 15000 }
+- waitForAnimationToEnd
+- assertVisible: { id: "event-order", text: "load, p1 s1" }
+- tapOn: "Swap"
+- extendedWaitUntil: { visible: "loads: 2", timeout: 15000 }
+- waitForAnimationToEnd
+- assertVisible: { id: "event-order", text: "load, p1 s1" }
+- assertVisible: "1 / 15"
+- tapOn: "‹ Back"

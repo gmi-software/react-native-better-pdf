@@ -474,6 +474,9 @@ class HybridBetterPdfView(
 
   // region Loading
 
+  private var isOpening = false
+  private var heldPageChange: PdfPageChangeEvent? = null
+
   private fun reload() {
     closeSession()
     val sources = sources ?: return
@@ -496,7 +499,14 @@ class HybridBetterPdfView(
   override fun onOpened(pageSizes: List<PdfDocumentLayout.PageSize>, sources: List<PdfDocumentSession.OpenedSource>) {
     val session = session ?: return
     val initial = ResolvedInitialPosition.of(initialPosition, pageSizes.size)
-    documentView.setDocument(session, pageSizes, initial.page, initial.scale, initial.point)
+    // The first page is reported after onLoad; a view not laid out yet reports it later.
+    heldPageChange = null
+    isOpening = true
+    try {
+      documentView.setDocument(session, pageSizes, initial.page, initial.scale, initial.point)
+    } finally {
+      isOpening = false
+    }
     // No one file holds a document of several sources.
     val filePath = sources.singleOrNull()?.filePath
     loaded = LoadedDocument(session, pageSizes.size, filePath?.let(::File))
@@ -514,6 +524,8 @@ class HybridBetterPdfView(
         }.toTypedArray(),
       ),
     )
+    heldPageChange?.let { onPageChange?.invoke(it) }
+    heldPageChange = null
   }
 
   override fun onLoadProgress(loadedBytes: Long, totalBytes: Long?) {
@@ -573,7 +585,8 @@ class HybridBetterPdfView(
   // region PdfDocumentView.Listener (UI thread)
 
   override fun onPageChanged(page: Int, pageCount: Int) {
-    onPageChange?.invoke(PdfPageChangeEvent(page.toDouble(), pageCount.toDouble()))
+    val event = PdfPageChangeEvent(page.toDouble(), pageCount.toDouble())
+    if (isOpening) heldPageChange = event else onPageChange?.invoke(event)
   }
 
   override fun onRenderFailed(failure: PdfFailure) {

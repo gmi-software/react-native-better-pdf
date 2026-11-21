@@ -239,6 +239,14 @@ export const DOCUMENTS: DocumentEntry[] = [
     initialScale: 2,
   },
   {
+    id: 'medium-page5-swap',
+    title: 'Swap at page 5',
+    subtitle: 'initialPage={4}; Swap: outline (12 pages)',
+    resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
+    alternate: async () => ({ uri: (await ensureFixture('outline')).uri }),
+    initialPage: 4,
+  },
+  {
     id: 'medium-inset',
     title: 'Inset',
     subtitle: 'contentInset under translucent bars',
