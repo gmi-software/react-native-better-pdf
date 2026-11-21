@@ -24,6 +24,27 @@ appId: software.gmi.betterpdf.example
 - tapOn: "1×"
 - extendedWaitUntil: { visible: "scale: 1.00 \\(#2\\)", timeout: 5000 }
 
+# Animated zoomTo and goToPage called together (a long press calls both) end
+# on the page and at the zoom asked for, in either order. Android only: the
+# two animations shared one scroller there; iOS is not checked.
+- runFlow:
+    when: { platform: Android }
+    commands:
+      - tapOn: "First"
+      - extendedWaitUntil: { visible: "1 / 100", timeout: 5000 }
+      - longPressOn: "+10"
+      - extendedWaitUntil: { visible: "scale: 2.50 \\(#3\\)", timeout: 5000 }
+      - waitForAnimationToEnd
+      - assertVisible: "11 / 100"
+      - tapOn: "1×"
+      - extendedWaitUntil: { visible: "scale: 1.00 \\(#4\\)", timeout: 5000 }
+      - tapOn: "First"
+      - extendedWaitUntil: { visible: "1 / 100", timeout: 5000 }
+      - longPressOn: "2.5×"
+      - extendedWaitUntil: { visible: "scale: 2.50 \\(#5\\)", timeout: 5000 }
+      - waitForAnimationToEnd
+      - assertVisible: "11 / 100"
+
 # Double-tap zoom: one event after PDFKit's zoom animation. PDFKit picks its
 # own zoom step (measured 1.70 here; Android zooms to 2×). Maestro's double
 # tap registers on iOS only (see double-tap/run-android.sh).

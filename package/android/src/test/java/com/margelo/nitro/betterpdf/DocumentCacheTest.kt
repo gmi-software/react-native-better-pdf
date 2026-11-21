@@ -230,6 +230,79 @@ class DocumentCacheTest {
 
   // endregion
 
+  // region Copies that cannot be opened
+
+  @Test
+  fun `a copy says whether its request downloaded it`() {
+    assertTrue(fetch(source()).ready().isDownloaded)
+    assertFalse("a stored copy", fetch(source()).ready().isDownloaded)
+    clock.addAndGet(5_000)
+    assertFalse("confirmed unchanged", fetch(source(maxAgeMs = 0.0)).ready().isDownloaded)
+
+    server.body = pdf("v2")
+    server.etag = "\"v2\""
+    assertTrue("replaced", fetch(source(maxAgeMs = 0.0)).ready().isDownloaded)
+
+    server.refuseConnections()
+    val stale = fetch(source(maxAgeMs = 0.0), allowStale = true).ready()
+    assertTrue(stale.isStale)
+    assertFalse(stale.isDownloaded)
+  }
+
+  @Test
+  fun `a copy that could not be opened is discarded, and the next request downloads it without validators`() {
+    server.body = damaged
+    val stored = fetch(source()).ready().copy
+    val opened = hold(stored.file)
+    server.body = pdf("v1")
+
+    assertTrue(cache.discard(stored) { it.isSameFile(opened) })
+    assertNull(cache.find(source()))
+    assertFalse("nothing is left to discard", cache.discard(stored) { it.isSameFile(opened) })
+
+    val fresh = fetch(source()).ready()
+    assertTrue(fresh.isDownloaded)
+    assertArrayEquals(pdf("v1"), fresh.copy.file.readBytes())
+    assertEquals(2, server.requests.size)
+    assertNull(server.requests[1].ifNoneMatch)
+  }
+
+  @Test
+  fun `discarding a copy kept across launches removes it from both directories`() {
+    server.body = damaged
+    val session = fetch(source()).ready().copy
+    val persistent = fetch(source(cache = PdfCacheMode.PERSISTENT)).ready().copy
+    val opened = hold(session.file)
+
+    assertTrue(cache.discard(persistent) { it.isSameFile(opened) })
+    assertFalse(session.file.exists())
+    assertFalse(persistent.file.exists())
+    assertNull(newCache().find(source()))
+    assertEquals(0L, cache.byteSize())
+  }
+
+  @Test
+  fun `a newer copy that replaced the opened one is not discarded`() {
+    server.body = damaged
+    val stored = fetch(source()).ready().copy
+    val opened = hold(stored.file)
+    server.body = pdf("v2")
+    server.etag = "\"v2\""
+    val newer = fetch(source(maxAgeMs = 0.0)).ready().copy
+    assertEquals(stored.file, newer.file)
+
+    assertFalse(cache.discard(stored) { it.isSameFile(opened) })
+    assertArrayEquals(pdf("v2"), cache.find(source())?.file?.readBytes())
+  }
+
+  /** Stands for an open descriptor: keeps the file when the cache deletes it. */
+  private fun hold(file: File): File =
+    File(temp.root, "opened-${System.nanoTime()}.pdf").also { Files.createLink(it.toPath(), file.toPath()) }
+
+  private fun File.isSameFile(other: File) = Files.isSameFile(toPath(), other.toPath())
+
+  // endregion
+
   // region Redirects
 
   @Test
@@ -448,7 +521,7 @@ class DocumentCacheTest {
     assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS))
   }
 
-  private class Ready(val copy: CachedCopy, val isStale: Boolean)
+  private class Ready(val copy: CachedCopy, val isStale: Boolean, val isDownloaded: Boolean)
 
   /** [headers] by lowercase name. */
   private class Request(val path: String, val headers: Map<String, String>) {
@@ -461,8 +534,8 @@ class DocumentCacheTest {
 
     override fun onProgress(loadedBytes: Long, totalBytes: Long?, isComplete: Boolean) = Unit
 
-    override fun onReady(copy: CachedCopy, isStale: Boolean) {
-      result.complete(Ready(copy, isStale))
+    override fun onReady(copy: CachedCopy, isStale: Boolean, isDownloaded: Boolean) {
+      result.complete(Ready(copy, isStale, isDownloaded))
     }
 
     override fun onFailed(failure: PdfFailure) {
@@ -590,5 +663,7 @@ class DocumentCacheTest {
     val credentials = mapOf("Authorization" to "Bearer t", "X-Api-Key" to "secret")
 
     fun pdf(version: String) = "%PDF-1.4\n% $version\n%%EOF\n".toByteArray()
+
+    val damaged = "%PDF-1.4\n${"x".repeat(5000)}".toByteArray()
   }
 }

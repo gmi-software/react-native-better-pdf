@@ -328,9 +328,31 @@ class PdfDocumentView(context: Context) :
   private val tileSource = Rect()
 
   private val scroller = OverScroller(context)
-  private var isTouching = false
   private var zoomAnimator: ValueAnimator? = null
   private val settleRunnable = Runnable { onSettled() }
+
+  /** Nothing else ends the scroller or the zoom animation, or schedules the settle. */
+  private val motion = ViewportMotion(object : ViewportMotion.Host {
+    override fun stopScroll() = scroller.forceFinished(true)
+
+    override fun finishScroll() {
+      scroller.abortAnimation()
+      setOffsets(scroller.currX.toFloat(), scroller.currY.toFloat())
+    }
+
+    override fun cancelZoom() {
+      zoomAnimator?.cancel()
+    }
+
+    override fun finishZoom() {
+      zoomAnimator?.end()
+    }
+
+    override fun scheduleSettle() {
+      removeCallbacks(settleRunnable)
+      postDelayed(settleRunnable, SETTLE_DELAY_MS)
+    }
+  })
 
   init {
     // Set by the ScrollView style; a PDF surface never takes key focus from touch.
@@ -352,6 +374,7 @@ class PdfDocumentView(context: Context) :
     override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
       if (scaleDetector.isInProgress) return true
       if (!isUserScrollEnabled) return false
+      motion.beforeScroll()
       val mainVelocity = if (isHorizontal) velocityX else velocityY
       val bounds = scrollBounds()
       if (isPaged && !isZoomedIn) {
@@ -380,6 +403,7 @@ class PdfDocumentView(context: Context) :
         bounds.left.roundToInt(), bounds.right.roundToInt(),
         bounds.top.roundToInt(), bounds.bottom.roundToInt(),
       )
+      motion.scrollStarted(isFling = true)
       if (mainVelocity != 0f) {
         direction = directionForOffsetChange(-mainVelocity)
       }
@@ -508,8 +532,9 @@ class PdfDocumentView(context: Context) :
     pendingInitialPage = page
     // A point on a page outside the document is dropped, as in goToViewport.
     pendingInitialPoint = initialPoint?.takeIf { it.page == page }
-    // Applied by rebuildLayout's initial-page branch (clamped, cross-axis centred).
-    scale = initialScale
+    // Applied by rebuildLayout's initial-page branch (cross-axis centred). Clamped
+    // here: without a size there is no layout yet, and the clamp would count as a change.
+    scale = initialScale.coerceIn(minScale, maxScale)
     rebuildLayout()
     // The initial zoom is not a change.
     lastReportedScale = scale
@@ -519,8 +544,9 @@ class PdfDocumentView(context: Context) :
 
   /** Drops the document and every bitmap it produced. Does not close the session. */
   fun clearDocument() {
-    scroller.forceFinished(true)
-    zoomAnimator?.cancel()
+    motion.end(atTarget = false)
+    // A finger still down holds the document that is gone.
+    motion.touchUp()
     removeCallbacks(settleRunnable)
     textSelection.clear()
     session = null
@@ -578,6 +604,8 @@ class PdfDocumentView(context: Context) :
     if (newMin == minScale && newMax == maxScale) return
     minScale = newMin
     maxScale = newMax
+    // A zoom animation is clamped frame by frame; ending it would stop it short.
+    if (zoomAnimator == null && scale !in newMin..newMax) motion.beforeZoom()
     zoomAround(scale, width / 2f, areaCenterY)
   }
 
@@ -629,7 +657,7 @@ class PdfDocumentView(context: Context) :
     val top = layout.pageTop(match.page) + match.rects.minOf { it.top } * pointsToPixels
     val right = layout.pageLeft(match.page) + match.rects.maxOf { it.right } * pointsToPixels
     val bottom = layout.pageTop(match.page) + match.rects.maxOf { it.bottom } * pointsToPixels
-    scroller.forceFinished(true)
+    motion.beforeScroll()
     // Across the scroll axis (only moves when the content is wider than the view).
     if (isHorizontal) {
       setOffsets(offsetX, (top + bottom) / 2f * scale - height / 2f)
@@ -640,10 +668,7 @@ class PdfDocumentView(context: Context) :
     val mainEnd = if (isHorizontal) right else bottom
     val visibleStart = areaStart / scale
     val visibleEnd = (areaStart + areaLength) / scale
-    if (mainStart >= visibleStart && mainEnd <= visibleEnd) {
-      scheduleSettle()
-      return
-    }
+    if (mainStart >= visibleStart && mainEnd <= visibleEnd) return
     var target = mainStart - areaLength / scale * SEARCH_REVEAL_FRACTION
     if (isPaged && !isZoomedIn) target = target.coerceIn(pageScrollStart(match.page), pageScrollEnd(match.page))
     scrollToMain(target, animated = true)
@@ -657,8 +682,7 @@ class PdfDocumentView(context: Context) :
   fun goToViewport(point: PagePoint, scale: Float) {
     if (pageSizes.isEmpty()) return
     val page = point.page.coerceIn(0, pageSizes.size - 1)
-    scroller.forceFinished(true)
-    zoomAnimator?.cancel()
+    motion.end(atTarget = false)
     this.scale = scale.coerceIn(minScale, maxScale)
     val layout = layout
     if (layout == null) {
@@ -670,7 +694,6 @@ class PdfDocumentView(context: Context) :
     readingPage = page
     val target = if (point.page == page) point else PagePoint(page, 0f, 0f)
     setOffsets(layout.contentX(target) * this.scale, layout.contentY(target) * this.scale - clearTop)
-    scheduleSettle()
   }
 
   fun goToPage(page: Int, animated: Boolean) {
@@ -685,10 +708,9 @@ class PdfDocumentView(context: Context) :
     readingPage = target
     if (isSinglePage) {
       // Nothing to animate through: the other pages are not shown.
-      scroller.forceFinished(true)
+      motion.beforeScroll()
       shownPage = target
       setMainOffset(layout.slotStart(target) * scale)
-      scheduleSettle()
       return
     }
     scrollToMain(layout.slotStart(target), animated)
@@ -715,8 +737,7 @@ class PdfDocumentView(context: Context) :
     isRightToLeft = mode.isRightToLeft
     spread = mode.spread
     fit = mode.fit
-    scroller.forceFinished(true)
-    zoomAnimator?.cancel()
+    motion.end(atTarget = false)
     textSelection.clear()
     if (layout != null) pendingInitialPage = (if (readingPage >= 0) readingPage else currentPage).coerceAtLeast(0)
     scale = minScale
@@ -762,7 +783,6 @@ class PdfDocumentView(context: Context) :
   /** Moves the content by ([dx], [dy]) view pixels, within the scrollable area, and reports where it settles. */
   fun panBy(dx: Float, dy: Float) {
     scrollByContent(dx, dy)
-    scheduleSettle()
   }
 
   fun onPageText(page: Int, text: String?) {
@@ -864,11 +884,11 @@ class PdfDocumentView(context: Context) :
 
   /** Scrolls so unzoomed main-axis [contentPosition] starts the area between the clearances. */
   private fun scrollToMain(contentPosition: Float, animated: Boolean, durationMs: Int = 300) {
-    scroller.forceFinished(true)
+    // The target is in zoomed pixels: a zoom animation jumps to its end first.
+    motion.beforeScroll()
     val target = clampMain(contentPosition * scale - clearTop)
     if (!animated) {
       setMainOffset(target)
-      scheduleSettle()
       return
     }
     // Animating across hundreds of pages would render every page on the way.
@@ -878,16 +898,14 @@ class PdfDocumentView(context: Context) :
       setMainOffset(target - mainViewportLength * Math.signum(distance))
     }
     val delta = (target - mainOffset).roundToInt()
-    if (delta == 0) {
-      scheduleSettle()
-      return
-    }
+    if (delta == 0) return
     direction = directionForOffsetChange(delta.toFloat())
     scroller.startScroll(
       offsetX.roundToInt(), offsetY.roundToInt(),
       if (isHorizontal) delta else 0, if (isHorizontal) 0 else delta,
       durationMs,
     )
+    motion.scrollStarted(isFling = false)
     postInvalidateOnAnimation()
   }
 
@@ -945,8 +963,8 @@ class PdfDocumentView(context: Context) :
     if (animated) {
       animateZoom(target, width / 2f, areaCenterY)
     } else {
+      motion.beforeZoom()
       zoomAround(target, width / 2f, areaCenterY)
-      scheduleSettle()
     }
   }
 
@@ -1021,7 +1039,7 @@ class PdfDocumentView(context: Context) :
   fun onPageMeasured(page: Int, size: PdfDocumentLayout.PageSize) {
     if (page >= pageSizes.size) return
     pageSizes[page] = size
-    if (isTouching || !scroller.isFinished || zoomAnimator != null) {
+    if (motion.isMoving) {
       relayoutPending = true
     } else {
       rebuildLayout()
@@ -1039,6 +1057,8 @@ class PdfDocumentView(context: Context) :
     context.applicationContext.registerComponentCallbacks(memoryCallbacks)
     bitmapPool.setMaxBytes(poolBudget())
     requestRenders(force = true)
+    // The settle the detach dropped.
+    motion.viewportChanged()
   }
 
   override fun onDetachedFromWindow() {
@@ -1047,8 +1067,9 @@ class PdfDocumentView(context: Context) :
     context.applicationContext.unregisterComponentCallbacks(memoryCallbacks)
     accessibilityManager.removeAccessibilityStateChangeListener(accessibilityStateListener)
     accessibilityManager.removeTouchExplorationStateChangeListener(touchExplorationListener)
-    scroller.forceFinished(true)
-    zoomAnimator?.cancel()
+    // Nothing animates off screen: a scroll or zoom on its way lands now.
+    motion.end(atTarget = true)
+    motion.touchUp()
     removeCallbacks(settleRunnable)
     // Also ends the selection toolbar, which must not outlive the window.
     textSelection.clear()
@@ -1079,8 +1100,7 @@ class PdfDocumentView(context: Context) :
     if (isAttachedToWindow) bitmapPool.setMaxBytes(poolBudget())
     if (w != oldw || (layoutDependsOnHeight && h != oldh)) {
       // A fling or zoom animation would go on in the old layout's coordinates (rotation).
-      scroller.forceFinished(true)
-      zoomAnimator?.cancel()
+      motion.end(atTarget = false)
       rebuildLayout()
     } else {
       clampAndRefresh()
@@ -1134,12 +1154,15 @@ class PdfDocumentView(context: Context) :
   override fun computeScroll() {
     if (scroller.computeScrollOffset()) {
       setOffsets(scroller.currX.toFloat(), scroller.currY.toFloat())
-      if (scroller.isFinished) scheduleSettle() else postInvalidateOnAnimation()
+      if (scroller.isFinished) motion.scrollEnded() else postInvalidateOnAnimation()
     }
   }
 
   @SuppressLint("ClickableViewAccessibility") // No click semantics; this is a scroll surface.
   override fun onTouchEvent(event: MotionEvent): Boolean {
+    // Before the return below: the document may have gone away, or become a
+    // single page, with the finger down.
+    if (event.actionMasked == MotionEvent.ACTION_UP || event.actionMasked == MotionEvent.ACTION_CANCEL) motion.touchUp()
     // A single page is static (a thumbnail): touches go to the parents.
     if (layout == null || isSinglePage) return false
     when (event.actionMasked) {
@@ -1147,24 +1170,16 @@ class PdfDocumentView(context: Context) :
         // Keep drags from scrolling parents — unless drags are theirs.
         if (isUserScrollEnabled) parent?.requestDisallowInterceptTouchEvent(true)
         pagingFlingHandled = false
-        scroller.forceFinished(true)
-        zoomAnimator?.cancel()
-        removeCallbacks(settleRunnable)
-        isTouching = true
+        motion.touchDown()
       }
-      MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> isTouching = false
     }
     // A gesture that starts on a selection handle is a handle drag throughout.
-    if (textSelection.onTouchEvent(event)) {
-      if (!isTouching) scheduleSettle()
-      return true
-    }
+    if (textSelection.onTouchEvent(event)) return true
     scaleDetector.onTouchEvent(event)
     gestureDetector.onTouchEvent(event)
     if (event.actionMasked == MotionEvent.ACTION_UP && isPaged && !isZoomedIn && !pagingFlingHandled) {
       settleOnPage()
     }
-    if (!isTouching && scroller.isFinished && zoomAnimator == null) scheduleSettle()
     return true
   }
 
@@ -1227,8 +1242,6 @@ class PdfDocumentView(context: Context) :
       setMainOffsetRaw(clampMain((newLayout.slotStart(anchorPage) + anchorFraction * slotLength) * scale - clearTop))
     }
     clampAndRefresh()
-    // Tiles were dropped and the position may have moved (rotation, first layout).
-    scheduleSettle()
   }
 
   private val isHorizontal: Boolean get() = axis == PdfDocumentLayout.Axis.HORIZONTAL
@@ -1316,6 +1329,7 @@ class PdfDocumentView(context: Context) :
     offsetY = y.coerceIn(bounds.top, bounds.bottom)
     onViewportChanged()
     awakenScrollBars()
+    motion.viewportChanged()
   }
 
   private fun clampAndRefresh() = setOffsets(offsetX, offsetY)
@@ -1334,8 +1348,9 @@ class PdfDocumentView(context: Context) :
   }
 
   private fun animateZoom(target: Float, focusX: Float, focusY: Float) {
-    zoomAnimator?.cancel()
+    motion.beforeZoom()
     val clamped = target.coerceIn(minScale, maxScale)
+    motion.zoomStarted()
     zoomAnimator = ValueAnimator.ofFloat(scale, clamped).apply {
       duration = 250
       interpolator = DecelerateInterpolator()
@@ -1343,7 +1358,7 @@ class PdfDocumentView(context: Context) :
       addListener(object : android.animation.AnimatorListenerAdapter() {
         override fun onAnimationEnd(animation: android.animation.Animator) {
           if (zoomAnimator === animation) zoomAnimator = null
-          scheduleSettle()
+          motion.zoomEnded()
         }
       })
       start()
@@ -1418,14 +1433,9 @@ class PdfDocumentView(context: Context) :
     onPagesMoved?.invoke()
   }
 
-  private fun scheduleSettle() {
-    removeCallbacks(settleRunnable)
-    postDelayed(settleRunnable, SETTLE_DELAY_MS)
-  }
-
   /** The viewport stopped moving: render zoom tiles for what is on screen. */
   private fun onSettled() {
-    if (isTouching || !scroller.isFinished || zoomAnimator != null) return
+    if (motion.isMoving) return
     if (relayoutPending) {
       relayoutPending = false
       rebuildLayout()
@@ -1500,7 +1510,7 @@ class PdfDocumentView(context: Context) :
     if (poolBudget != bitmapPool.budgetBytes) bitmapPool.setMaxBytes(poolBudget)
 
     val requests = ArrayList<DocumentWork>(fit.keep + visible.count() * 2)
-    val settled = !isTouching && scroller.isFinished && zoomAnimator == null
+    val settled = !motion.isMoving
     for (index in 0 until fit.keep) {
       val base = bases[index]
       val page = base.page

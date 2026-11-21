@@ -14,6 +14,9 @@
 // without answering (a device without network, as far as the app can tell)
 // until `GET /__control/online`.
 //
+// `GET /__control/damage?count=N` sends the next N documents (within 30 s)
+// as `%PDF-` plus garbage, with the real file's `ETag` / `Last-Modified`.
+//
 // Redirects: `/__redirect?to=<url>` answers 302 to `<url>`, and
 // `/__redirect-loop` redirects to itself. `?require=a,b` answers 401 unless
 // the request has all of these headers, `?forbid=a,b` 403 if it has any.
@@ -45,9 +48,21 @@ function throttle(bytesPerSecond) {
 }
 
 let offline = false;
+let damagedResponses = 0;
+let damagedUntilMs = 0;
+const damagedBody = Buffer.from(`%PDF-1.4\n${'x'.repeat(5000)}`);
 
 createServer((request, response) => {
   const url = new URL(request.url ?? '/', 'http://x');
+  if (url.pathname === '/__control/damage') {
+    damagedResponses = Number(url.searchParams.get('count') ?? 1);
+    damagedUntilMs = Date.now() + 30_000;
+    console.log(`${request.method} ${url.pathname}${url.search}`);
+    response
+      .writeHead(200, { 'Content-Type': 'text/plain' })
+      .end(`damaging ${damagedResponses}`);
+    return;
+  }
   if (url.pathname.startsWith('/__control/')) {
     offline = url.pathname === '/__control/offline';
     console.log(
@@ -100,6 +115,19 @@ createServer((request, response) => {
         .writeHead(304, { ETag: etag, 'Last-Modified': lastModified })
         .end();
       console.log(`${request.method} ${url.pathname}${url.search} → 304`);
+      return;
+    }
+    if (damagedResponses > 0 && Date.now() < damagedUntilMs) {
+      damagedResponses -= 1;
+      response
+        .writeHead(200, {
+          'Content-Type': 'application/pdf',
+          'Content-Length': damagedBody.length,
+          ETag: etag,
+          'Last-Modified': lastModified,
+        })
+        .end(damagedBody);
+      console.log(`${request.method} ${url.pathname}${url.search} → damaged`);
       return;
     }
     response.writeHead(200, {

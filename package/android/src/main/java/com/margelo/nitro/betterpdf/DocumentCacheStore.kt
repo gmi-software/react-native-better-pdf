@@ -103,6 +103,13 @@ internal class DocumentCacheStore(
     return removedPersistent || removedSession
   }
 
+  /** Like [remove], only if [isCurrent] accepts the file served for [key]. */
+  @Synchronized
+  fun remove(key: String, isCurrent: (File) -> Boolean): Boolean {
+    val current = find(key) ?: return false
+    return isCurrent(current.file) && remove(key)
+  }
+
   /** Deletes every copy. Downloads in progress still store their result. */
   @Synchronized
   fun clear() {

@@ -55,13 +55,15 @@ package/
     source.ts                      PdfSource union (or a list) → native [{ uri, base64, headers, cache options, password }]
     nativeSource.ts                base64 text → native-owned ArrayBuffer (once per distinct text)
   test/base64/                     the C++ and Swift base64 decoders against shared cases, and each other
+  test/loader/                     iOS's loader, cache and downloads, built for macOS, against a local server
   nitrogen/generated/              Nitrogen output (committed; regenerate with `bun run specs`)
   ios/
     HybridBetterPdfView.swift      PDFView host, scale mapping, events, lifecycle
     PdfContainerView.swift         taps, links, text selection settle / disable
     PdfSearchController.swift      PDFKit async find, highlights, next/previous
     SettleDebouncer.swift          "viewport stopped moving" for scale and viewport events
-    PdfDocumentLoader.swift        source resolution, cache fetch + pin, base64 → pin, PDFDocument open
+    PdfDocumentLoader.swift        source resolution, cache fetch + pin, base64 → pin, PDFDocument open,
+                                   an unreadable copy removed and downloaded once more
     Base64Document.swift           base64 decoding by the library's rules (same as Android's C++)
     DocumentSetLoader.swift        the view's sources in parallel; several assembled into one PDFDocument
     DisplayedDocument.swift        the displayed document and its sources (files, passwords, first pages)
@@ -83,6 +85,7 @@ package/
     PageFormats.kt                 pure: which pages rendered grey or in colour, a guess for the rest
     RenderQueue.kt                 pure: replace-on-submit work queue (cancellation)
     PdfDocumentView.kt             the viewer View: gestures, drawing, cache, tiles
+    ViewportMotion.kt              pure: finger, scroller and zoom animation; when the viewport has settled
     TextSelectionController.kt     long press, handles, highlight, floating Copy / Select all toolbar
     PageTextSelection.kt           pure: selection ends, handle anchors, drags
     SearchController.kt            search(), next/previous, onSearchChange throttling
@@ -95,6 +98,8 @@ package/
     BitmapPool.kt                  bitmap reuse + eager recycling
     MemoryBudgets.kt               pure: bitmap pool budget
     PdfSourceResolver.kt           source → seekable ParcelFileDescriptor (base64, streamed content://: write, open, delete)
+    ResolvedSource+readOrRefetch.kt
+                                   an unreadable copy removed and downloaded once more (view and document)
     NativeBase64Document.kt        JNI entry: base64 text in a native buffer → decoded into a file
     DocumentCache.kt               fresh copy or shared download/revalidation, stale fallback
     DocumentCacheStore.kt          copies on disk: session/persistent dirs, metadata
@@ -386,6 +391,17 @@ place. A relayout (rotation, a page's real size, `contentInset`,
 `pageSpacing`) drops the tiles, and those still rendering when they
 arrive.
 
+### Motion
+
+The scroller (flings, animated `goToPage`, page snaps) counts in zoomed
+pixels, so it never runs together with the zoom animation: `ViewportMotion`
+ends one before the other starts. An animation ended for the other one jumps
+to its target, so `zoomTo` and `goToPage` called together reach both the
+page and the zoom; a fling stops where it is, as under a finger. The same
+class decides when the viewport has settled: 80 ms after the finger, the
+scroller and the zoom animation have all ended, and after every change made
+at rest (a scale-limit clamp, a resize). Unit tested (`ViewportMotionTest`).
+
 ### Lifecycle
 
 | Event                 | Effect                                                                       |
@@ -393,7 +409,7 @@ arrive.
 | `source`/`password` change | old session `close()`d; new session started                              |
 | `onDropView`          | `on*` callbacks released, session closed, all bitmaps dropped                |
 | `session.close()`     | queue cleared, download aborted, pending main-thread results dropped; the worker finishes the in-flight render, then closes the renderer (and with it the FD) |
-| Detach from window    | bitmaps dropped (also renders finishing later), pool emptied, queue emptied, search stopped until attached again |
+| Detach from window    | a scroll or zoom animation jumps to its target (it settles when attached again); bitmaps dropped (also renders finishing later), pool emptied, queue emptied, search stopped until attached again |
 | Window hidden         | queue emptied, a late off-screen render discarded; on `UI_HIDDEN`, off-screen pages dropped and pool emptied |
 | Window shown again    | render plan resubmitted, so neighbours of the visible pages are prefetched   |
 

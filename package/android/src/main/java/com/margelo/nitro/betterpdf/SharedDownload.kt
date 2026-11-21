@@ -70,7 +70,7 @@ internal class SharedDownload(
           etag = connection.getHeaderField("ETag") ?: existing.metadata.etag,
           lastModified = connection.getHeaderField("Last-Modified") ?: existing.metadata.lastModified,
         )
-        return DownloadOutcome.Stored(store.markValidated(existing, validated))
+        return DownloadOutcome.Stored(store.markValidated(existing, validated), isDownloaded = false)
       }
       if (status !in 200..299) {
         val reason = if (status in RedirectPolicy.STATUSES) ": the redirect is not followed" else ""
@@ -97,7 +97,7 @@ internal class SharedDownload(
           isServerUnreachable = false,
         )
       }
-      return DownloadOutcome.Stored(store.commit(key, partial, mode, metadata))
+      return DownloadOutcome.Stored(store.commit(key, partial, mode, metadata), isDownloaded = true)
     } catch (e: PdfFailure) {
       return DownloadOutcome.Failed(e, isServerUnreachable = false)
     } catch (e: MalformedURLException) {

@@ -27,7 +27,7 @@ Maestro (e2e). With several Android devices attached, set `ANDROID_SERIAL`.
 ```sh
 bun run typecheck                       # library + example
 bun run lint
-bun run test                            # JS unit tests (bun test)
+bun run test                            # JS unit tests (bun test); on macOS also iOS's base64 decoder and loader, built with swiftc
 cd package && bun run specs             # regenerate Nitro bindings after editing *.nitro.ts
 ```
 
@@ -77,6 +77,7 @@ example/e2e/run.sh <device> stress-open-close stress-rapid        # stress flows
 | `viewer-links` | page tap coordinates in PDF points, URL link reported (not opened), internal link followed, double tap not reported as a tap; a `/Dest` with `/Fit` and a name-tree destination, and a JavaScript action reported as a page tap (`links-all`). Run it on an Android 14 emulator without SDK extension 13 too: links there come from the library's parser alone |
 | `viewer-load-progress` | download progress of a remote document (fixture server throttled via `?bytesPerSecond=`) |
 | `viewer-offline` | `PdfCache` and cache options: persistent vs session copies across an app restart, 304 revalidation, stale copy while the fixture server is "offline" (`/__control/offline`), removal, cancellation, `clear()` |
+| `viewer-unreadable-copy` | a download that starts like a PDF but cannot be opened (`/__control/damage`): not kept after `invalid-pdf`, by `PdfView` and `PdfDocument`; a copy already stored (persistent, after a restart and a 304; stale) replaced within the open; a copy that needs a password kept |
 | `viewer-print` | print dialog previews the bundled sample and the unlocked protected fixture; closing resolves `isSubmitted: false`; Android saves the protected document as PDF (`isSubmitted: true`) |
 | `viewer-dark` | the Embedded card switches to dark pages and back while shown (screenshot for review: Maestro cannot check colours) |
 | `viewer-inset` | `contentInset` under translucent bars on 100 pages: the first page and `goToPage` below the header (also after zooming back), the end above the toolbar, facing pages, a fitted page's height between the bars (screenshot) |

@@ -16,7 +16,7 @@ final class DocumentCache {
     let onProgress: (_ loadedBytes: Int64, _ totalBytes: Int64?, _ isComplete: Bool) -> Void
     /// The copy to open. `isStale`: older than the source's `maxAgeMs`,
     /// shown because the server could not be reached (only with `allowStale`).
-    let onReady: (_ copy: CachedCopy, _ isStale: Bool) -> Void
+    let onReady: (_ copy: CachedCopy, _ isStale: Bool, _ isDownloaded: Bool) -> Void
     let onFailed: (PdfLoadFailure) -> Void
   }
 
@@ -79,7 +79,7 @@ final class DocumentCache {
     let key = source.storeKey()
     let copy = store.find(key: key)
     if let copy, copy.metadata.isFresh(maxAgeMs: source.maxAgeMs, nowMs: clock()) {
-      return deliverReady(subscriber, copy, isStale: false)
+      return deliverReady(subscriber, copy, isStale: false, isDownloaded: false)
     }
     let newDownload = lock.withLock { () -> SharedDownload? in
       if subscriber.isCancelled { return nil }
@@ -140,11 +140,11 @@ final class DocumentCache {
     }
     for subscriber in subscribers {
       switch outcome {
-      case .stored(let copy):
-        deliverReady(subscriber, copy, isStale: false)
+      case .stored(let copy, let isDownloaded):
+        deliverReady(subscriber, copy, isStale: false, isDownloaded: isDownloaded)
       case .failed(let failure, let isServerUnreachable):
         if subscriber.allowStale, isServerUnreachable, let stale = store.find(key: download.key) {
-          deliverReady(subscriber, stale, isStale: true)
+          deliverReady(subscriber, stale, isStale: true, isDownloaded: false)
         } else {
           deliverFailure(subscriber, failure)
         }
@@ -152,7 +152,7 @@ final class DocumentCache {
     }
   }
 
-  private func deliverReady(_ subscriber: Subscriber, _ copy: CachedCopy, isStale: Bool) {
+  private func deliverReady(_ subscriber: Subscriber, _ copy: CachedCopy, isStale: Bool, isDownloaded: Bool) {
     var delivered = copy
     if subscriber.source.cache == .persistent {
       do {
@@ -165,7 +165,7 @@ final class DocumentCache {
         ))
       }
     }
-    if !isCancelled(subscriber) { subscriber.listener.onReady(delivered, isStale) }
+    if !isCancelled(subscriber) { subscriber.listener.onReady(delivered, isStale, isDownloaded) }
   }
 
   private func deliverFailure(_ subscriber: Subscriber, _ failure: PdfLoadFailure) {
