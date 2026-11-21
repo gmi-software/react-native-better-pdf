@@ -429,7 +429,7 @@ class PdfDocumentView(context: Context) :
     }
 
     override fun onDoubleTap(e: MotionEvent): Boolean {
-      val target = if (scale > minScale * 1.05f) minScale else min(maxScale, max(minScale * 2f, 2f))
+      val target = FitZoom.doubleTapTarget(scale, minScale, maxScale)
       animateZoom(target, e.x, e.y)
       return true
     }
@@ -1277,7 +1277,7 @@ class PdfDocumentView(context: Context) :
   /** The vertical centre of the area between the clearances, in view pixels. */
   private val areaCenterY: Float get() = clearTop + (height - clearTop - clearBottom) / 2f
 
-  private val isZoomedIn: Boolean get() = scale > minScale * 1.01f
+  private val isZoomedIn: Boolean get() = FitZoom.isZoomedIn(scale, minScale, maxScale)
 
   private val minimumPagingFlingVelocity: Float = ViewConfiguration.get(context).scaledMinimumFlingVelocity * 4f
 

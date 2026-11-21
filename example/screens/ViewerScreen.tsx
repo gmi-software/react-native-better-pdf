@@ -535,6 +535,7 @@ export function ViewerScreen() {
             enableTextSelection={textSelection}
             enableFormFilling={formFilling}
             contentInset={entry.contentInset}
+            minScale={entry.minScale}
             onFormChange={(event) =>
               setLastEvent(`form: ${describeField(event.field)}`)
             }

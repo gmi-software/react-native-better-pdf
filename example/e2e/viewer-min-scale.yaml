@@ -1,0 +1,37 @@
+# minScale={0.5}: zoom is still measured from the fitted page, so a paged
+# layout at 1× snaps to pages. A drag of a quarter page and release settles
+# back on the same page; without the snap each drag leaves the page
+# where the finger lifted. The double tap at 1× is checked on Android by
+# double-tap/run-android.sh.
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+- tapOn: "Viewer"
+- runFlow: { file: _open-list-entry.yaml, env: { ENTRY: "Min scale 0.5.*" } }
+- extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
+- tapOn: "Vertical"
+- tapOn: "Horizontal"
+- extendedWaitUntil: { visible: "Paged", timeout: 5000 }
+- waitForAnimationToEnd
+# A layout change resets the zoom to minScale; the check is at 1×.
+- tapOn: "1×"
+- waitForAnimationToEnd
+- extendedWaitUntil:
+    visible: { id: "viewport-status", text: "p 1 · .* · 1.00x" }
+    timeout: 5000
+- swipe: { start: "50%, 65%", end: "50%, 50%", duration: 1500 }
+- waitForAnimationToEnd
+- copyTextFrom: { id: "viewport-status" }
+- swipe: { start: "50%, 65%", end: "50%, 50%", duration: 1500 }
+- waitForAnimationToEnd
+- assertVisible: { id: "viewport-status", text: "${maestro.copiedText}" }
+- assertVisible: "1 / 100"
+- takeScreenshot: min-scale-paged
+- tapOn: "Paged"
+- tapOn: "Paged H"
+- tapOn: "RTL"
+- tapOn: "Paged RTL"
+- tapOn: "Pairs"
+- tapOn: "Book"
+- extendedWaitUntil: { visible: "Vertical", timeout: 5000 }
+- tapOn: "‹ Back"

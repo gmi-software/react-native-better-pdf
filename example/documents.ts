@@ -70,6 +70,7 @@ export interface DocumentEntry {
   form?: boolean;
   /** Translucent bars over the viewer, which pages scroll under (`contentInset`). */
   contentInset?: { top: number; bottom: number };
+  minScale?: number;
   /** Another source for "Swap"; also shows "Same" and the onLoad count. */
   alternate?: () => Promise<DocumentSource>;
   /** Mounts the viewer at zero width, calls this from `onLoad`, then widens it. */
@@ -252,6 +253,13 @@ export const DOCUMENTS: DocumentEntry[] = [
     subtitle: 'contentInset under translucent bars',
     resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
     contentInset: { top: 80, bottom: 60 },
+  },
+  {
+    id: 'medium-min-scale',
+    title: 'Min scale 0.5',
+    subtitle: 'minScale={0.5}',
+    resolve: async () => ({ uri: (await ensureFixture('medium')).uri }),
+    minScale: 0.5,
   },
   {
     id: 'medium-inset-last',

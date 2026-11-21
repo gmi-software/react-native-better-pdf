@@ -1,0 +1,5 @@
+appId: software.gmi.betterpdf.example
+---
+# minScale={0.5}: the first double tap on the fitted page zooms in, not out.
+- extendedWaitUntil: { visible: "scale: 2.00 \\(#1\\)", timeout: 5000 }
+- tapOn: "‹ Back"

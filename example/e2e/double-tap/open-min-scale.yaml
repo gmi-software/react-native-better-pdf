@@ -1,0 +1,7 @@
+appId: software.gmi.betterpdf.example
+---
+- runFlow: ../_start.yaml
+- tapOn: "Viewer"
+- runFlow: { file: ../_open-list-entry.yaml, env: { ENTRY: "Min scale 0.5.*" } }
+- extendedWaitUntil: { visible: "1 / 100", timeout: 60000 }
+- waitForAnimationToEnd
