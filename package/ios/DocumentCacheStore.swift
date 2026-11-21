@@ -43,8 +43,7 @@ final class DocumentCacheStore {
   func find(key: String) -> CachedCopy? {
     return lock.withLock {
       prepare()
-      return copy(in: persistentDirectory, key: key, mode: .persistent)
-        ?? copy(in: sessionDirectory, key: key, mode: .session)
+      return currentCopy(key: key)
     }
   }
 
@@ -99,9 +98,29 @@ final class DocumentCacheStore {
   func remove(key: String) -> Bool {
     return lock.withLock {
       prepare()
-      let removedPersistent = deleteCopy(in: persistentDirectory, key: key)
-      let removedSession = deleteCopy(in: sessionDirectory, key: key)
-      return removedPersistent || removedSession
+      return deleteCopies(key: key)
+    }
+  }
+
+  /// Like `remove(key:)`, only while the copy served for `key` is `file`.
+  func remove(key: String, ifCurrentIs file: FileIdentity) -> Bool {
+    return lock.withLock {
+      prepare()
+      guard let current = currentCopy(key: key), FileIdentity(current.fileURL) == file else { return false }
+      return deleteCopies(key: key)
+    }
+  }
+
+  /// A file whatever its name: a pin and its copy are the same file.
+  struct FileIdentity: Equatable {
+    let device: dev_t
+    let inode: ino_t
+
+    init?(_ url: URL) {
+      var status = stat()
+      guard stat(url.path, &status) == 0 else { return nil }
+      device = status.st_dev
+      inode = status.st_ino
     }
   }
 
@@ -195,6 +214,17 @@ final class DocumentCacheStore {
       try root.setResourceValues(values)
     }
     return directory
+  }
+
+  private func currentCopy(key: String) -> CachedCopy? {
+    return copy(in: persistentDirectory, key: key, mode: .persistent)
+      ?? copy(in: sessionDirectory, key: key, mode: .session)
+  }
+
+  private func deleteCopies(key: String) -> Bool {
+    let removedPersistent = deleteCopy(in: persistentDirectory, key: key)
+    let removedSession = deleteCopy(in: sessionDirectory, key: key)
+    return removedPersistent || removedSession
   }
 
   private func copy(in directory: URL, key: String, mode: PdfCacheMode) -> CachedCopy? {

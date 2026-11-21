@@ -87,23 +87,28 @@ class HybridBetterPdfDocument : HybridBetterPdfDocumentSpec() {
     onProgress: ((event: PdfLoadProgressEvent) -> Unit)?,
   ): PdfOpenedDocument {
     val throttle = ProgressThrottle()
-    val resolved = resolver.open(source) { loadedBytes, totalBytes, isComplete ->
-      if (onProgress == null || closed) return@open
-      val emit = synchronized(throttle) { throttle.shouldEmit(SystemClock.uptimeMillis(), loadedBytes, isComplete) }
-      if (emit) onProgress(PdfLoadProgressEvent(loadedBytes.toDouble(), totalBytes?.toDouble()))
+    val report = { loadedBytes: Long, totalBytes: Long?, isComplete: Boolean ->
+      if (onProgress != null && !closed) {
+        val emit = synchronized(throttle) { throttle.shouldEmit(SystemClock.uptimeMillis(), loadedBytes, isComplete) }
+        if (emit) onProgress(PdfLoadProgressEvent(loadedBytes.toDouble(), totalBytes?.toDouble()))
+      }
     }
-    val descriptor = resolved.descriptor
+    var resolved = resolver.open(source, report)
     val pageCount = try {
-      // Checks the password and counts pages; nothing stays open.
-      DocumentRenderer.openOrFail(descriptor.dup(), password).use { it.pageCount }
+      resolved.readOrRefetch(reopen = { mode ->
+        resolved.descriptor.closeQuietly()
+        resolver.open(source.refetching(mode), report).also { resolved = it }
+      }) { file ->
+        // Checks the password and counts pages; nothing stays open.
+        val count = DocumentRenderer.openOrFail(file.descriptor.dup(), password).use { it.pageCount }
+        if (count <= 0) throw PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF has no pages")
+        count
+      }
     } catch (error: Throwable) {
-      descriptor.closeQuietly()
+      resolved.descriptor.closeQuietly()
       throw error
     }
-    if (pageCount <= 0) {
-      descriptor.closeQuietly()
-      throw PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF has no pages")
-    }
+    val descriptor = resolved.descriptor
     synchronized(lock) {
       if (closed) {
         descriptor.closeQuietly()

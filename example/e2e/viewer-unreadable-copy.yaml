@@ -1,0 +1,95 @@
+# A downloaded copy that cannot be opened (/__control/damage) is not served
+# again; a copy that needs a password stays.
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+
+# PdfView, a copy this open downloads.
+- evalScript: ${http.get('http://localhost:8090/__control/damage?count=1')}
+- tapOn: "Viewer"
+- tapOn: "Remote \\(HTTP\\).*"
+- extendedWaitUntil: { visible: "invalid-pdf", timeout: 15000 }
+- tapOn: "‹ Back"
+- tapOn: "Remote \\(HTTP\\).*"
+- extendedWaitUntil: { visible: "1 / 100", timeout: 30000 }
+- tapOn: "‹ Back"
+
+# PdfDocument.open, the same.
+- tapOn: "Docs"
+- evalScript: ${http.get('http://localhost:8090/__control/damage?count=1')}
+- tapOn: "metadata \\(remote\\)"
+- extendedWaitUntil: { visible: "error: invalid-pdf", timeout: 15000 }
+- tapOn: "metadata \\(remote\\)"
+- extendedWaitUntil: { visible: "opened in .* ms", timeout: 15000 }
+- assertVisible: "pages 2, stale no, file yes"
+
+- tapOn: "Offline"
+- tapOn:
+    text: "Go online"
+    optional: true
+- tapOn: "Clear all"
+- extendedWaitUntil: { visible: "Storage: 0.0 MB", timeout: 5000 }
+- evalScript: ${http.get('http://localhost:8090/__control/damage?count=1')}
+- tapOn: "Download Report"
+- extendedWaitUntil:
+    visible: { id: "report-status", text: "Saved \\(persistent\\).*" }
+    timeout: 15000
+# Stored, then 304 after a restart: replaced within the open.
+- runFlow: _start.yaml
+- tapOn: "Offline"
+- extendedWaitUntil:
+    visible: { id: "report-status", text: "Saved \\(persistent\\).*" }
+    timeout: 10000
+- tapOn: "Open Report"
+- extendedWaitUntil: { visible: "1 / 10", timeout: 20000 }
+- assertVisible: "Downloaded"
+- assertNotVisible: { id: "offline-stale" }
+- tapOn: "‹ Back"
+
+# PdfDocument.open, a stored copy ("Metadata" is the Docs tab's "metadata (remote)").
+- tapOn: "Clear all"
+- extendedWaitUntil: { visible: "Storage: 0.0 MB", timeout: 5000 }
+# Not scrollUntilVisible: iOS counts a button cut off at the bottom as visible.
+- swipe: { start: "50%, 75%", end: "50%, 25%" }
+- evalScript: ${http.get('http://localhost:8090/__control/damage?count=1')}
+- tapOn: "Download Metadata"
+- extendedWaitUntil:
+    visible: { id: "metadata-status", text: "Saved \\(session\\).*" }
+    timeout: 15000
+- tapOn: "Docs"
+- tapOn: "metadata \\(remote\\)"
+- extendedWaitUntil: { visible: "opened in .* ms", timeout: 15000 }
+- assertVisible: "pages 2, stale no, file yes"
+- tapOn: "Offline"
+
+# Stale: removed, so the open fails as without a copy.
+- tapOn: "Clear all"
+- extendedWaitUntil: { visible: "Storage: 0.0 MB", timeout: 5000 }
+- evalScript: ${http.get('http://localhost:8090/__control/damage?count=1')}
+- tapOn: "Download Report"
+- extendedWaitUntil:
+    visible: { id: "report-status", text: "Saved \\(persistent\\).*" }
+    timeout: 15000
+- tapOn: "Go offline"
+- extendedWaitUntil: { visible: "Server offline", timeout: 5000 }
+- tapOn: "Open Report"
+- extendedWaitUntil: { visible: "network-error", timeout: 30000 }
+- tapOn: "‹ Back"
+- extendedWaitUntil:
+    visible: { id: "report-status", text: "Not downloaded" }
+    timeout: 5000
+- tapOn: "Go online"
+- extendedWaitUntil: { visible: "Server online", timeout: 5000 }
+- tapOn: "Open Report"
+- extendedWaitUntil: { visible: "1 / 10", timeout: 20000 }
+- tapOn: "‹ Back"
+
+# A copy that needs a password stays.
+- swipe: { start: "50%, 75%", end: "50%, 25%" }
+- tapOn: "Open Locked"
+- extendedWaitUntil: { visible: "password-required|unsupported-pdf", timeout: 15000 }
+- tapOn: "‹ Back"
+- swipe: { start: "50%, 75%", end: "50%, 25%" }
+- extendedWaitUntil:
+    visible: { id: "locked-status", text: "Saved \\(session\\).*" }
+    timeout: 5000

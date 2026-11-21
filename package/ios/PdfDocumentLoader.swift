@@ -50,31 +50,61 @@ final class PdfDocumentLoader {
       }
     }
     workQueue.async {
-      resolveLocalFile(source: source, task: task, progress: reportProgress) { fileResult in
-        // Downloads complete on URLSession's delegate queue; parse on ours.
-        workQueue.async {
-          switch fileResult {
+      open(
+        source: source, password: password, isDisplayed: isDisplayed, task: task,
+        progress: reportProgress, refetchesStoredCopy: true, completion: finish
+      )
+    }
+    return task
+  }
+
+  /// A remote copy that fails with `invalidPdf` is removed and, unless this
+  /// load just downloaded it, fetched once more (`refetchesStoredCopy`).
+  private static func open(
+    source: NativePdfSource,
+    password: String?,
+    isDisplayed: Bool,
+    task: PdfLoadTask,
+    progress: @escaping (Int64, Int64?, Bool) -> Void,
+    refetchesStoredCopy: Bool,
+    completion: @escaping (Result<LoadedDocument, PdfLoadFailure>) -> Void
+  ) {
+    let store = DocumentCache.shared.store
+    resolveLocalFile(source: source, task: task, progress: progress) { fileResult in
+      // Downloads complete on URLSession's delegate queue; parse on ours.
+      workQueue.async {
+        switch fileResult {
+        case .failure(let failure):
+          completion(.failure(failure))
+        case .success(let file):
+          if task.isCancelled {
+            if let pin = file.pin { store.unpin(pin) }
+            return
+          }
+          switch openDocument(file, password: password, isDisplayed: isDisplayed) {
           case .failure(let failure):
-            finish(.failure(failure))
-          case .success(let file):
-            if task.isCancelled {
-              if let pin = file.pin { DocumentCache.shared.store.unpin(pin) }
-              return
+            var refetches = false
+            if failure.code == .invalidPdf, let remote = file.remote {
+              if let opened = remote.file { _ = store.remove(key: remote.key, ifCurrentIs: opened) }
+              refetches = refetchesStoredCopy && !remote.isDownloaded
             }
-            switch openDocument(file, password: password, isDisplayed: isDisplayed) {
-            case .failure(let failure):
-              if let pin = file.pin { DocumentCache.shared.store.unpin(pin) }
-              finish(.failure(failure))
-            case .success(let document):
-              finish(.success(LoadedDocument(
-                document: document, url: file.url, filePath: file.filePath, isStale: file.isStale, pin: file.pin
-              )))
+            if let pin = file.pin { store.unpin(pin) }
+            if refetches, let remote = file.remote {
+              open(
+                source: source.refetching(remote.mode), password: password, isDisplayed: isDisplayed, task: task,
+                progress: progress, refetchesStoredCopy: false, completion: completion
+              )
+            } else {
+              completion(.failure(failure))
             }
+          case .success(let document):
+            completion(.success(LoadedDocument(
+              document: document, url: file.url, filePath: file.filePath, isStale: file.isStale, pin: file.pin
+            )))
           }
         }
       }
     }
-    return task
   }
 
   // MARK: - Source resolution
@@ -104,11 +134,15 @@ final class PdfDocumentLoader {
     case "http", "https":
       let subscription = DocumentCache.shared.fetch(source: source, allowStale: true, listener: .init(
         onProgress: progress,
-        onReady: { copy, isStale in
+        onReady: { copy, isStale, isDownloaded in
           // Without a pin, the copy itself still opens; only its later
           // replacement would affect the separate reads.
           let pin = try? DocumentCache.shared.store.pin(copy)
-          completion(.success(ResolvedFile(url: pin ?? copy.fileURL, filePath: copy.fileURL.path, isStale: isStale, pin: pin)))
+          let url = pin ?? copy.fileURL
+          completion(.success(ResolvedFile(
+            url: url, filePath: copy.fileURL.path, isStale: isStale, pin: pin,
+            remote: .init(key: copy.key, mode: copy.mode, isDownloaded: isDownloaded, file: .init(url))
+          )))
         },
         onFailed: { completion(.failure($0)) }
       ))
@@ -174,5 +208,15 @@ final class PdfDocumentLoader {
       return .failure(PdfLoadFailure(code: .invalidPdf, message: "\(name) has no pages"))
     }
     return .success(document)
+  }
+}
+
+private extension NativePdfSource {
+  /// This source, asking for a persistent copy when the copy it replaces was one.
+  func refetching(_ mode: PdfCacheMode) -> NativePdfSource {
+    guard mode == .persistent else { return self }
+    return NativePdfSource(
+      uri: uri, base64: base64, headers: headers, cache: mode, maxAgeMs: maxAgeMs, cacheKey: cacheKey, password: password
+    )
   }
 }

@@ -345,9 +345,10 @@ class PdfDocumentSession internal constructor(
 
   /** Opens every source and returns every page's size, estimated where not yet measured. */
   private fun open(): List<PdfDocumentLayout.PageSize> {
-    sources.resolveAll(SourcesProgress(sources.segments.size, emit = { loadedBytes, totalBytes -> post { listener.onLoadProgress(loadedBytes, totalBytes) } }))
+    val progress = SourcesProgress(sources.segments.size, emit = { loadedBytes, totalBytes -> post { listener.onLoadProgress(loadedBytes, totalBytes) } })
+    sources.resolveAll(progress)
     if (closed) throw InterruptedException()
-    val firstPages = sources.openFirstPages()
+    val firstPages = sources.openFirstPages(progress)
     val sourcePages = SourcePages(firstPages.map { it.first })
     knownSizes = Array(sourcePages.pageCount) { firstPages[sourcePages.sourceOf(it)].second }
     measured = BooleanArray(sourcePages.pageCount).also { measured ->
