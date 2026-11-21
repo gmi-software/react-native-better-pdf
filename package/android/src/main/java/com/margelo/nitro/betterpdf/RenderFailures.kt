@@ -27,6 +27,12 @@ internal class RenderFailures {
   /** Returns whether to render [request]'s page again after it ran out of memory. */
   fun onOutOfMemory(request: RenderRequest): Boolean = outOfMemoryOf(request).add(request.page)
 
+  /** Makes the out-of-memory retry available again for every page. */
+  fun forgetOutOfMemory() {
+    baseOutOfMemory.clear()
+    tileOutOfMemory.clear()
+  }
+
   fun onRendered(request: RenderRequest) {
     failuresOf(request).remove(request.page)
     outOfMemoryOf(request).remove(request.page)
@@ -36,8 +42,7 @@ internal class RenderFailures {
     baseFailures.clear()
     tileFailures.clear()
     reportedPages.clear()
-    baseOutOfMemory.clear()
-    tileOutOfMemory.clear()
+    forgetOutOfMemory()
   }
 
   private fun failuresOf(request: RenderRequest): HashMap<Int, Int> = when (request) {

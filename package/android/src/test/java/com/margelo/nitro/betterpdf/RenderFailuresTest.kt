@@ -113,4 +113,13 @@ class RenderFailuresTest {
     failures.clear()
     assertTrue(failures.onOutOfMemory(tile(3)))
   }
+
+  @Test
+  fun `a retry that could not render is available again`() {
+    failures.onOutOfMemory(base(3))
+    failures.onOutOfMemory(tile(4))
+    failures.forgetOutOfMemory()
+    assertTrue(failures.onOutOfMemory(base(3)))
+    assertTrue(failures.onOutOfMemory(tile(4)))
+  }
 }
