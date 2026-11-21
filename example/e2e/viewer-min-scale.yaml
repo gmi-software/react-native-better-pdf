@@ -13,8 +13,12 @@ appId: software.gmi.betterpdf.example
 - tapOn: "Horizontal"
 - extendedWaitUntil: { visible: "Paged", timeout: 5000 }
 - waitForAnimationToEnd
-# A layout change resets the zoom to minScale; the check is at 1×.
+# A layout change resets the zoom to minScale; the check is at 1×. Zooming
+# around the centre leaves the view between pages 1 and 2, so go back to 1.
 - tapOn: "1×"
+- waitForAnimationToEnd
+- tapOn: "First"
+- extendedWaitUntil: { visible: "1 / 100", timeout: 5000 }
 - waitForAnimationToEnd
 - extendedWaitUntil:
     visible: { id: "viewport-status", text: "p 1 · .* · 1.00x" }
