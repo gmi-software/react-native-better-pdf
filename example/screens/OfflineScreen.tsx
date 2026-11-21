@@ -53,6 +53,16 @@ const OFFLINE_DOCUMENTS: OfflineDocument[] = [
       maxAgeMs: 0,
     },
   },
+  {
+    id: 'metadata',
+    title: 'Metadata',
+    source: { uri: `${FIXTURE_SERVER}/metadata.pdf` },
+  },
+  {
+    id: 'locked',
+    title: 'Locked',
+    source: { uri: `${FIXTURE_SERVER}/encrypted.pdf` },
+  },
 ];
 
 type RowState =

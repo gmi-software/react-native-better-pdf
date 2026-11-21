@@ -43,8 +43,7 @@ final class DocumentCacheStore {
   func find(key: String) -> CachedCopy? {
     return lock.withLock {
       prepare()
-      return copy(in: persistentDirectory, key: key, mode: .persistent)
-        ?? copy(in: sessionDirectory, key: key, mode: .session)
+      return currentCopy(key: key)
     }
   }
 
@@ -99,9 +98,16 @@ final class DocumentCacheStore {
   func remove(key: String) -> Bool {
     return lock.withLock {
       prepare()
-      let removedPersistent = deleteCopy(in: persistentDirectory, key: key)
-      let removedSession = deleteCopy(in: sessionDirectory, key: key)
-      return removedPersistent || removedSession
+      return deleteCopies(key: key)
+    }
+  }
+
+  /// Like `remove(key:)`, only while the copy served for `key` is `file`'s inode.
+  func remove(key: String, ifCurrentIs file: URL) -> Bool {
+    return lock.withLock {
+      prepare()
+      guard let current = currentCopy(key: key), Self.isSameFile(current.fileURL, file) else { return false }
+      return deleteCopies(key: key)
     }
   }
 
@@ -197,6 +203,17 @@ final class DocumentCacheStore {
     return directory
   }
 
+  private func currentCopy(key: String) -> CachedCopy? {
+    return copy(in: persistentDirectory, key: key, mode: .persistent)
+      ?? copy(in: sessionDirectory, key: key, mode: .session)
+  }
+
+  private func deleteCopies(key: String) -> Bool {
+    let removedPersistent = deleteCopy(in: persistentDirectory, key: key)
+    let removedSession = deleteCopy(in: sessionDirectory, key: key)
+    return removedPersistent || removedSession
+  }
+
   private func copy(in directory: URL, key: String, mode: PdfCacheMode) -> CachedCopy? {
     let file = pdfFile(in: directory, key: key)
     guard fileManager.fileExists(atPath: file.path) else { return nil }
@@ -244,6 +261,13 @@ final class DocumentCacheStore {
   private func pdfFiles(in directory: URL) -> [URL] {
     let files = (try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
     return files.filter { $0.pathExtension == "pdf" }
+  }
+
+  private static func isSameFile(_ first: URL, _ second: URL) -> Bool {
+    var firstStatus = stat()
+    var secondStatus = stat()
+    guard stat(first.path, &firstStatus) == 0, stat(second.path, &secondStatus) == 0 else { return false }
+    return firstStatus.st_dev == secondStatus.st_dev && firstStatus.st_ino == secondStatus.st_ino
   }
 
   private static func resolvedComponents(of directory: URL) -> [String] {

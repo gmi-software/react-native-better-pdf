@@ -11,4 +11,10 @@ struct ResolvedFile {
   let isStale: Bool
   /// To be unpinned once the document is no longer displayed.
   let pin: URL?
+  var remote: RemoteCopy? = nil
+
+  struct RemoteCopy {
+    let key: String
+    let isDownloaded: Bool
+  }
 }

@@ -1186,6 +1186,23 @@ invalidation, prefetch and offline reading (#952, #964, #572, #566, #689,
 - **Only PDFs are stored.** A `200` that does not start with `%PDF-` within
   1024 bytes (login page, captive portal) fails with `invalid-pdf` instead
   of being kept — persistently — as the document.
+- **A copy that cannot be opened is not kept.** The header check lets a
+  damaged file through (a body without a length that was cut short, a file
+  broken at the source), and without `maxAgeMs` a copy is never asked about
+  again: every retry would reopen it, across launches for a persistent
+  one. So when `PdfView` or `PdfDocument.open` finds a remote copy not to
+  be a PDF (the platform cannot open it, or it has no pages), it removes
+  the copy — only while the store's file is still the one that was opened
+  (same device and inode), so a copy that replaced it meanwhile stays. If
+  the copy was already stored when the open began (a fresh hit, a `304`, a
+  stale fallback), the open downloads once more, without validators as the
+  copy is gone, and reports `invalid-pdf` only if that file cannot be
+  opened either; this also heals copies stored before this rule. A copy
+  the open has just downloaded is not downloaded twice: the server has
+  just sent these bytes. `password-required`, `invalid-password` and
+  `unsupported-pdf` keep the copy (the file is fine), and so does an
+  unexpected exception that the platform reader throws rather than its
+  "not a PDF" answer. `PdfCache.download` never opens what it stores.
 - **Redirects: one policy, ours.** The platforms disagreed and both were
   unsafe: Android (AOSP's OkHttp) refused http → https and sent every
   header but `Authorization` on to other hosts; iOS (CFNetwork) followed

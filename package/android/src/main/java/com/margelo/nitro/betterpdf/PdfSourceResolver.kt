@@ -10,6 +10,7 @@ import android.provider.OpenableColumns
 import android.system.ErrnoException
 import android.system.Os
 import android.system.OsConstants
+import android.system.StructStat
 import com.margelo.nitro.core.ArrayBuffer
 import java.io.File
 import java.io.FileNotFoundException
@@ -31,14 +32,16 @@ class PdfSourceResolver(private val context: Context) {
 
   @Volatile
   private var cancelled = false
-  private val remoteDone = CountDownLatch(1)
+
+  @Volatile
+  private var remoteDone: CountDownLatch? = null
   private val contentCancellation = CancellationSignal()
 
   /** Aborts an in-flight download or copy; [open] then throws [InterruptedException]. Safe from any thread. */
   fun cancel() {
     cancelled = true
     subscription?.cancel()
-    remoteDone.countDown()
+    remoteDone?.countDown()
     contentCancellation.cancel()
   }
 
@@ -207,34 +210,59 @@ class PdfSourceResolver(private val context: Context) {
     // Written on a download thread before the latch opens; read after.
     var delivered: CachedCopy? = null
     var deliveredStale = false
+    var deliveredDownloaded = false
     var deliveredFailure: PdfFailure? = null
-    subscription = DocumentCache.shared(context).fetch(
+    val done = CountDownLatch(1)
+    remoteDone = done
+    val cache = DocumentCache.shared(context)
+    subscription = cache.fetch(
       source,
       allowStale = true,
       object : DocumentCache.Listener {
         override fun onProgress(loadedBytes: Long, totalBytes: Long?, isComplete: Boolean) =
           onProgress(loadedBytes, totalBytes, isComplete)
 
-        override fun onReady(copy: CachedCopy, isStale: Boolean) {
+        override fun onReady(copy: CachedCopy, isStale: Boolean, isDownloaded: Boolean) {
           delivered = copy
           deliveredStale = isStale
-          remoteDone.countDown()
+          deliveredDownloaded = isDownloaded
+          done.countDown()
         }
 
         override fun onFailed(failure: PdfFailure) {
           deliveredFailure = failure
-          remoteDone.countDown()
+          done.countDown()
         }
       },
     )
     // cancel() may have run before the subscription existed.
-    if (cancelled) subscription?.cancel()
-    remoteDone.await()
+    if (cancelled) {
+      subscription?.cancel()
+      throw InterruptedException()
+    }
+    done.await()
     if (cancelled) throw InterruptedException()
     deliveredFailure?.let { throw it }
     val copy = delivered ?: throw IllegalStateException("The cache delivered no copy")
-    return openFile(copy.file).copy(isStale = deliveredStale)
+    val resolved = openFile(copy.file)
+    // The path may lead to a newer copy by the time it is discarded.
+    val opened = try {
+      Os.fstat(resolved.descriptor.fileDescriptor)
+    } catch (_: ErrnoException) {
+      null
+    }
+    val remote = RemoteCopy(deliveredDownloaded) {
+      if (opened != null) cache.discard(copy) { it.isSameFile(opened) }
+    }
+    return resolved.copy(isStale = deliveredStale, remote = remote)
   }
+
+  private fun File.isSameFile(opened: StructStat): Boolean =
+    try {
+      Os.stat(path).let { it.st_dev == opened.st_dev && it.st_ino == opened.st_ino }
+    } catch (_: ErrnoException) {
+      false
+    }
 
   private fun cacheDirectory(): File =
     File(context.cacheDir, "BetterPdf").apply { mkdirs() }

@@ -43,10 +43,10 @@ internal class DocumentSources(
     var master: ParcelFileDescriptor? = null
     var renderer: DocumentRenderer? = null
     var pagesOpenedByRenderer = 0
-    var filePath: String? = null
+    var resolvedSource: ResolvedSource? = null
       private set
-    var isStale = false
-      private set
+    val filePath: String? get() = resolvedSource?.file?.path
+    val isStale: Boolean get() = resolvedSource?.isStale == true
 
     /** Set once the file's links are read: the renderer's are not read then. */
     @Volatile var hasFileLinks = false
@@ -55,8 +55,7 @@ internal class DocumentSources(
     val reads = DocumentReads(source.password) { duplicate(this) }
 
     fun resolved(file: ResolvedSource) {
-      filePath = file.file?.path
-      isStale = file.isStale
+      resolvedSource = file
       synchronized(lock) { master = file.descriptor }
     }
   }
@@ -82,12 +81,7 @@ internal class DocumentSources(
     val failure = AtomicReference<Throwable?>()
     fun resolveOrCancel(segment: Segment) {
       try {
-        segment.attributed {
-          val file = segment.resolver.openSource(segment.source) { loadedBytes, totalBytes, isComplete ->
-            progress.report(segment.index, loadedBytes, totalBytes, isComplete)
-          }
-          segment.resolved(file)
-        }
+        segment.attributed { resolve(segment, progress) }
       } catch (error: Throwable) {
         if (failure.compareAndSet(null, error)) cancel()
       }
@@ -111,16 +105,29 @@ internal class DocumentSources(
     failure.get()?.let { throw it }
   }
 
+  private fun resolve(segment: Segment, progress: SourcesProgress): ResolvedSource =
+    segment.resolver.openSource(segment.source) { loadedBytes, totalBytes, isComplete ->
+      progress.report(segment.index, loadedBytes, totalBytes, isComplete)
+    }.also(segment::resolved)
+
   /** Opens every source's renderer, which stays open: its page count and the size of its first page. Worker thread. */
-  fun openFirstPages(): List<Pair<Int, PdfDocumentLayout.PageSize>> = segments.map { segment ->
+  fun openFirstPages(progress: SourcesProgress): List<Pair<Int, PdfDocumentLayout.PageSize>> = segments.map { segment ->
     segment.attributed {
-      val renderer = rendererFor(segment)
-      val pageCount = renderer.pageCount
-      if (pageCount <= 0) throw PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF has no pages")
-      val size = renderer.openPage(0).use { page -> PdfDocumentLayout.PageSize(page.width.toFloat(), page.height.toFloat()) }
-      segment.pagesOpenedByRenderer = 1
-      pageCount to size
+      checkNotNull(segment.resolvedSource).readOrRefetch(reopen = {
+        closeRenderer(segment)
+        close(segment)
+        resolve(segment, progress)
+      }) { openFirstPage(segment) }
     }
+  }
+
+  private fun openFirstPage(segment: Segment): Pair<Int, PdfDocumentLayout.PageSize> {
+    val renderer = rendererFor(segment)
+    val pageCount = renderer.pageCount
+    if (pageCount <= 0) throw PdfFailure(PdfErrorCode.INVALID_PDF, "The PDF has no pages")
+    val size = renderer.openPage(0).use { page -> PdfDocumentLayout.PageSize(page.width.toFloat(), page.height.toFloat()) }
+    segment.pagesOpenedByRenderer = 1
+    return pageCount to size
   }
 
   /** Opens [at] with its source's renderer; [counted] page opens count towards re-creating it. Worker thread. */
@@ -203,10 +210,12 @@ internal class DocumentSources(
   /** Closes every renderer and descriptor. Worker thread. */
   fun closeAll() = segments.forEach { segment ->
     closeRenderer(segment)
-    synchronized(lock) {
-      segment.master?.closeQuietly()
-      segment.master = null
-    }
+    close(segment)
+  }
+
+  private fun close(segment: Segment) = synchronized(lock) {
+    segment.master?.closeQuietly()
+    segment.master = null
   }
 
   /** [block]'s failure as one of this source's: what cannot be opened is named by its index. */

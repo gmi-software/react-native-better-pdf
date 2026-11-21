@@ -9,10 +9,14 @@ import com.margelo.nitro.betterpdf.PdfMethodException.Code
 import com.margelo.nitro.betterpdf.TextSelectionQuery.Boundary
 import com.margelo.nitro.betterpdf.outline.FormFieldEntry
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.CountDownLatch
@@ -28,6 +32,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * reach the renderer and then fail; a render callback shows the work ran.
  */
 class PdfDocumentSessionTest {
+  @get:Rule
+  val temp = TemporaryFolder()
+
   private val mainThread = LinkedBlockingQueue<Runnable>()
   private val listener = RecordingListener()
   private val renderer = FakeRenderer()
@@ -285,6 +292,155 @@ class PdfDocumentSessionTest {
     assertNull(listener.failures.last().sourceIndex)
   }
 
+  // region Remote copies the renderer cannot open
+
+  @Test
+  fun `a stored copy the renderer rejects is removed and downloaded once more`() {
+    val remote = RemoteDocument(downloads = listOf(READABLE))
+    remote.store(DAMAGED)
+    start(openRenderer = remote::openRenderer, openSource = { remote.open() })
+
+    runUntil("the load to end") { listener.opened || listener.failures.isNotEmpty() }
+    assertEquals(emptyList<PdfFailure>(), listener.failures)
+    assertEquals(2, remote.resolves.get())
+    assertEquals(READABLE, remote.stored()?.file?.readText())
+    assertEquals(listOf("discard", "close"), remote.events.take(2))
+  }
+
+  @Test
+  fun `a copy downloaded again and still rejected fails with invalid-pdf and is not kept`() {
+    val remote = RemoteDocument(downloads = listOf(DAMAGED, READABLE))
+    remote.store(DAMAGED)
+    start(openRenderer = remote::openRenderer, openSource = { remote.open() })
+
+    runUntil("the failure") { listener.opened || listener.failures.isNotEmpty() }
+    assertEquals(PdfErrorCode.INVALID_PDF, listener.failures.single().code)
+    assertEquals(2, remote.resolves.get())
+    assertNull(remote.stored())
+  }
+
+  @Test
+  fun `a copy just downloaded and rejected is removed without another download`() {
+    val remote = RemoteDocument(downloads = listOf(DAMAGED, READABLE))
+    start(openRenderer = remote::openRenderer, openSource = { remote.open() })
+
+    runUntil("the failure") { listener.opened || listener.failures.isNotEmpty() }
+    assertEquals(PdfErrorCode.INVALID_PDF, listener.failures.single().code)
+    assertEquals(1, remote.resolves.get())
+    assertNull(remote.stored())
+  }
+
+  @Test
+  fun `a copy without pages is treated like one the renderer rejects`() {
+    val remote = RemoteDocument(downloads = listOf(READABLE))
+    remote.store(READABLE)
+    start(openRenderer = { _, _ -> FakeRenderer(pageCount = 0) }, openSource = { remote.open() })
+
+    runUntil("the failure") { listener.opened || listener.failures.isNotEmpty() }
+    assertEquals(PdfErrorCode.INVALID_PDF, listener.failures.single().code)
+    assertEquals(2, remote.resolves.get())
+    assertNull(remote.stored())
+  }
+
+  @Test
+  fun `a stored copy that needs a password or cannot be opened on this device stays`() {
+    for (code in listOf(PdfErrorCode.PASSWORD_REQUIRED, PdfErrorCode.INVALID_PASSWORD, PdfErrorCode.UNSUPPORTED_PDF)) {
+      val remote = RemoteDocument(downloads = emptyList())
+      remote.store(READABLE)
+      val failures = listener.failures.size
+      start(openRenderer = { _, _ -> throw PdfFailure(code, "Locked") }, openSource = { remote.open() })
+
+      runUntil("the failure") { listener.failures.size > failures }
+      assertEquals(code, listener.failures.last().code)
+      assertEquals(1, remote.resolves.get())
+      assertNotNull(remote.stored())
+      assertEquals(emptyList<String>(), remote.events.filter { it == "discard" })
+    }
+  }
+
+  @Test
+  fun `a failure that is not the renderer's verdict on the file leaves the copy`() {
+    val remote = RemoteDocument(downloads = emptyList())
+    remote.store(READABLE)
+    start(openRenderer = { _, _ -> throw IllegalStateException("Out of descriptors") }, openSource = { remote.open() })
+
+    runUntil("the failure") { listener.failures.isNotEmpty() }
+    assertEquals(PdfErrorCode.INVALID_PDF, listener.failures.single().code)
+    assertEquals(1, remote.resolves.get())
+    assertNotNull(remote.stored())
+  }
+
+  @Test
+  fun `among several sources only the rejected copy is resolved again`() {
+    val remote = RemoteDocument(downloads = listOf(READABLE))
+    remote.store(DAMAGED)
+    val resolves = ConcurrentHashMap<String, AtomicInteger>()
+    start(
+      sources = 3,
+      openRenderer = { descriptor, password -> if (password == "1") remote.openRenderer(descriptor, password) else FakeRenderer() },
+      openSource = { source ->
+        resolves.getOrPut(source.uri) { AtomicInteger() }.incrementAndGet()
+        if (source.uri == "/1.pdf") remote.open() else null
+      },
+    )
+
+    runUntil("the load to end") { listener.opened || listener.failures.isNotEmpty() }
+    assertEquals(emptyList<PdfFailure>(), listener.failures)
+    assertEquals(mapOf("/0.pdf" to 1, "/1.pdf" to 2, "/2.pdf" to 1), resolves.mapValues { it.value.get() })
+  }
+
+  /** A remote source over a real store: the stored copy, else the next of [downloads]. */
+  private inner class RemoteDocument(downloads: List<String>) {
+    private val downloads = ConcurrentLinkedQueue(downloads)
+    private val store = DocumentCacheStore(
+      sessionDirectory = temp.newFolder(),
+      persistentDirectory = temp.newFolder(),
+      partialDirectory = temp.newFolder(),
+      legacyDirectory = null,
+      link = { existing, link -> Files.createLink(link.toPath(), existing.toPath()) },
+    )
+    private val cache = DocumentCache(createStore = { store }, executor = Executor { it.run() })
+    private val source = NativePdfSource("https://example.com/doc.pdf", base64 = null, headers = null, cache = null, maxAgeMs = null, cacheKey = null, password = null)
+    private val damaged = ConcurrentHashMap.newKeySet<ParcelFileDescriptor>()
+    val resolves = AtomicInteger()
+
+    val events = ConcurrentLinkedQueue<String>()
+
+    fun store(content: String): CachedCopy {
+      val partial = store.newPartialFile(source.storeKey()).also { it.writeText(content) }
+      return store.commit(source.storeKey(), partial, PdfCacheMode.SESSION, CacheMetadata(0, null, null))
+    }
+
+    fun stored(): CachedCopy? = cache.find(source)
+
+    fun open(): ResolvedSource {
+      resolves.incrementAndGet()
+      val stored = stored()
+      val copy = stored ?: store(downloads.remove())
+      val opened = File(temp.root, "opened-${System.nanoTime()}").also { Files.createLink(it.toPath(), copy.file.toPath()) }
+      val descriptor = object : ParcelFileDescriptor(null as ParcelFileDescriptor?) {
+        override fun dup(): ParcelFileDescriptor = this
+
+        override fun close() {
+          events += "close"
+        }
+      }
+      if (copy.file.readText() == DAMAGED) damaged += descriptor
+      val remote = RemoteCopy(isDownloaded = stored == null) {
+        events += "discard"
+        cache.discard(copy) { Files.isSameFile(it.toPath(), opened.toPath()) }
+      }
+      return ResolvedSource(descriptor, copy.file, remote = remote)
+    }
+
+    fun openRenderer(descriptor: ParcelFileDescriptor, @Suppress("UNUSED_PARAMETER") password: String?): DocumentRenderer {
+      if (descriptor in damaged) throw PdfFailure(PdfErrorCode.INVALID_PDF, "The file is not a readable PDF document")
+      return FakeRenderer()
+    }
+  }
+
+  // endregion
+
   /**
    * A session of [sources] files, `/0.pdf`, `/1.pdf` …, each with its index
    * as password. [openSource] may throw for a source; it returns null to
@@ -293,7 +449,7 @@ class PdfDocumentSessionTest {
   private fun start(
     sources: Int = 1,
     openRenderer: (ParcelFileDescriptor, String?) -> DocumentRenderer = { _, _ -> renderer },
-    openSource: (NativePdfSource) -> Unit? = { null },
+    openSource: (NativePdfSource) -> ResolvedSource? = { null },
     runOnMain: Executor = Executor { mainThread.add(it) },
   ): PdfDocumentSession {
     val context = object : ContextWrapper(null) {
@@ -313,10 +469,7 @@ class PdfDocumentSessionTest {
       bitmapPool = BitmapPool(maxBytes = 0),
       listener = listener,
       mainThread = runOnMain,
-      openSource = { source, _ ->
-        openSource(source)
-        ResolvedSource(descriptor, file = null)
-      },
+      openSource = { source, _ -> openSource(source) ?: ResolvedSource(descriptor, file = null) },
       openRenderer = openRenderer,
     ).also { it.start() }
   }
@@ -427,5 +580,7 @@ class PdfDocumentSessionTest {
   private companion object {
     const val TIMEOUT_SECONDS = 5L
     const val READS = 20
+    const val READABLE = "readable"
+    const val DAMAGED = "damaged"
   }
 }

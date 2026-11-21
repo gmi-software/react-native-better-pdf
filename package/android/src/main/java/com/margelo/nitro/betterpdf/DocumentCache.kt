@@ -30,7 +30,7 @@ internal class DocumentCache(
      * The copy to open. [isStale]: older than the source's `maxAgeMs`, shown
      * because the server could not be reached (only with `allowStale`).
      */
-    fun onReady(copy: CachedCopy, isStale: Boolean)
+    fun onReady(copy: CachedCopy, isStale: Boolean, isDownloaded: Boolean)
 
     fun onFailed(failure: PdfFailure)
   }
@@ -72,6 +72,10 @@ internal class DocumentCache(
   /** Blocking; see [DocumentCacheStore.remove]. */
   fun remove(source: NativePdfSource): Boolean = store.remove(source.storeKey())
 
+  /** Removes [copy] unless a newer copy has replaced it. Blocking. */
+  fun discard(copy: CachedCopy, isOpened: (File) -> Boolean): Boolean =
+    store.remove(copy.file.nameWithoutExtension, isOpened)
+
   /** Blocking; see [DocumentCacheStore.clear]. */
   fun clear() = store.clear()
 
@@ -91,7 +95,7 @@ internal class DocumentCache(
     val key = source.storeKey()
     val copy = store.find(key)
     if (copy != null && copy.metadata.isFresh(source.maxAgeMs, clock())) {
-      return deliverReady(subscriber, copy, isStale = false)
+      return deliverReady(subscriber, copy, isStale = false, isDownloaded = false)
     }
     synchronized(lock) {
       if (subscriber.isCancelled) return
@@ -143,16 +147,20 @@ internal class DocumentCache(
     }
     for (subscriber in subscribers) {
       when (outcome) {
-        is DownloadOutcome.Stored -> deliverReady(subscriber, outcome.copy, isStale = false)
+        is DownloadOutcome.Stored -> deliverReady(subscriber, outcome.copy, isStale = false, isDownloaded = outcome.isDownloaded)
         is DownloadOutcome.Failed -> {
           val stale = if (subscriber.allowStale && outcome.isServerUnreachable) store.find(download.key) else null
-          if (stale != null) deliverReady(subscriber, stale, isStale = true) else deliverFailure(subscriber, outcome.failure)
+          if (stale != null) {
+            deliverReady(subscriber, stale, isStale = true, isDownloaded = false)
+          } else {
+            deliverFailure(subscriber, outcome.failure)
+          }
         }
       }
     }
   }
 
-  private fun deliverReady(subscriber: Subscriber, copy: CachedCopy, isStale: Boolean) {
+  private fun deliverReady(subscriber: Subscriber, copy: CachedCopy, isStale: Boolean, isDownloaded: Boolean) {
     val delivered = if (subscriber.source.cache == PdfCacheMode.PERSISTENT) {
       try {
         store.promote(copy)
@@ -162,7 +170,7 @@ internal class DocumentCache(
     } else {
       copy
     }
-    if (!isCancelled(subscriber)) subscriber.listener.onReady(delivered, isStale)
+    if (!isCancelled(subscriber)) subscriber.listener.onReady(delivered, isStale, isDownloaded)
   }
 
   private fun deliverFailure(subscriber: Subscriber, failure: PdfFailure) {

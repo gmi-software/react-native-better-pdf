@@ -43,7 +43,7 @@ class HybridBetterPdfCache : HybridBetterPdfCacheSpec() {
           if (emit) reportProgress(PdfLoadProgressEvent(loadedBytes.toDouble(), totalBytes?.toDouble()))
         }
 
-        override fun onReady(copy: CachedCopy, isStale: Boolean) {
+        override fun onReady(copy: CachedCopy, isStale: Boolean, isDownloaded: Boolean) {
           finished.set(true)
           downloads.remove(requestId)
           promise.resolve(PdfDownloadResult(entry = copy.toPdfCacheEntry(), error = null))
