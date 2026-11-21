@@ -4,9 +4,6 @@ import android.graphics.Bitmap
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
-import android.print.PrintJob
-import android.print.PrintJobInfo
-import android.print.PrintManager
 import android.view.View
 import androidx.annotation.Keep
 import com.facebook.proguard.annotations.DoNotStrip
@@ -447,59 +444,15 @@ class HybridBetterPdfView(
           error != null -> promise.fail(error)
           // Closed or replaced meanwhile: no dialog over another screen.
           loaded !== document -> promise.reject(PdfMethodException.closed())
-          else -> openPrintDialog(document.session, jobName, document.pageCount, promise)
+          else ->
+            printDialog.open(ReactPrintHost(context), jobName, document.pageCount, document.session::writeForPrinting, promise::settle)
         }
       }
     }
     promise
   }
 
-  private fun openPrintDialog(session: PdfDocumentSession, jobName: String, pageCount: Int, promise: Promise<PdfPrintResult>) {
-    val activity = context.currentActivity
-    when {
-      activity == null -> promise.reject(PdfMethodException(Code.BUSY, "Printing needs the app in the foreground"))
-      printJob != null -> promise.reject(PdfMethodException(Code.BUSY, "A print dialog is already open"))
-      else -> try {
-        var job: PrintJob? = null
-        val adapter = PdfPrintAdapter(printFileName(jobName), pageCount, session::writeForPrinting) {
-          printJob = null
-          val opened = job
-          if (opened == null) promise.resolve(PdfPrintResult(isSubmitted = false)) else settlePrint(opened, promise, PRINT_SETTLE_POLLS)
-        }
-        job = activity.getSystemService(PrintManager::class.java).print(jobName, adapter, null)
-        printJob = job
-      } catch (error: Exception) {
-        promise.fail(error)
-      }
-    }
-  }
-
-  /** The job of the open print dialog (main thread). */
-  private var printJob: PrintJob? = null
-
-  /**
-   * Resolves once [job] has left the state it is created in. When the
-   * dialog closes, a saved or printed job is already queued or completed,
-   * but a cancelled one is still "created" and turns cancelled a moment
-   * later (measured: under 500 ms on API 37), so wait for that.
-   */
-  private fun settlePrint(job: PrintJob, promise: Promise<PdfPrintResult>, polls: Int) {
-    when (job.info.state) {
-      PrintJobInfo.STATE_CREATED ->
-        if (polls > 0) {
-          mainHandler.postDelayed({ settlePrint(job, promise, polls - 1) }, PRINT_SETTLE_INTERVAL_MS)
-        } else {
-          promise.resolve(PdfPrintResult(isSubmitted = false))
-        }
-      PrintJobInfo.STATE_CANCELED -> promise.resolve(PdfPrintResult(isSubmitted = false))
-      PrintJobInfo.STATE_FAILED -> promise.reject(PdfMethodException(Code.IO_ERROR, "The print job failed"))
-      else -> promise.resolve(PdfPrintResult(isSubmitted = true))
-    }
-  }
-
-  /** Saving as PDF names the file after the document; it needs the extension. */
-  private fun printFileName(jobName: String): String =
-    if (jobName.endsWith(".pdf", ignoreCase = true)) jobName else "$jobName.pdf"
+  private val printDialog = PrintDialog { delayMs, task -> mainHandler.postDelayed(task, delayMs) }
 
   override fun getStats(): PdfViewStats {
     val session = session
@@ -650,13 +603,6 @@ class HybridBetterPdfView(
   }
 
   // endregion
-
-  private companion object {
-    const val PRINT_SETTLE_INTERVAL_MS = 50L
-
-    /** 2 s in all. */
-    const val PRINT_SETTLE_POLLS = 40
-  }
 }
 
 /** Resolves with [result]'s value, or rejects with its error. */

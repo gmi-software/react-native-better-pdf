@@ -19,12 +19,24 @@ if (result?.isSubmitted) showToast('Sent to the printer');
   the foreground (`busy`), when the view closes or its `source` changes
   before the dialog opens (`closed`; a filled-in form, and on iOS a
   protected document, is prepared first: seconds when the document is
-  long), and on iOS when the device cannot print (`not-supported`) or the
-  document's permissions forbid printing (`not-permitted`; Android has no
-  API to read them and prints anyway). Also rejects for a view showing
+  long), when the device cannot print (`not-supported`), and on iOS when
+  the document's permissions forbid printing (`not-permitted`; Android has
+  no API to read them and prints anyway). Also rejects for a view showing
   several sources (`not-supported`, see
   [Several documents as one](sources-and-loading.md#several-documents-as-one)).
   On iPad the dialog opens as a popover from the view.
+- On Android a device cannot print when it has no print service (Android
+  TV, for example) or when the system opens no dialog, as it does when a
+  device policy disables printing. The app is in the foreground while
+  `AppState` is `active`. The result of a dialog arrives once the app is
+  there again, so a `print()` called from it opens the next dialog. An
+  app still in the background 2 s after the dialog closed gets the result
+  anyway; a `print()` from it rejects with `busy` until `AppState` is
+  `active`. The result tells how the dialog ended: a job cancelled in the
+  print queue afterwards was still submitted. When the system destroys
+  the Activity under the dialog, the dialog closes with it and the
+  promise resolves, with `isSubmitted: false` unless the job was already
+  submitted.
 - Printing a file the app already has needs no viewer: `onLoad`'s
   `filePath` works with `expo-print` or `react-native-print`. This method
   adds what they cannot: protected documents, `content://` sources, and the
