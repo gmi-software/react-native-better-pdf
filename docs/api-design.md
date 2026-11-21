@@ -1758,6 +1758,30 @@ file path), and anchoring the dialog to the viewer on iPad.
   "cancelled" within 500 ms, while a saved job is already "completed"
   (measured on API 37). The view waits up to 2 s for the job to leave
   "created".
+- **On Android the promise settles whatever the print framework does.**
+  `PrintManager.print` tells the caller nothing in three cases. Without
+  the `android.software.print` feature it returns null and never calls
+  the adapter: the view checks the feature first (`not-supported`, as on
+  iOS). With the feature, a null job means the system opened no dialog:
+  also `not-supported`, because the cause seen is a device policy and a
+  retry cannot help; the system then still finishes the adapter, which
+  must not settle a second time. And when the Activity is destroyed under
+  the dialog, the framework drops the adapter's `onFinish`: the view
+  watches that Activity and settles from the job's state, `false` unless
+  the job was already submitted. Before, such a promise settled only if
+  the garbage collector found it (Nitro then rejects it as `unknown`,
+  "JPromise was destroyed").
+- **`busy` in the background is checked, not inferred.** React Native
+  keeps its current Activity while the app is paused or stopped, so "no
+  Activity" did not mean "in the background": a `print()` that reached
+  the framework from the background (it waits for form work first)
+  started a job, Android blocked the dialog (`BAL_BLOCK`), nothing
+  finished the adapter, and every later `print()` of the view found a
+  dialog "already open". The view now reads the React host's lifecycle
+  state, the one `AppState` reports as `active`. The result waits for the
+  same state, within the 2 s it may wait for the job: the adapter's
+  `onFinish` arrives before the Activity resumes (50 ms on API 37), and a
+  `print()` called from the result would be refused.
 - **Permissions:** iOS refuses documents whose permissions forbid printing
   (`allowsPrinting`); Android's `PdfRenderer` exposes no permissions, so
   it prints them.
@@ -1773,7 +1797,12 @@ file path), and anchoring the dialog to the viewer on iPad.
   Print opens no dialog over the list. Not tested: submitting on iOS (a
   simulator has no printer; Printer Simulator is not installed), a
   `source` change during preparation (the example has no control for it;
-  the same check covers it) and real printers.
+  the same check covers it) and real printers. Android's settling is
+  tested on the JVM (`PrintDialogTest`) and was run once by hand on
+  emulators: "Don't keep activities" (API 37: resolved 0.6 s after the
+  Activity was destroyed), a `print()` from the background (`busy`, no
+  dialog), the `no_printing` user restriction (`not-supported`) and an
+  Android TV image without the print feature (API 36: `not-supported`).
 
 ## Documents without a view
 
