@@ -102,12 +102,25 @@ final class DocumentCacheStore {
     }
   }
 
-  /// Like `remove(key:)`, only while the copy served for `key` is `file`'s inode.
-  func remove(key: String, ifCurrentIs file: URL) -> Bool {
+  /// Like `remove(key:)`, only while the copy served for `key` is `file`.
+  func remove(key: String, ifCurrentIs file: FileIdentity) -> Bool {
     return lock.withLock {
       prepare()
-      guard let current = currentCopy(key: key), Self.isSameFile(current.fileURL, file) else { return false }
+      guard let current = currentCopy(key: key), FileIdentity(current.fileURL) == file else { return false }
       return deleteCopies(key: key)
+    }
+  }
+
+  /// A file whatever its name: a pin and its copy are the same file.
+  struct FileIdentity: Equatable {
+    let device: dev_t
+    let inode: ino_t
+
+    init?(_ url: URL) {
+      var status = stat()
+      guard stat(url.path, &status) == 0 else { return nil }
+      device = status.st_dev
+      inode = status.st_ino
     }
   }
 
@@ -261,13 +274,6 @@ final class DocumentCacheStore {
   private func pdfFiles(in directory: URL) -> [URL] {
     let files = (try? fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
     return files.filter { $0.pathExtension == "pdf" }
-  }
-
-  private static func isSameFile(_ first: URL, _ second: URL) -> Bool {
-    var firstStatus = stat()
-    var secondStatus = stat()
-    guard stat(first.path, &firstStatus) == 0, stat(second.path, &secondStatus) == 0 else { return false }
-    return firstStatus.st_dev == secondStatus.st_dev && firstStatus.st_ino == secondStatus.st_ino
   }
 
   private static func resolvedComponents(of directory: URL) -> [String] {

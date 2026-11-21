@@ -308,6 +308,17 @@ class PdfDocumentSessionTest {
   }
 
   @Test
+  fun `a persistent copy downloaded again stays persistent`() {
+    val remote = RemoteDocument(downloads = listOf(READABLE))
+    remote.store(DAMAGED, PdfCacheMode.PERSISTENT)
+    start(openRenderer = remote::openRenderer, openSource = { remote.open(it) })
+
+    runUntil("the load to end") { listener.opened || listener.failures.isNotEmpty() }
+    assertEquals(emptyList<PdfFailure>(), listener.failures)
+    assertEquals(PdfCacheMode.PERSISTENT, remote.stored()?.mode)
+  }
+
+  @Test
   fun `a copy downloaded again and still rejected fails with invalid-pdf and is not kept`() {
     val remote = RemoteDocument(downloads = listOf(DAMAGED, READABLE))
     remote.store(DAMAGED)
@@ -406,17 +417,18 @@ class PdfDocumentSessionTest {
 
     val events = ConcurrentLinkedQueue<String>()
 
-    fun store(content: String): CachedCopy {
+    fun store(content: String, mode: PdfCacheMode = PdfCacheMode.SESSION): CachedCopy {
       val partial = store.newPartialFile(source.storeKey()).also { it.writeText(content) }
-      return store.commit(source.storeKey(), partial, PdfCacheMode.SESSION, CacheMetadata(0, null, null))
+      return store.commit(source.storeKey(), partial, mode, CacheMetadata(0, null, null))
     }
 
     fun stored(): CachedCopy? = cache.find(source)
 
-    fun open(): ResolvedSource {
+    /** Stores a download as the cache would for [requested]: persistent only when asked. */
+    fun open(requested: NativePdfSource? = null): ResolvedSource {
       resolves.incrementAndGet()
       val stored = stored()
-      val copy = stored ?: store(downloads.remove())
+      val copy = stored ?: store(downloads.remove(), requested?.cache ?: PdfCacheMode.SESSION)
       val opened = File(temp.root, "opened-${System.nanoTime()}").also { Files.createLink(it.toPath(), copy.file.toPath()) }
       val descriptor = object : ParcelFileDescriptor(null as ParcelFileDescriptor?) {
         override fun dup(): ParcelFileDescriptor = this
@@ -426,7 +438,7 @@ class PdfDocumentSessionTest {
         }
       }
       if (copy.file.readText() == DAMAGED) damaged += descriptor
-      val remote = RemoteCopy(isDownloaded = stored == null) {
+      val remote = RemoteCopy(isDownloaded = stored == null, copy.mode) {
         events += "discard"
         cache.discard(copy) { Files.isSameFile(it.toPath(), opened.toPath()) }
       }

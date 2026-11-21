@@ -85,14 +85,13 @@ final class PdfDocumentLoader {
           case .failure(let failure):
             var refetches = false
             if failure.code == .invalidPdf, let remote = file.remote {
-              // Before unpinning: the pin identifies the opened file.
-              if let pin = file.pin { _ = store.remove(key: remote.key, ifCurrentIs: pin) }
+              if let opened = remote.file { _ = store.remove(key: remote.key, ifCurrentIs: opened) }
               refetches = refetchesStoredCopy && !remote.isDownloaded
             }
             if let pin = file.pin { store.unpin(pin) }
-            if refetches {
+            if refetches, let remote = file.remote {
               open(
-                source: source, password: password, isDisplayed: isDisplayed, task: task,
+                source: source.refetching(remote.mode), password: password, isDisplayed: isDisplayed, task: task,
                 progress: progress, refetchesStoredCopy: false, completion: completion
               )
             } else {
@@ -139,9 +138,10 @@ final class PdfDocumentLoader {
           // Without a pin, the copy itself still opens; only its later
           // replacement would affect the separate reads.
           let pin = try? DocumentCache.shared.store.pin(copy)
+          let url = pin ?? copy.fileURL
           completion(.success(ResolvedFile(
-            url: pin ?? copy.fileURL, filePath: copy.fileURL.path, isStale: isStale, pin: pin,
-            remote: .init(key: copy.key, isDownloaded: isDownloaded)
+            url: url, filePath: copy.fileURL.path, isStale: isStale, pin: pin,
+            remote: .init(key: copy.key, mode: copy.mode, isDownloaded: isDownloaded, file: .init(url))
           )))
         },
         onFailed: { completion(.failure($0)) }
@@ -208,5 +208,15 @@ final class PdfDocumentLoader {
       return .failure(PdfLoadFailure(code: .invalidPdf, message: "\(name) has no pages"))
     }
     return .success(document)
+  }
+}
+
+private extension NativePdfSource {
+  /// This source, asking for a persistent copy when the copy it replaces was one.
+  func refetching(_ mode: PdfCacheMode) -> NativePdfSource {
+    guard mode == .persistent else { return self }
+    return NativePdfSource(
+      uri: uri, base64: base64, headers: headers, cache: mode, maxAgeMs: maxAgeMs, cacheKey: cacheKey, password: password
+    )
   }
 }

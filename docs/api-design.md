@@ -1195,9 +1195,13 @@ invalidation, prefetch and offline reading (#952, #964, #572, #566, #689,
   the copy — only while the store's file is still the one that was opened
   (same device and inode), so a copy that replaced it meanwhile stays. If
   the copy was already stored when the open began (a fresh hit, a `304`, a
-  stale fallback), the open downloads once more, without validators as the
-  copy is gone, and reports `invalid-pdf` only if that file cannot be
-  opened either; this also heals copies stored before this rule. A copy
+  stale fallback), the open downloads once more and reports `invalid-pdf`
+  if that file cannot be opened either; this also heals copies stored before
+  this rule. The request has no validators unless it joins a revalidation
+  already in flight for the same key, or a newer copy took the removed
+  one's place (then that copy is the one checked). The new copy keeps the
+  removed one's persistence, and after a stale fallback the open fails with
+  the network or HTTP error, as without a copy. A copy
   the open has just downloaded is not downloaded twice: the server has
   just sent these bytes. `password-required`, `invalid-password` and
   `unsupported-pdf` keep the copy (the file is fine), and so does an

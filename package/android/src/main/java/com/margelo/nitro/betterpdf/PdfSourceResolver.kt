@@ -64,7 +64,7 @@ class PdfSourceResolver(private val context: Context) {
     val parsed = Uri.parse(uri)
     return when (parsed.scheme?.lowercase()) {
       "file" -> openFile(File(parsed.path ?: throw invalidSource(uri)))
-      "http", "https" -> openRemote(source, onProgress)
+      "http", "https" -> openRemote(source, onProgress, retriesMissingCopy = true)
       "content" -> openContent(parsed, onProgress)
       // Release builds resolve `require('./x.pdf')` to a bare resource name.
       null -> openRawResource(uri)
@@ -206,6 +206,7 @@ class PdfSourceResolver(private val context: Context) {
   private fun openRemote(
     source: NativePdfSource,
     onProgress: (loadedBytes: Long, totalBytes: Long?, isComplete: Boolean) -> Unit,
+    retriesMissingCopy: Boolean,
   ): ResolvedSource {
     // Written on a download thread before the latch opens; read after.
     var delivered: CachedCopy? = null
@@ -244,14 +245,20 @@ class PdfSourceResolver(private val context: Context) {
     if (cancelled) throw InterruptedException()
     deliveredFailure?.let { throw it }
     val copy = delivered ?: throw IllegalStateException("The cache delivered no copy")
-    val resolved = openFile(copy.file)
+    val resolved = try {
+      openFile(copy.file)
+    } catch (failure: PdfFailure) {
+      // Another open discarded the copy after the cache delivered it.
+      if (failure.code != PdfErrorCode.FILE_NOT_FOUND || !retriesMissingCopy) throw failure
+      return openRemote(source, onProgress, retriesMissingCopy = false)
+    }
     // The path may lead to a newer copy by the time it is discarded.
     val opened = try {
       Os.fstat(resolved.descriptor.fileDescriptor)
     } catch (_: ErrnoException) {
       null
     }
-    val remote = RemoteCopy(deliveredDownloaded) {
+    val remote = RemoteCopy(deliveredDownloaded, copy.mode) {
       if (opened != null) cache.discard(copy) { it.isSameFile(opened) }
     }
     return resolved.copy(isStale = deliveredStale, remote = remote)

@@ -92,8 +92,8 @@ func run(_ words: [Substring], done: @escaping (String) -> Void) {
     }
     let opened = try! store.pin(commit("%PDF-opened"))
     let newer = try! store.pin(commit("%PDF-newer"))
-    let removedNewer = store.remove(key: key, ifCurrentIs: opened)
-    let removedOpened = store.remove(key: key, ifCurrentIs: newer)
+    let removedNewer = store.remove(key: key, ifCurrentIs: .init(opened)!)
+    let removedOpened = store.remove(key: key, ifCurrentIs: .init(newer)!)
     done("newer \(removedNewer ? "removed" : "kept"), then its own \(removedOpened ? "removed" : "kept")")
   case "fixture":
     let document = PDFDocument()

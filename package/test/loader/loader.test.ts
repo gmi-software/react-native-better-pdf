@@ -195,6 +195,20 @@ describe.skipIf(!isMac)('a downloaded copy that cannot be opened', () => {
     expect(requests.length).toBe(2);
   });
 
+  test('stored persistently stays persistent when an open without cache options replaces it', async () => {
+    answers['/doc.pdf'] = [damaged, pdf];
+    const results = await launch(newHome(), [
+      `download ${url('/doc.pdf')} cache=persistent`,
+      `load ${url('/doc.pdf')}`,
+      `entry ${url('/doc.pdf')}`,
+    ]);
+    expect(results).toEqual([
+      'stored persistent',
+      'loaded pages=1 stale=false',
+      `entry persistent bytes=${pdf.length}`,
+    ]);
+  });
+
   test('downloaded again and still unreadable fails without a third request, and is not kept', async () => {
     answers['/doc.pdf'] = [damaged];
     const results = await launch(newHome(), [

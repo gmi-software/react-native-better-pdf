@@ -95,9 +95,9 @@ class HybridBetterPdfDocument : HybridBetterPdfDocumentSpec() {
     }
     var resolved = resolver.open(source, report)
     val pageCount = try {
-      resolved.readOrRefetch(reopen = {
+      resolved.readOrRefetch(reopen = { mode ->
         resolved.descriptor.closeQuietly()
-        resolver.open(source, report).also { resolved = it }
+        resolver.open(source.refetching(mode), report).also { resolved = it }
       }) { file ->
         // Checks the password and counts pages; nothing stays open.
         val count = DocumentRenderer.openOrFail(file.descriptor.dup(), password).use { it.pageCount }

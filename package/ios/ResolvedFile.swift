@@ -15,6 +15,9 @@ struct ResolvedFile {
 
   struct RemoteCopy {
     let key: String
+    let mode: PdfCacheMode
     let isDownloaded: Bool
+    /// Taken before the file is opened; nil when it could not be read.
+    let file: DocumentCacheStore.FileIdentity?
   }
 }

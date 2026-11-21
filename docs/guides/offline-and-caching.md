@@ -41,8 +41,10 @@ const source: PdfUriSource = {
   again. A copy that was already stored when the open began (by
   `PdfCache.download` or an earlier version, also one the server has just
   confirmed unchanged) is removed and the document downloaded once more
-  within the same open, which fails only if that copy cannot be opened
-  either. A copy that needs a password stays.
+  within the same open, and stays persistent if it was. That download can
+  fail like any other: when the copy was shown because the server could not
+  be reached, the open then fails with `network-error` or `http-error`, as
+  without a copy. A copy that needs a password stays.
 
 `PdfCache` manages the copies without a view, with the same source object:
 

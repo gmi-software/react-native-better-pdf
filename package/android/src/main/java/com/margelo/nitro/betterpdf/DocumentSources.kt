@@ -105,18 +105,18 @@ internal class DocumentSources(
     failure.get()?.let { throw it }
   }
 
-  private fun resolve(segment: Segment, progress: SourcesProgress): ResolvedSource =
-    segment.resolver.openSource(segment.source) { loadedBytes, totalBytes, isComplete ->
+  private fun resolve(segment: Segment, progress: SourcesProgress, source: NativePdfSource = segment.source): ResolvedSource =
+    segment.resolver.openSource(source) { loadedBytes, totalBytes, isComplete ->
       progress.report(segment.index, loadedBytes, totalBytes, isComplete)
     }.also(segment::resolved)
 
   /** Opens every source's renderer, which stays open: its page count and the size of its first page. Worker thread. */
   fun openFirstPages(progress: SourcesProgress): List<Pair<Int, PdfDocumentLayout.PageSize>> = segments.map { segment ->
     segment.attributed {
-      checkNotNull(segment.resolvedSource).readOrRefetch(reopen = {
+      checkNotNull(segment.resolvedSource).readOrRefetch(reopen = { mode ->
         closeRenderer(segment)
         close(segment)
-        resolve(segment, progress)
+        resolve(segment, progress, segment.source.refetching(mode))
       }) { openFirstPage(segment) }
     }
   }
