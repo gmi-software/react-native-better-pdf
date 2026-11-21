@@ -1,5 +1,6 @@
 # onScaleChange: one event per settled zoom change, with the zoom relative
-# to the fitted page; no events during animations or for unchanged values.
+# to the fitted page; no events during animations, rotations or for
+# unchanged values.
 appId: software.gmi.betterpdf.example
 ---
 - runFlow: _start.yaml
@@ -62,4 +63,25 @@ appId: software.gmi.betterpdf.example
 - waitForAnimationToEnd
 - assertVisible: "4 / 5"
 - assertNotVisible: "scale: .*"
+# Rotation keeps the relative zoom and sends nothing.
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd
+- setOrientation: PORTRAIT
+- waitForAnimationToEnd
+- assertVisible: "4 / 5"
+- assertNotVisible: "scale: .*"
+# zoomTo is relative to the page shown, not to the first page.
+- tapOn: "Last"
+- extendedWaitUntil: { visible: "5 / 5", timeout: 5000 }
+- waitForAnimationToEnd
+- tapOn: "2.5×"
+- extendedWaitUntil: { visible: "scale: 2.50 \\(#1\\)", timeout: 5000 }
+# Rotating keeps that page's zoom.
+- setOrientation: LANDSCAPE_LEFT
+- waitForAnimationToEnd
+- setOrientation: PORTRAIT
+- waitForAnimationToEnd
+- assertVisible: "scale: 2.50 \\(#1\\)"
+- tapOn: "1×"
+- extendedWaitUntil: { visible: "scale: 1.00 \\(#2\\)", timeout: 5000 }
 - tapOn: "‹ Back"

@@ -3,7 +3,7 @@
 #   hit no page;
 # - 'width' makes it much longer than the view: in paged mode, Android
 #   scrolls within it before moving on. iOS (PDFKit's page view controller)
-#   turns the page instead; that step is Android-only.
+#   fits each page whole whatever the policy; that step is Android-only.
 appId: software.gmi.betterpdf.example
 ---
 - runFlow: _start.yaml

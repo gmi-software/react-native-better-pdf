@@ -293,7 +293,8 @@ export interface PdfViewProps extends ViewProps {
   horizontal?: boolean;
   /**
    * Show one page at a time: swipes snap to the previous or next page. A
-   * page longer than the view scrolls freely before moving on. While zoomed
+   * page longer than the view scrolls freely before moving on (Android; iOS
+   * fits each page whole, see {@linkcode PdfViewProps.fitPolicy}). While zoomed
    * in, panning is free; zooming back out snaps to a page again. Swipes
    * follow {@linkcode PdfViewProps.horizontal}: vertical by default.
    * Default `false`.
@@ -331,7 +332,9 @@ export interface PdfViewProps extends ViewProps {
    *
    * Android fits every page individually. iOS (PDFKit) applies one scale to
    * the whole continuous document: `'width'` fits the widest page when
-   * scrolling vertically; otherwise the first page is fitted.
+   * scrolling vertically; otherwise the first page is fitted. With
+   * {@linkcode PdfViewProps.enablePaging}, iOS fits each page whole whatever
+   * this says, and zoom is relative to the page shown.
    */
   fitPolicy?: PdfFitPolicy;
   /**
