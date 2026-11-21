@@ -229,14 +229,18 @@ jobs:
           "$sdkmanager" --install "ndk;$ndk_version"
 
       # assembleDebug, not compileDebugKotlin: it also runs CMake, so cpp-adapter.cpp
-      # and the generated JNI bindings get compiled too. Both tasks go in one
+      # and the generated JNI bindings get compiled too. All tasks go in one
       # invocation — a second ./gradlew repays the configuration phase, which
       # shells out to node.
+      #
+      # :content-fixtures is example/modules/content-fixtures. The library's
+      # tasks do not depend on it, so it has to be named to be compiled at all.
       - name: Compile the library and run the Kotlin unit tests
         working-directory: example/android
         run: |
           ./gradlew \
             :react-native-better-pdf:assembleDebug \
             :react-native-better-pdf:testDebugUnitTest \
+            :content-fixtures:assembleDebug \
             -PreactNativeArchitectures=arm64-v8a \
             --no-daemon --console=plain
