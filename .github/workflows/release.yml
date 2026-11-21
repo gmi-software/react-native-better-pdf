@@ -1,10 +1,13 @@
 name: Release
 
-# Publishing is driven by a version tag, not by a commit pushed from CI.
-# `main` requires pull request reviews with `enforce_admins` enabled, so nothing —
-# including github-actions[bot] — can push a release commit to it. The version
-# bump therefore lands through a normal reviewed pull request, and pushing the
+# Publishing is driven by a version tag, not by a commit pushed from CI: `main`
+# is protected, so github-actions[bot] cannot push a release commit to it. The
+# version bump lands through a normal reviewed pull request, and pushing the
 # matching tag afterwards triggers the publish.
+#
+# A run reads this file from its own ref, so the checks in it only catch
+# mistakes. The settings that stop an edited copy from publishing live outside
+# the repository and are listed in RELEASING.md.
 on:
   push:
     tags:
@@ -19,16 +22,53 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # First, so a tag on a branch fails in seconds and not after the native builds.
+  on-main:
+    name: Commit is on main
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # Every branch, so origin/main exists to compare against.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify the commit is on main
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+            echo "::error::origin/main was not fetched, so the commit cannot be checked."
+            exit 1
+          fi
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "$GITHUB_SHA is on main."
+          elif [ "$EVENT_NAME" = 'push' ]; then
+            echo "::error::$GITHUB_REF_NAME points at $GITHUB_SHA, which is not on main. Merge the release pull request, then tag the commit on main."
+            exit 1
+          else
+            # A rehearsal publishes nothing, and its use is to try a release
+            # branch before it is merged.
+            echo "::warning::$GITHUB_SHA is not on main. The rehearsal continues, but a tag on this commit would be rejected."
+          fi
+
   # Native pull request runs are `paths:`-filtered and advisory, so this is the
   # step that actually stops a broken native build from being published.
   native:
+    needs: [on-main]
     permissions:
       contents: read
     uses: ./.github/workflows/native-build.yml
 
   release:
-    needs: [native]
+    needs: [on-main, native]
     runs-on: ubuntu-latest
+    # A rehearsal stays outside the environment: it publishes nothing, and the
+    # environment admits only version tags.
+    environment: ${{ github.event_name == 'push' && 'npm' || '' }}
     permissions:
       # Create the GitHub Release for the pushed tag.
       contents: write
