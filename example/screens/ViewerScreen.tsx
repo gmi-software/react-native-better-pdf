@@ -693,7 +693,16 @@ export function ViewerScreen() {
           title="−10"
           onPress={() => ref.current?.goToPage(Math.max(0, page - 10))}
         />
-        <Button title="+10" onPress={() => ref.current?.goToPage(page + 10)} />
+        <Button
+          title="+10"
+          onPress={() => ref.current?.goToPage(page + 10)}
+          // Both animated calls at once: the page and the zoom asked for
+          // must both be reached.
+          onLongPress={() => {
+            ref.current?.zoomTo(2.5);
+            ref.current?.goToPage(page + 10);
+          }}
+        />
         <Button
           title="Last"
           onPress={() =>
@@ -701,7 +710,15 @@ export function ViewerScreen() {
           }
         />
         <Button title="1×" onPress={() => ref.current?.zoomTo(1)} />
-        <Button title="2.5×" onPress={() => ref.current?.zoomTo(2.5)} />
+        <Button
+          title="2.5×"
+          onPress={() => ref.current?.zoomTo(2.5)}
+          // As the long press on "+10", in the other order.
+          onLongPress={() => {
+            ref.current?.goToPage(page + 10);
+            ref.current?.zoomTo(2.5);
+          }}
+        />
         {/* Bottom row: a top-row button would push "Stats" under the dev-client menu button. */}
         <Button
           title={textSelection ? 'Sel on' : 'Sel off'}
