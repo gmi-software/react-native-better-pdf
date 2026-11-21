@@ -115,21 +115,32 @@ class RenderFailuresTest {
   }
 
   @Test
-  fun `a retry that could not render is available again`() {
+  fun `a retry that submitted nothing is available again`() {
     failures.onOutOfMemory(base(3))
     failures.onOutOfMemory(tile(4))
-    failures.onOutOfMemoryRetrySkipped()
+    failures.onOutOfMemoryRetryDone()
     assertTrue(failures.onOutOfMemory(base(3)))
     assertTrue(failures.onOutOfMemory(tile(4)))
   }
 
   @Test
-  fun `a skipped retry leaves pages whose retry already ran marked`() {
+  fun `a retry is used only by the pages and kinds it submitted`() {
     failures.onOutOfMemory(base(3))
-    failures.onOutOfMemoryRetried()
+    failures.onOutOfMemory(tile(4))
+    // While the viewport moves, tiles are not planned.
+    failures.onSubmitted(listOf(base(3), base(4), PageTextQuery(4)))
+    failures.onOutOfMemoryRetryDone()
     assertFalse(failures.onOutOfMemory(base(3)))
-    assertTrue(failures.onOutOfMemory(base(4)))
-    failures.onOutOfMemoryRetrySkipped()
+    assertTrue(failures.onOutOfMemory(tile(4)))
+  }
+
+  @Test
+  fun `a page whose retry ran keeps its marker when another retry submits nothing`() {
+    failures.onOutOfMemory(base(3))
+    failures.onSubmitted(listOf(base(3)))
+    failures.onOutOfMemoryRetryDone()
+    failures.onOutOfMemory(base(4))
+    failures.onOutOfMemoryRetryDone()
     assertFalse(failures.onOutOfMemory(base(3)))
     assertTrue(failures.onOutOfMemory(base(4)))
   }

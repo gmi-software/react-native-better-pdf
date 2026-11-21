@@ -33,13 +33,16 @@ internal class RenderFailures {
     return true
   }
 
-  /** The delayed retry ran: its pages have used their retry. */
-  fun onOutOfMemoryRetried() {
-    pendingOutOfMemory.clear()
+  /** [requests] were submitted: a pending retry of the same page and kind has run. */
+  fun onSubmitted(requests: List<DocumentWork>) {
+    if (pendingOutOfMemory.isEmpty()) return
+    pendingOutOfMemory.removeAll { pending ->
+      requests.any { it is RenderRequest && it.page == pending.page && it::class == pending::class }
+    }
   }
 
-  /** The delayed retry could not render: its pages keep their retry. */
-  fun onOutOfMemoryRetrySkipped() {
+  /** The delayed retry is over: pages it did not submit keep their retry. */
+  fun onOutOfMemoryRetryDone() {
     pendingOutOfMemory.forEach { outOfMemoryOf(it).remove(it.page) }
     pendingOutOfMemory.clear()
   }

@@ -332,12 +332,8 @@ class PdfDocumentView(context: Context) :
   private var zoomAnimator: ValueAnimator? = null
   private val settleRunnable = Runnable { onSettled() }
   private val retryAfterOutOfMemory = Runnable {
-    if (canRender) {
-      renderFailures.onOutOfMemoryRetried()
-      requestRenders(force = true)
-    } else {
-      renderFailures.onOutOfMemoryRetrySkipped()
-    }
+    requestRenders(force = true)
+    renderFailures.onOutOfMemoryRetryDone()
   }
 
   /** Nothing else ends the scroller or the zoom animation, or schedules the settle. */
@@ -1496,14 +1492,11 @@ class PdfDocumentView(context: Context) :
     return DocumentViewport(anchor, scale, visible, isAtEnd)
   }
 
-  private val canRender: Boolean
-    get() = isAttachedToWindow && windowVisibility == VISIBLE && width > 0 && height > 0
-
   private fun requestRenders(force: Boolean = false) {
     val session = session ?: return
     val layout = layout ?: return
     // Nothing renders while the app's UI is hidden; onWindowVisibilityChanged resumes.
-    if (!canRender) return
+    if (!isAttachedToWindow || windowVisibility != VISIBLE || width <= 0 || height <= 0) return
     val visible = visiblePages()
     val center = layout.pageAt((areaStart + areaLength / 2f) / scale)
     // A single page never shows its neighbours; don't spend memory on them.
@@ -1562,6 +1555,7 @@ class PdfDocumentView(context: Context) :
     if (!force && requests == lastSubmitted) return
     lastSubmitted = requests
     session.submit(requests)
+    renderFailures.onSubmitted(requests)
   }
 
   private fun baseRequest(layout: PdfDocumentLayout, page: Int, scale: Float = this.scale): RenderRequest.Base {
