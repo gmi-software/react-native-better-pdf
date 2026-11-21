@@ -11,6 +11,8 @@ internal class RenderFailures {
   private val reportedPages = HashSet<Int>()
   private val baseOutOfMemory = HashSet<Int>()
   private val tileOutOfMemory = HashSet<Int>()
+  /** Out-of-memory failures whose delayed retry has not run yet. */
+  private val pendingOutOfMemory = ArrayList<RenderRequest>()
 
   fun allowsBase(page: Int): Boolean = (baseFailures[page] ?: 0) < ATTEMPTS
 
@@ -25,12 +27,21 @@ internal class RenderFailures {
   }
 
   /** Returns whether to render [request]'s page again after it ran out of memory. */
-  fun onOutOfMemory(request: RenderRequest): Boolean = outOfMemoryOf(request).add(request.page)
+  fun onOutOfMemory(request: RenderRequest): Boolean {
+    if (!outOfMemoryOf(request).add(request.page)) return false
+    pendingOutOfMemory += request
+    return true
+  }
 
-  /** Makes the out-of-memory retry available again for every page. */
-  fun forgetOutOfMemory() {
-    baseOutOfMemory.clear()
-    tileOutOfMemory.clear()
+  /** The delayed retry ran: its pages have used their retry. */
+  fun onOutOfMemoryRetried() {
+    pendingOutOfMemory.clear()
+  }
+
+  /** The delayed retry could not render: its pages keep their retry. */
+  fun onOutOfMemoryRetrySkipped() {
+    pendingOutOfMemory.forEach { outOfMemoryOf(it).remove(it.page) }
+    pendingOutOfMemory.clear()
   }
 
   fun onRendered(request: RenderRequest) {
@@ -42,7 +53,9 @@ internal class RenderFailures {
     baseFailures.clear()
     tileFailures.clear()
     reportedPages.clear()
-    forgetOutOfMemory()
+    baseOutOfMemory.clear()
+    tileOutOfMemory.clear()
+    pendingOutOfMemory.clear()
   }
 
   private fun failuresOf(request: RenderRequest): HashMap<Int, Int> = when (request) {

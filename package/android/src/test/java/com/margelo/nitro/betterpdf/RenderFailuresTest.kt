@@ -118,8 +118,19 @@ class RenderFailuresTest {
   fun `a retry that could not render is available again`() {
     failures.onOutOfMemory(base(3))
     failures.onOutOfMemory(tile(4))
-    failures.forgetOutOfMemory()
+    failures.onOutOfMemoryRetrySkipped()
     assertTrue(failures.onOutOfMemory(base(3)))
     assertTrue(failures.onOutOfMemory(tile(4)))
+  }
+
+  @Test
+  fun `a skipped retry leaves pages whose retry already ran marked`() {
+    failures.onOutOfMemory(base(3))
+    failures.onOutOfMemoryRetried()
+    assertFalse(failures.onOutOfMemory(base(3)))
+    assertTrue(failures.onOutOfMemory(base(4)))
+    failures.onOutOfMemoryRetrySkipped()
+    assertFalse(failures.onOutOfMemory(base(3)))
+    assertTrue(failures.onOutOfMemory(base(4)))
   }
 }

@@ -332,8 +332,12 @@ class PdfDocumentView(context: Context) :
   private var zoomAnimator: ValueAnimator? = null
   private val settleRunnable = Runnable { onSettled() }
   private val retryAfterOutOfMemory = Runnable {
-    // A retry that cannot render now stays available for the next out-of-memory render.
-    if (canRender) requestRenders(force = true) else renderFailures.forgetOutOfMemory()
+    if (canRender) {
+      renderFailures.onOutOfMemoryRetried()
+      requestRenders(force = true)
+    } else {
+      renderFailures.onOutOfMemoryRetrySkipped()
+    }
   }
 
   /** Nothing else ends the scroller or the zoom animation, or schedules the settle. */
