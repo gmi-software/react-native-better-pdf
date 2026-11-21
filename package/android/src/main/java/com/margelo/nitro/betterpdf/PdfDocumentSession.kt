@@ -29,8 +29,9 @@ import kotlin.math.sqrt
  * page ([SourcePages.locate]), here, on the worker thread.
  *
  * Why a single thread: `PdfRenderer` allows only one open page at a time, so
- * parallel rendering of one document is impossible (and PDFium's lock is
- * process-wide, so neither is rendering several). Why a replaceable queue
+ * parallel rendering of one document is impossible (and renderers share one
+ * process-wide lock, the platform's from Android 7.1.1 and [RendererLock]
+ * before, so neither is rendering several). Why a replaceable queue
  * instead of an executor: once `Page.render` starts it cannot be
  * interrupted, so the only effective cancellation is to drop work *before*
  * it starts. The UI thread re-submits the full wanted list on every viewport
