@@ -200,12 +200,20 @@ function warnIgnoredKeys(
   kind: 'filePath' | 'base64',
 ): void {
   if (!isDevelopment()) return;
+  // A getter that throws still names a key the source has.
+  const read = (key: string): unknown => {
+    try {
+      return source[key];
+    } catch {
+      return true;
+    }
+  };
   const ignored = [
     ...(kind === 'filePath' ? ['base64', 'uri'] : ['uri']).filter(
-      (key) => source[key] !== undefined,
+      (key) => read(key) !== undefined,
     ),
     // `null` options are absent, as on uri sources.
-    ...uriOnlyKeys.filter((key) => source[key] != null),
+    ...uriOnlyKeys.filter((key) => read(key) != null),
   ];
   if (ignored.length === 0) return;
   const combination = `${kind}:${ignored.join(',')}`;
@@ -236,17 +244,21 @@ export function validateSourceItem(
     return invalid();
   }
   const obj = source as Record<string, unknown>;
-  const { filePath, base64, uri } = obj;
+  // Read in order of precedence, so a key the source ignores is never read
+  // outside development.
+  const { filePath } = obj;
   if (filePath !== undefined) {
     if (typeof filePath !== 'string') return invalid();
     warnIgnoredKeys(obj, 'filePath');
     return { ok: true, source: { uri: filePath } };
   }
+  const { base64 } = obj;
   if (base64 !== undefined) {
     if (typeof base64 !== 'string') return invalid();
     warnIgnoredKeys(obj, 'base64');
     return { ok: true, source: { uri: '', base64 } };
   }
+  const { uri } = obj;
   if (typeof uri === 'string') return uriSourceResult(uri, obj);
   return invalid();
 }

@@ -535,6 +535,37 @@ describe('ignored source keys', () => {
     expect(warnings).toEqual([]);
   });
 
+  test('ignores keys whose getters throw, in development and outside it', () => {
+    const throwing = (kind: Record<string, unknown>) =>
+      Object.defineProperties(kind, {
+        uri: {
+          enumerable: true,
+          get: () => {
+            throw new Error('uri');
+          },
+        },
+        cache: {
+          enumerable: true,
+          get: () => {
+            throw new Error('cache');
+          },
+        },
+      });
+    for (const dev of [true, false]) {
+      globals.__DEV__ = dev;
+      expect(validatedSource(throwing({ filePath: '/a.pdf' }))).toStrictEqual({
+        uri: '/a.pdf',
+      });
+      expect(
+        validatedSource(throwing({ base64: 'JVBERi0xLjQK' })),
+      ).toStrictEqual({ uri: '', base64: 'JVBERi0xLjQK' });
+    }
+    expect(warnings).toEqual([
+      expect.stringContaining('A source with filePath ignores uri, cache.'),
+      expect.stringContaining('A source with base64 ignores uri, cache.'),
+    ]);
+  });
+
   test('stays silent outside development', () => {
     for (const dev of [false, undefined]) {
       if (dev === undefined) delete globals.__DEV__;
