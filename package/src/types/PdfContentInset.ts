@@ -9,6 +9,6 @@ import type { PdfViewProps } from '../PdfView';
  * @see {@linkcode PdfViewProps.contentInset}
  */
 export interface PdfContentInset {
-  top?: number;
-  bottom?: number;
+  top?: number | undefined;
+  bottom?: number | undefined;
 }

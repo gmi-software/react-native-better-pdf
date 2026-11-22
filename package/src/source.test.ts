@@ -367,3 +367,73 @@ describe('invalid and empty sources', () => {
     });
   });
 });
+
+describe('explicit undefined', () => {
+  const uri = 'https://x.test/a.pdf';
+  const undefinedOptions = {
+    headers: undefined,
+    cache: undefined,
+    maxAgeMs: undefined,
+    cacheKey: undefined,
+    password: undefined,
+  };
+
+  test('is absent for every optional field of a uri source', () => {
+    expect(validatedSource({ uri, ...undefinedOptions })).toStrictEqual({
+      uri,
+    });
+    expect(normalizeUriSource({ uri, ...undefinedOptions })).toStrictEqual({
+      uri,
+    });
+    expect(
+      inspectSources({ uri, ...undefinedOptions }, 'prop', resolveAsset),
+    ).toStrictEqual(inspectSources({ uri }, 'prop', resolveAsset));
+  });
+
+  test('is absent for the password of file and base64 sources', () => {
+    for (const source of [{ filePath: '/a.pdf' }, { base64: 'JVBERi0xLjQK' }]) {
+      expect(
+        inspectSources(
+          { ...source, password: undefined },
+          'prop',
+          resolveAsset,
+        ),
+      ).toStrictEqual(inspectSources(source, 'prop', resolveAsset));
+    }
+  });
+
+  test('is absent for the password prop', () => {
+    expect(inspectSources({ uri }, undefined, resolveAsset)).toStrictEqual({
+      status: 'valid',
+      sources: [{ uri, password: '' }],
+    });
+  });
+
+  test('does not select a source kind', () => {
+    expect(
+      validatedSource({ uri, filePath: undefined, base64: undefined }),
+    ).toStrictEqual({ uri });
+    expect(
+      validatedSource({ filePath: undefined, base64: 'JVBERi0xLjQK' }),
+    ).toStrictEqual({ uri: '', base64: 'JVBERi0xLjQK' });
+    expect(
+      validatedSource({ uri: undefined, filePath: '/a.pdf' }),
+    ).toStrictEqual({ uri: '/a.pdf' });
+  });
+
+  test('alone still reports the key', () => {
+    const message = (source: unknown) => {
+      const result = validateSourceItem(source, resolveAsset);
+      return result.ok ? undefined : result.error;
+    };
+    const prefix =
+      'source must be a require() result or an object with uri, filePath or base64; got ';
+    expect(message({ filePath: undefined })).toBe(
+      `${prefix}{ filePath: undefined }`,
+    );
+    expect(message({ base64: undefined })).toBe(
+      `${prefix}{ base64: undefined }`,
+    );
+    expect(message({ uri: undefined })).toBe(`${prefix}{ uri: undefined }`);
+  });
+});

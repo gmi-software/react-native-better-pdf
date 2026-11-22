@@ -3,6 +3,10 @@
 Every component, object and type is exported from the package root. The
 [guides](../README.md#documentation) show each feature in use.
 
+Strict presets with `exactOptionalPropertyTypes` are supported for inputs:
+every optional prop, option and source field also takes `undefined`, which
+means the same as leaving it out.
+
 ## Components
 
 | Component | Description |

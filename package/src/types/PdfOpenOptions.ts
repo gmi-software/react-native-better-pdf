@@ -4,18 +4,18 @@ import type { PdfLoadProgressEvent } from './PdfLoadProgressEvent';
 /** Options of {@linkcode PdfDocument.open}. */
 export interface PdfOpenOptions {
   /** Password of a protected document, unless the source has its own. */
-  password?: string;
+  password?: string | undefined;
   /**
    * Download progress of a remote document (on Android also the copy of a
    * `content://` document its provider streams), at most every 100 ms plus
    * once on completion. Not called for local files and stored copies.
    */
-  onProgress?: (event: PdfLoadProgressEvent) => void;
+  onProgress?: ((event: PdfLoadProgressEvent) => void) | undefined;
   /**
    * Cancels opening: the promise rejects with the signal's reason (an
    * `AbortError` by default) and `onProgress` is not called again. A
    * download that a `PdfView` or `PdfCache` is also waiting for continues
    * for them.
    */
-  signal?: AbortSignal;
+  signal?: AbortSignal | undefined;
 }

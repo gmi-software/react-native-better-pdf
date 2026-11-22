@@ -9,7 +9,7 @@ export interface PdfRenderPageOptions {
    */
   width: number;
   /** Default `'png'`. */
-  format?: PdfImageFormat;
+  format?: PdfImageFormat | undefined;
   /** JPEG quality from 0 to 1; ignored for PNG. Default `0.9`. */
-  quality?: number;
+  quality?: number | undefined;
 }

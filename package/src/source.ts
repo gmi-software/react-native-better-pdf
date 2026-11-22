@@ -36,7 +36,7 @@ export interface PdfUriSource {
    * host or port (http to https included), the rest of the download is
    * sent without them.
    */
-  headers?: Readonly<Record<string, string>>;
+  headers?: Readonly<Record<string, string>> | undefined;
   /**
    * How long the downloaded copy is kept: for the app session, or across
    * launches for offline reading. While a copy is kept, opening the document
@@ -44,7 +44,7 @@ export interface PdfUriSource {
    * {@linkcode PdfUriSource.maxAgeMs}). A persistent copy is also used when
    * `cache` is `'session'`. Default `'session'`.
    */
-  cache?: PdfCacheMode;
+  cache?: PdfCacheMode | undefined;
   /**
    * How old, in milliseconds, a downloaded copy may be before it is checked
    * with the server again when the document is opened or downloaded. The
@@ -54,7 +54,7 @@ export interface PdfUriSource {
    * a 5xx response), `PdfView` shows the old copy and reports
    * `isStale` in `onLoad`. Default: never checked again.
    */
-  maxAgeMs?: number;
+  maxAgeMs?: number | undefined;
   /**
    * Identifies the downloaded copy instead of `uri` and `headers`. Set it
    * when they change between opens of the same document — signed URLs,
@@ -62,13 +62,13 @@ export interface PdfUriSource {
    * with the same `cacheKey` are the same document: `PdfView` does not
    * reload when only their `uri` or `headers` differ.
    */
-  cacheKey?: string;
+  cacheKey?: string | undefined;
   /**
    * Opens a password-protected document. Takes precedence over
    * `PdfView`'s `password` prop and `PdfDocument.open`'s `password` option,
    * so each of several sources can have its own. `PdfCache` ignores it.
    */
-  password?: string;
+  password?: string | undefined;
 }
 
 /** A document at an absolute path on the device. */
@@ -76,7 +76,7 @@ export interface PdfFileSource {
   /** Absolute path of the file. */
   filePath: string;
   /** As {@linkcode PdfUriSource.password}. */
-  password?: string;
+  password?: string | undefined;
 }
 
 /**
@@ -87,7 +87,7 @@ export interface PdfBase64Source {
   /** Standard base64 without a `data:` prefix; whitespace and missing padding are fine. */
   base64: string;
   /** As {@linkcode PdfUriSource.password}. */
-  password?: string;
+  password?: string | undefined;
 }
 
 /**
@@ -177,7 +177,14 @@ function describeSourceType(source: unknown, uriOnly = false): string {
   return type;
 }
 
-/** Validates and normalizes one runtime source value without throwing. */
+const invalidSourceMessage =
+  'source must be a require() result or an object with uri, filePath or base64';
+
+/**
+ * Validates and normalizes one runtime source value without throwing.
+ * `filePath` wins over `base64`, which wins over `uri`; a key set to
+ * `undefined` counts as absent.
+ */
 export function validateSourceItem(
   source: unknown,
   resolveAsset: AssetResolver,
@@ -185,43 +192,25 @@ export function validateSourceItem(
   if (typeof source === 'number') {
     return { ok: true, source: { uri: resolveAsset(source)?.uri ?? '' } };
   }
+  const invalid = () => ({
+    ok: false as const,
+    error: `${invalidSourceMessage}; got ${describeSourceType(source)}`,
+  });
   if (source == null || typeof source !== 'object' || Array.isArray(source)) {
-    return {
-      ok: false,
-      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
-    };
+    return invalid();
   }
   const obj = source as Record<string, unknown>;
-  if ('filePath' in obj) {
-    if (typeof obj.filePath === 'string') {
-      return { ok: true, source: { uri: obj.filePath } };
-    }
-    return {
-      ok: false,
-      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
-    };
+  const { filePath, base64, uri } = obj;
+  if (filePath !== undefined) {
+    if (typeof filePath !== 'string') return invalid();
+    return { ok: true, source: { uri: filePath } };
   }
-  if ('base64' in obj) {
-    if (typeof obj.base64 === 'string') {
-      return { ok: true, source: { uri: '', base64: obj.base64 } };
-    }
-    return {
-      ok: false,
-      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
-    };
+  if (base64 !== undefined) {
+    if (typeof base64 !== 'string') return invalid();
+    return { ok: true, source: { uri: '', base64 } };
   }
-  if ('uri' in obj) {
-    const { uri } = obj;
-    if (typeof uri === 'string') return uriSourceResult(uri, obj);
-    return {
-      ok: false,
-      error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
-    };
-  }
-  return {
-    ok: false,
-    error: `source must be a require() result or an object with uri, filePath or base64; got ${describeSourceType(source)}`,
-  };
+  if (typeof uri === 'string') return uriSourceResult(uri, obj);
+  return invalid();
 }
 
 /**

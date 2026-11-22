@@ -120,7 +120,7 @@ const DEFAULT_SEARCH_CURRENT_HIGHLIGHT_COLOR = 0x99ff8c00;
 
 export interface NavigationOptions {
   /** Default `true`. */
-  animated?: boolean;
+  animated?: boolean | undefined;
 }
 
 /**
@@ -251,17 +251,17 @@ export interface PdfViewProps extends ViewProps {
    * forms cannot be filled in, and `print`, `exportDocument`,
    * `getFormFields` and `setFormFieldValues` reject.
    */
-  source?: PdfSource | readonly PdfSource[] | null;
+  source?: PdfSource | readonly PdfSource[] | null | undefined;
   /**
    * Opens password-protected documents: every source without a `password`
    * of its own, including bundled assets.
    */
-  password?: string;
+  password?: string | undefined;
   /**
    * Zero-based page shown when a document finishes loading, rounded to the
    * nearest page. Default `0`.
    */
-  initialPage?: number;
+  initialPage?: number | undefined;
   /**
    * Zoom applied once when a document finishes loading, relative to the
    * fitted page and clamped to [`minScale`, `maxScale`]; like
@@ -269,7 +269,7 @@ export interface PdfViewProps extends ViewProps {
    * `ref.zoomTo()`). Not reported through
    * {@linkcode PdfViewProps.onScaleChange}. Default `1`.
    */
-  initialScale?: number;
+  initialScale?: number | undefined;
   /**
    * Position shown when a document finishes loading, e.g. where the reader
    * left off (from {@linkcode PdfViewProps.onViewportChange}). Takes
@@ -277,20 +277,20 @@ export interface PdfViewProps extends ViewProps {
    * {@linkcode PdfViewProps.initialScale}; like them, later changes have no
    * effect (use `ref.goToViewport()`).
    */
-  initialViewport?: PdfViewport;
+  initialViewport?: PdfViewport | undefined;
   /** Relative to the fitted page (see {@linkcode PdfViewProps.fitPolicy}). Default `1`. */
-  minScale?: number;
+  minScale?: number | undefined;
   /** Relative to the fitted page (see {@linkcode PdfViewProps.fitPolicy}). Default `4`. */
-  maxScale?: number;
+  maxScale?: number | undefined;
   /**
    * Gap between pages in dp / pt; negative, `NaN` and infinite values are the
    * default. Default `8`.
    */
-  pageSpacing?: number;
+  pageSpacing?: number | undefined;
   /**
    * Lay pages out left to right and scroll horizontally. Default `false`.
    */
-  horizontal?: boolean;
+  horizontal?: boolean | undefined;
   /**
    * Show one page at a time: swipes snap to the previous or next page. A
    * page longer than the view scrolls freely before moving on (Android; iOS
@@ -299,7 +299,7 @@ export interface PdfViewProps extends ViewProps {
    * follow {@linkcode PdfViewProps.horizontal}: vertical by default.
    * Default `false`.
    */
-  enablePaging?: boolean;
+  enablePaging?: boolean | undefined;
   /**
    * Right-to-left reading order for horizontal layouts (Arabic, Hebrew,
    * manga): the first page is on the right and reading continues to the
@@ -311,7 +311,7 @@ export interface PdfViewProps extends ViewProps {
    * {@linkcode PdfViewProps.enablePaging}; a continuous horizontal layout
    * stays left to right.
    */
-  enableRTL?: boolean;
+  enableRTL?: boolean | undefined;
   /**
    * Show only one page, as a static image — for thumbnails and previews.
    * The page is {@linkcode PdfViewProps.initialPage}; `ref.goToPage()`
@@ -322,7 +322,7 @@ export interface PdfViewProps extends ViewProps {
    * {@linkcode PdfViewProps.horizontal} and
    * {@linkcode PdfViewProps.enablePaging}. Default `false`.
    */
-  singlePage?: boolean;
+  singlePage?: boolean | undefined;
   /**
    * How pages are scaled to the view at zoom `1`; `minScale`, `maxScale` and
    * `zoomTo` are relative to this fit. Default `'width'` for the vertical
@@ -336,7 +336,7 @@ export interface PdfViewProps extends ViewProps {
    * {@linkcode PdfViewProps.enablePaging}, iOS fits each page whole whatever
    * this says, and zoom is relative to the page shown.
    */
-  fitPolicy?: PdfFitPolicy;
+  fitPolicy?: PdfFitPolicy | undefined;
   /**
    * Shows facing pages side by side, e.g. on a tablet in landscape (pass it
    * from `useWindowDimensions()` to switch with the orientation): each page
@@ -350,7 +350,7 @@ export interface PdfViewProps extends ViewProps {
    * spread under the viewport centre, or the last page once scrolled to the
    * end.
    */
-  spreadMode?: PdfSpreadMode;
+  spreadMode?: PdfSpreadMode | undefined;
   /**
    * Shows pages in dark colours for reading in the dark: lightness
    * inverted, hues kept (white paper turns black, black text white, a red
@@ -364,7 +364,7 @@ export interface PdfViewProps extends ViewProps {
    * anything but `'dark'` (also `'unspecified'` and `null`) shows the
    * document's colours. Default `'light'`.
    */
-  colorScheme?: PdfColorScheme | 'unspecified' | null;
+  colorScheme?: PdfColorScheme | 'unspecified' | null | undefined;
   /**
    * Space in dp / pt kept clear at the top and bottom, e.g. for a
    * translucent header or toolbar over the viewer: pages scroll under it,
@@ -377,7 +377,7 @@ export interface PdfViewProps extends ViewProps {
    * {@linkcode PdfViewProps.horizontal}, {@linkcode PdfViewProps.enablePaging}
    * and {@linkcode PdfViewProps.singlePage}. Default none.
    */
-  contentInset?: PdfContentInset;
+  contentInset?: PdfContentInset | undefined;
   /**
    * Double tap toggles zoom (Android: fitted page ↔ 2×; iOS: PDFKit's own
    * zoom step, e.g. 1.7× for an A4 page on an iPhone). When `false`,
@@ -385,7 +385,7 @@ export interface PdfViewProps extends ViewProps {
    * right away instead of after the double-tap window (~300 ms). Pinch zoom
    * and `zoomTo()` are unaffected. Default `true`.
    */
-  enableDoubleTapZoom?: boolean;
+  enableDoubleTapZoom?: boolean | undefined;
   /**
    * When `false`, dragging does not scroll the document: the drag goes to
    * parent views instead (e.g. a surrounding `ScrollView` scrolls). Pinch
@@ -394,21 +394,21 @@ export interface PdfViewProps extends ViewProps {
    * keep working. Same name and default as React Native's `ScrollView`.
    * Default `true`.
    */
-  scrollEnabled?: boolean;
+  scrollEnabled?: boolean | undefined;
   /**
    * How screen readers (VoiceOver, TalkBack) name a page, e.g. when it comes
    * into view: `{page}` is replaced by the 1-based page number and
    * `{pageCount}` by the number of pages. Localise it for your app's
    * language. Default `'Page {page} of {pageCount}'`.
    */
-  pageAccessibilityLabel?: string;
+  pageAccessibilityLabel?: string | undefined;
   /** Show the vertical scroll indicator while scrolling. Default `true`. */
-  showsVerticalScrollIndicator?: boolean;
+  showsVerticalScrollIndicator?: boolean | undefined;
   /**
    * Show the horizontal scroll indicator while scrolling a page that is
    * zoomed wider than the view. Default `true`.
    */
-  showsHorizontalScrollIndicator?: boolean;
+  showsHorizontalScrollIndicator?: boolean | undefined;
   /**
    * Let the user select text, as in a read-only text field: a long press
    * selects a word, handles adjust the selection and the system menu offers
@@ -420,7 +420,7 @@ export interface PdfViewProps extends ViewProps {
    * copying ends it. Android: needs Android 15+, or Android 12–14 with SDK
    * extension 13; other devices ignore long presses.
    */
-  enableTextSelection?: boolean;
+  enableTextSelection?: boolean | undefined;
   /**
    * Form fields (text fields, checkboxes, radio buttons, choices) can be
    * filled in by touch; `false` shows them as they are. Read and set values
@@ -428,21 +428,21 @@ export interface PdfViewProps extends ViewProps {
    * Android: needs Android 15+, or Android 12–14 with SDK extension 13.
    * Default `true`.
    */
-  enableFormFilling?: boolean;
+  enableFormFilling?: boolean | undefined;
   /**
    * Background of every search match. Use a translucent colour so the text
    * stays readable. `PlatformColor` and `DynamicColorIOS` are not supported
    * (the default is used). Default `'rgba(255, 214, 0, 0.4)'` (yellow).
    */
-  searchHighlightColor?: ColorValue;
+  searchHighlightColor?: ColorValue | undefined;
   /**
    * Background of the current search match (the one `searchNext()` /
    * `searchPrevious()` moved to), drawn instead of
    * {@linkcode PdfViewProps.searchHighlightColor}. Default
    * `'rgba(255, 140, 0, 0.6)'` (orange).
    */
-  searchCurrentHighlightColor?: ColorValue;
-  onLoad?: (event: PdfLoadEvent) => void;
+  searchCurrentHighlightColor?: ColorValue | undefined;
+  onLoad?: ((event: PdfLoadEvent) => void) | undefined;
   /**
    * Download progress of a remote document (on Android also the copy of a
    * `content://` document its provider streams), at most every 100 ms plus
@@ -450,7 +450,7 @@ export interface PdfViewProps extends ViewProps {
    * for local files, or when a downloaded copy is used or confirmed
    * unchanged by the server (see `PdfUriSource.cache` and `maxAgeMs`).
    */
-  onLoadProgress?: (event: PdfLoadProgressEvent) => void;
+  onLoadProgress?: ((event: PdfLoadProgressEvent) => void) | undefined;
   /**
    * The document could not be loaded, or (Android only) one of its pages
    * could not be rendered. `error.page !== undefined` tells them apart.
@@ -466,8 +466,8 @@ export interface PdfViewProps extends ViewProps {
    *
    * Without it, development builds print a warning naming the code instead.
    */
-  onError?: (error: PdfLoadError | PdfPageError) => void;
-  onPageChange?: (event: PdfPageChangeEvent) => void;
+  onError?: ((error: PdfLoadError | PdfPageError) => void) | undefined;
+  onPageChange?: ((event: PdfPageChangeEvent) => void) | undefined;
   /**
    * The user tapped a link to a URL. Links to other pages of the document
    * are followed natively and not reported here. The viewer never opens URLs
@@ -477,46 +477,47 @@ export interface PdfViewProps extends ViewProps {
    * Android 12–14 with SDK extension 13; other devices report taps on them
    * through {@linkcode PdfViewProps.onPageTap} instead.
    */
-  onLinkPress?: (event: PdfLinkPressEvent) => void;
+  onLinkPress?: ((event: PdfLinkPressEvent) => void) | undefined;
   /**
    * The user tapped a page outside of any link. Delivered after the
    * double-tap-to-zoom window has passed.
    */
-  onPageTap?: (event: PdfPageTapEvent) => void;
+  onPageTap?: ((event: PdfPageTapEvent) => void) | undefined;
   /**
    * The zoom settled at a new value — once per change, after a pinch or
    * double-tap ends or `ref.zoomTo()` finishes; never during a gesture.
    * Not called when the value is unchanged (e.g. rotation keeps the relative
    * zoom).
    */
-  onScaleChange?: (event: PdfScaleChangeEvent) => void;
+  onScaleChange?: ((event: PdfScaleChangeEvent) => void) | undefined;
   /**
    * The text selection settled at different text — after a long press, a
    * handle drag or Select all ends, never while a handle moves — or was
    * cleared (`text` is `''`), e.g. by a tap elsewhere or loading another
    * document.
    */
-  onTextSelectionChange?: (event: PdfTextSelectionChangeEvent) => void;
+  onTextSelectionChange?:
+    ((event: PdfTextSelectionChangeEvent) => void) | undefined;
   /**
    * The search started with `ref.search()` changed: more matches found, the
    * current match moved, or it completed or was cleared. At most 10 events
    * per second while searching, plus one on completion.
    */
-  onSearchChange?: (event: PdfSearchChangeEvent) => void;
+  onSearchChange?: ((event: PdfSearchChangeEvent) => void) | undefined;
   /**
    * The viewport settled at a new position: once after loading, then after
    * each scroll, fling, zoom, page turn, rotation or `ref` navigation ends —
    * never while it moves. Save `event.viewport` to reopen the document where
    * the reader left off; `isAtEnd` tells that the end was reached.
    */
-  onViewportChange?: (event: PdfViewportChangeEvent) => void;
+  onViewportChange?: ((event: PdfViewportChangeEvent) => void) | undefined;
   /**
    * The reader changed a form field: at once for a checkbox, radio button
    * or choice, when editing ends for text — never per keystroke. Not sent
    * for `ref.setFormFieldValues()`.
    */
-  onFormChange?: (event: PdfFormChangeEvent) => void;
-  ref?: Ref<PdfViewRef>;
+  onFormChange?: ((event: PdfFormChangeEvent) => void) | undefined;
+  ref?: Ref<PdfViewRef> | undefined;
 }
 
 type Handlers = Pick<

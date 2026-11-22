@@ -6,5 +6,5 @@ export interface PdfPrintOptions {
    * source's file name, or `'Document'` when it has none (e.g. a
    * `content://` source).
    */
-  jobName?: string;
+  jobName?: string | undefined;
 }

@@ -79,5 +79,9 @@ jobs:
       - name: Build
         run: bun run build
 
+      # Compiles against the built declarations, as an app sees them.
+      - name: Type tests (exactOptionalPropertyTypes)
+        run: bun run typetest
+
       - name: Test
         run: bun run test
