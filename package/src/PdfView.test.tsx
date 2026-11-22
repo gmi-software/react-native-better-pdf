@@ -137,6 +137,7 @@ mock.module(
 const { PdfView } = await import('./PdfView');
 const { PdfPageOverlay } = await import('./PdfPageOverlay');
 const { PdfMethodError } = await import('./PdfMethodError');
+const { resetIgnoredKeyWarnings } = await import('./source');
 import type { PdfViewRef } from './PdfView';
 import type { PdfError } from './types/PdfError';
 import type { PdfViewStats } from './types/PdfViewStats';
@@ -1601,6 +1602,59 @@ describe('PdfView without onError', () => {
     );
     act(() => renderer.update(<PdfView source={{ uri: 'file:///a.pdf' }} />));
     emitError({ code: 'file-not-found', message: 'No file at /a.pdf' });
+    expect(warnings).toEqual([]);
+  });
+});
+
+describe('PdfView with contradictory sources', () => {
+  const globals = globalThis as { __DEV__?: boolean };
+  const warn = console.warn;
+  let warnings: string[] = [];
+
+  beforeEach(() => {
+    warnings = [];
+    console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+    resetIgnoredKeyWarnings();
+  });
+
+  afterEach(() => {
+    console.warn = warn;
+    delete globals.__DEV__;
+  });
+
+  test('warns in development once per combination of ignored keys, not per render', () => {
+    globals.__DEV__ = true;
+    const renderer = render(
+      <PdfView source={{ filePath: '/a.pdf', cache: 'persistent' }} />,
+    );
+    act(() =>
+      renderer.update(
+        <PdfView source={{ filePath: '/b.pdf', cache: 'session' }} />,
+      ),
+    );
+    act(() =>
+      renderer.update(
+        <PdfView
+          source={[
+            { filePath: '/a.pdf', cache: 'persistent' },
+            { uri: 'https://x.test/a.pdf', filePath: '/a.pdf' },
+          ]}
+        />,
+      ),
+    );
+    expect(lastSources()).toEqual([
+      { uri: '/a.pdf', password: '' },
+      { uri: '/a.pdf', password: '' },
+    ]);
+    expect(warnings).toEqual([
+      expect.stringContaining('A source with filePath ignores cache.'),
+      expect.stringContaining('A source with filePath ignores uri.'),
+    ]);
+  });
+
+  test('release builds do not warn', () => {
+    globals.__DEV__ = false;
+    render(<PdfView source={{ filePath: '/a.pdf', cache: 'persistent' }} />);
     expect(warnings).toEqual([]);
   });
 });

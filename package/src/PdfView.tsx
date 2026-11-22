@@ -27,6 +27,7 @@ import {
   toNativeFilePath,
   toNativeFormValues,
 } from './formFields';
+import { isDevelopment } from './development';
 import { nativeColor } from './nativeColor';
 import { PdfMethodError, withMethodErrors } from './PdfMethodError';
 import { OverlayRegistryContext, type OverlayRegistry } from './PdfPageOverlay';
@@ -83,14 +84,6 @@ const NativeBetterPdfView = getHostComponent<NativeProps, PdfViewMethods>(
 );
 
 type NativeRef = HybridRef<NativeProps, PdfViewMethods>;
-
-// React Native's global, missing elsewhere (tests); the library builds without
-// React Native's global types.
-declare const __DEV__: boolean | undefined;
-
-function isDevelopment(): boolean {
-  return typeof __DEV__ !== 'undefined' && __DEV__ === true;
-}
 
 const warnedErrorCodes = new WeakMap<object, Set<PdfErrorCode>>();
 

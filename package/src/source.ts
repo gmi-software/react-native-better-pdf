@@ -1,3 +1,4 @@
+import { isDevelopment } from './development';
 import type { NativePdfSource } from './types/NativePdfSource';
 import type { PdfCacheMode } from './types/PdfCacheMode';
 
@@ -180,6 +181,41 @@ function describeSourceType(source: unknown, uriOnly = false): string {
 const invalidSourceMessage =
   'source must be a require() result or an object with uri, filePath or base64';
 
+/** Keys that only `uri` sources use, in the order a warning names them. */
+const uriOnlyKeys = ['headers', 'cache', 'maxAgeMs', 'cacheKey'] as const;
+
+const warnedIgnoredKeys = new Set<string>();
+
+/** Forgets which ignored keys were warned about (for tests). */
+export function resetIgnoredKeyWarnings(): void {
+  warnedIgnoredKeys.clear();
+}
+
+/**
+ * In development, warns once per combination about keys `source` has that
+ * its kind ignores. Names keys only: their values can hold tokens.
+ */
+function warnIgnoredKeys(
+  source: Record<string, unknown>,
+  kind: 'filePath' | 'base64',
+): void {
+  if (!isDevelopment()) return;
+  const ignored = [
+    ...(kind === 'filePath' ? ['base64', 'uri'] : ['uri']).filter(
+      (key) => source[key] !== undefined,
+    ),
+    // `null` options are absent, as on uri sources.
+    ...uriOnlyKeys.filter((key) => source[key] != null),
+  ];
+  if (ignored.length === 0) return;
+  const combination = `${kind}:${ignored.join(',')}`;
+  if (warnedIgnoredKeys.has(combination)) return;
+  warnedIgnoredKeys.add(combination);
+  console.warn(
+    `[react-native-better-pdf] A source with ${kind} ignores ${ignored.join(', ')}. Pass one of uri, filePath or base64; headers, cache, maxAgeMs and cacheKey apply to uri sources only.`,
+  );
+}
+
 /**
  * Validates and normalizes one runtime source value without throwing.
  * `filePath` wins over `base64`, which wins over `uri`; a key set to
@@ -203,10 +239,12 @@ export function validateSourceItem(
   const { filePath, base64, uri } = obj;
   if (filePath !== undefined) {
     if (typeof filePath !== 'string') return invalid();
+    warnIgnoredKeys(obj, 'filePath');
     return { ok: true, source: { uri: filePath } };
   }
   if (base64 !== undefined) {
     if (typeof base64 !== 'string') return invalid();
+    warnIgnoredKeys(obj, 'base64');
     return { ok: true, source: { uri: '', base64 } };
   }
   if (typeof uri === 'string') return uriSourceResult(uri, obj);

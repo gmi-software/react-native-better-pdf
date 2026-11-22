@@ -22,6 +22,17 @@ A protected document opens with the source's own `password`, or else with
 (bundled assets included). `PdfDocument.open` takes a source's own password
 before its `password` option.
 
+Give each source one of `uri`, `filePath` or `base64`. When a source has
+more, `filePath` wins over `base64`, which wins over `uri`, and `headers`,
+`cache`, `maxAgeMs` and `cacheKey` only apply to `uri` sources. A key set to
+`undefined` counts as absent. Development builds warn about the keys a
+source ignores with `console.warn`, once per combination of keys (names
+only, never values); release builds print nothing:
+
+```text
+[react-native-better-pdf] A source with filePath ignores cache. Pass one of uri, filePath or base64; headers, cache, maxAgeMs and cacheKey apply to uri sources only.
+```
+
 `headers` are sent with the download. Each name must be an HTTP token
 (letters, digits and ``!#$%&'*+-.^_`|~``) and no value may contain a line
 break or another control character (tab is fine): such a source fails with
