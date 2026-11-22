@@ -13,14 +13,14 @@ export interface PdfError {
    * (`page-render-failed`, and `out-of-memory` while rendering; Android
    * only).
    */
-  page?: number;
+  page?: number | undefined;
   /**
    * Zero-based index in `PdfView`'s `source` of the document that could not
    * be loaded, set by `PdfView` for load failures (`0` for a single source).
    * Unset for page failures, and when several sources failed as a whole, as
    * when Android runs out of memory laying out their pages.
    */
-  sourceIndex?: number;
+  sourceIndex?: number | undefined;
   /** HTTP status code, set for `http-error`. */
   httpStatus?: number;
   /** Raw platform error description, for logging only. */
