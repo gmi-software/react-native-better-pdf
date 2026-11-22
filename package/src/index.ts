@@ -7,6 +7,7 @@ export { PdfDocument } from './PdfDocument';
 export { PdfDownloadError } from './PdfDownloadError';
 export { PdfMethodError } from './PdfMethodError';
 export { PdfOpenError } from './PdfOpenError';
+export type { PdfDownloadErrorCode } from './types/PdfDownloadErrorCode';
 export type { PdfDownloadOptions } from './types/PdfDownloadOptions';
 export type {
   PdfBase64Source,
@@ -42,6 +43,7 @@ export type { PdfLinkPressEvent } from './types/PdfLinkPressEvent';
 export type { PdfLoadEvent } from './types/PdfLoadEvent';
 export type { PdfLoadedSource } from './types/PdfLoadedSource';
 export type { PdfLoadProgressEvent } from './types/PdfLoadProgressEvent';
+export type { PdfOpenErrorCode } from './types/PdfOpenErrorCode';
 export type { PdfOpenOptions } from './types/PdfOpenOptions';
 export type { PdfOutlineItem } from './types/PdfOutlineItem';
 export type { PdfImageFormat } from './types/PdfImageFormat';

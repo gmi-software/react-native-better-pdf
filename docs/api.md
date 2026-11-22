@@ -169,6 +169,42 @@ Without `onError`, development builds warn about failures with
 The warning names the code but leaves out the message, which can quote the
 source URL, header names and their tokens.
 
+### `PdfDocument.open` and `PdfCache.download` errors
+
+`PdfDocument.open` rejects with a `PdfOpenError` and `PdfCache.download`
+with a `PdfDownloadError`, both with the codes above. Each call can only
+reject with some of them, exported as types:
+
+| Type | Codes |
+| --- | --- |
+| `PdfOpenErrorCode` | Every code except `page-render-failed`; `unsupported-pdf` and `out-of-memory` on Android only |
+| `PdfDownloadErrorCode` | `invalid-source`, `network-error`, `http-error`, `invalid-pdf` |
+
+The classes' `code` is typed as the whole `PdfErrorCode` until 2.0; narrow
+it for an exhaustive `switch`:
+
+```ts
+try {
+  await PdfCache.download(source);
+} catch (error) {
+  if (!(error instanceof PdfDownloadError)) throw error;
+  switch (error.code as PdfDownloadErrorCode) {
+    case 'network-error':
+      /* offline */ break;
+    case 'http-error':
+      /* error.httpStatus */ break;
+    case 'invalid-pdf':
+      /* e.g. a login page */ break;
+    case 'invalid-source':
+      /* a bug in the source */ break;
+  }
+}
+```
+
+`PdfCache`'s other methods (`getEntry`, `remove`, `clear`,
+`getByteSize`) reject with a `PdfMethodError`: `invalid-argument` for an
+invalid source, with the same message `download` gives.
+
 ### Method errors
 
 The ref's promise methods (`getOutline`, `getPageSizes`, `renderPage`,
@@ -203,6 +239,7 @@ is the platform's text (on Android with the stack trace), for logging.
 | `PdfLoadedSource` | One source as `onLoad` reports it: `{ pageCount, firstPage, filePath?, isStale }` |
 | `PdfError` / `PdfErrorCode` | Errors and their stable codes |
 | `PdfLoadError` / `PdfPageError` | `onError`'s argument: a load failure, or a page that could not be rendered after `onLoad` (Android, with `page`) |
+| `PdfOpenErrorCode` / `PdfDownloadErrorCode` | The codes `PdfDocument.open` and `PdfCache.download` can reject with, see [their errors](#pdfdocumentopen-and-pdfcachedownload-errors) |
 | `PdfMethodErrorCode` | The stable codes of `PdfMethodError`, see [Method errors](#method-errors) |
 | `PdfViewport` | A reading position: `{ page, x, y, scale }` |
 | `PdfFormField` | A form field, discriminated by `type` (`PdfTextFormField`, `PdfCheckboxFormField`, …) |
