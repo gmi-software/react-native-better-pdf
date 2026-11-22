@@ -1,8 +1,8 @@
 import type { PdfMethodError } from '../PdfMethodError';
 
 /**
- * Stable, platform-independent reason a `PdfViewRef` or `PdfDocument`
- * method rejected.
+ * Stable, platform-independent reason a `PdfViewRef`, `PdfDocument` or
+ * `PdfCache` method (other than `PdfCache.download`) rejected.
  *
  * @see {@linkcode PdfMethodError.code}
  */

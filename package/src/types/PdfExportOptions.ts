@@ -10,5 +10,5 @@ export interface PdfExportOptions {
    * Default: a new file in the app's cache directory, named after the
    * document.
    */
-  filePath?: string;
+  filePath?: string | undefined;
 }

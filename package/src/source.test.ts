@@ -1,7 +1,8 @@
-import { describe, expect, test } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import {
   inspectSources,
   normalizeUriSource,
+  resetIgnoredKeyWarnings,
   sourceKey,
   validateSourceItem,
 } from './source';
@@ -365,5 +366,212 @@ describe('invalid and empty sources', () => {
         'source must be a require() result or an object with uri, filePath or base64; got a string',
       sourceIndex: 1,
     });
+  });
+});
+
+describe('explicit undefined', () => {
+  const uri = 'https://x.test/a.pdf';
+  const undefinedOptions = {
+    headers: undefined,
+    cache: undefined,
+    maxAgeMs: undefined,
+    cacheKey: undefined,
+    password: undefined,
+  };
+
+  test('is absent for every optional field of a uri source', () => {
+    expect(validatedSource({ uri, ...undefinedOptions })).toStrictEqual({
+      uri,
+    });
+    expect(normalizeUriSource({ uri, ...undefinedOptions })).toStrictEqual({
+      uri,
+    });
+    expect(
+      inspectSources({ uri, ...undefinedOptions }, 'prop', resolveAsset),
+    ).toStrictEqual(inspectSources({ uri }, 'prop', resolveAsset));
+  });
+
+  test('is absent for the password of file and base64 sources', () => {
+    for (const source of [{ filePath: '/a.pdf' }, { base64: 'JVBERi0xLjQK' }]) {
+      expect(
+        inspectSources(
+          { ...source, password: undefined },
+          'prop',
+          resolveAsset,
+        ),
+      ).toStrictEqual(inspectSources(source, 'prop', resolveAsset));
+    }
+  });
+
+  test('is absent for the password prop', () => {
+    expect(inspectSources({ uri }, undefined, resolveAsset)).toStrictEqual({
+      status: 'valid',
+      sources: [{ uri, password: '' }],
+    });
+  });
+
+  test('does not select a source kind', () => {
+    expect(
+      validatedSource({ uri, filePath: undefined, base64: undefined }),
+    ).toStrictEqual({ uri });
+    expect(
+      validatedSource({ filePath: undefined, base64: 'JVBERi0xLjQK' }),
+    ).toStrictEqual({ uri: '', base64: 'JVBERi0xLjQK' });
+    expect(
+      validatedSource({ uri: undefined, filePath: '/a.pdf' }),
+    ).toStrictEqual({ uri: '/a.pdf' });
+  });
+
+  test('alone still reports the key', () => {
+    const message = (source: unknown) => {
+      const result = validateSourceItem(source, resolveAsset);
+      return result.ok ? undefined : result.error;
+    };
+    const prefix =
+      'source must be a require() result or an object with uri, filePath or base64; got ';
+    expect(message({ filePath: undefined })).toBe(
+      `${prefix}{ filePath: undefined }`,
+    );
+    expect(message({ base64: undefined })).toBe(
+      `${prefix}{ base64: undefined }`,
+    );
+    expect(message({ uri: undefined })).toBe(`${prefix}{ uri: undefined }`);
+  });
+});
+
+describe('ignored source keys', () => {
+  const globals = globalThis as { __DEV__?: boolean };
+  const warn = console.warn;
+  let warnings: string[];
+
+  beforeEach(() => {
+    warnings = [];
+    console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+    resetIgnoredKeyWarnings();
+    globals.__DEV__ = true;
+  });
+
+  afterEach(() => {
+    console.warn = warn;
+    delete globals.__DEV__;
+  });
+
+  test('warns, naming the keys that are ignored', () => {
+    validatedSource({ uri: 'https://x.test/a.pdf', filePath: '/a.pdf' });
+    validatedSource({
+      filePath: '/a.pdf',
+      base64: 'JVBERi0xLjQK',
+      cache: 'persistent',
+      cacheKey: 'secret-key',
+    });
+    validatedSource({
+      base64: 'JVBERi0xLjQK',
+      uri: 'https://x.test/a.pdf',
+      headers: { Authorization: 'Bearer token' },
+      maxAgeMs: 0,
+    });
+    expect(warnings).toEqual([
+      '[react-native-better-pdf] A source with filePath ignores uri. Pass one of uri, filePath or base64; headers, cache, maxAgeMs and cacheKey apply to uri sources only.',
+      '[react-native-better-pdf] A source with filePath ignores base64, cache, cacheKey. Pass one of uri, filePath or base64; headers, cache, maxAgeMs and cacheKey apply to uri sources only.',
+      '[react-native-better-pdf] A source with base64 ignores uri, headers, maxAgeMs. Pass one of uri, filePath or base64; headers, cache, maxAgeMs and cacheKey apply to uri sources only.',
+    ]);
+  });
+
+  test('names keys only, never their values', () => {
+    validatedSource({
+      filePath: '/private/a.pdf',
+      uri: 'https://x.test/a.pdf?token=secret',
+      headers: { Authorization: 'Bearer secret' },
+    });
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]).not.toContain('secret');
+    expect(warnings[0]).not.toContain('/private');
+  });
+
+  test('warns once per combination of keys, however often it is normalized', () => {
+    for (let render = 0; render < 3; render++) {
+      inspectSources(
+        [
+          { filePath: '/a.pdf', cache: 'persistent' },
+          { filePath: '/b.pdf', cache: 'session' },
+          { base64: 'JVBERi0xLjQK', cache: 'persistent' },
+        ],
+        undefined,
+        resolveAsset,
+      );
+    }
+    expect(warnings).toEqual([
+      expect.stringContaining('A source with filePath ignores cache.'),
+      expect.stringContaining('A source with base64 ignores cache.'),
+    ]);
+  });
+
+  test('does not warn about consistent sources or undefined keys', () => {
+    validatedSource({
+      uri: 'https://x.test/a.pdf',
+      headers: { A: '1' },
+      cache: 'persistent',
+      maxAgeMs: 0,
+      cacheKey: 'doc',
+      password: 'pw',
+      filePath: undefined,
+      base64: undefined,
+    });
+    validatedSource({
+      filePath: '/a.pdf',
+      password: 'pw',
+      uri: undefined,
+      cache: undefined,
+    });
+    validatedSource({ base64: 'JVBERi0xLjQK', password: 'pw' });
+    validatedSource({
+      filePath: '/a.pdf',
+      headers: null,
+      cache: null,
+      maxAgeMs: null,
+      cacheKey: null,
+    });
+    validatedSource(7);
+    expect(warnings).toEqual([]);
+  });
+
+  test('ignores keys whose getters throw, in development and outside it', () => {
+    const throwing = (kind: Record<string, unknown>) =>
+      Object.defineProperties(kind, {
+        uri: {
+          enumerable: true,
+          get: () => {
+            throw new Error('uri');
+          },
+        },
+        cache: {
+          enumerable: true,
+          get: () => {
+            throw new Error('cache');
+          },
+        },
+      });
+    for (const dev of [true, false]) {
+      globals.__DEV__ = dev;
+      expect(validatedSource(throwing({ filePath: '/a.pdf' }))).toStrictEqual({
+        uri: '/a.pdf',
+      });
+      expect(
+        validatedSource(throwing({ base64: 'JVBERi0xLjQK' })),
+      ).toStrictEqual({ uri: '', base64: 'JVBERi0xLjQK' });
+    }
+    expect(warnings).toEqual([
+      expect.stringContaining('A source with filePath ignores uri, cache.'),
+      expect.stringContaining('A source with base64 ignores uri, cache.'),
+    ]);
+  });
+
+  test('stays silent outside development', () => {
+    for (const dev of [false, undefined]) {
+      if (dev === undefined) delete globals.__DEV__;
+      else globals.__DEV__ = dev;
+      validatedSource({ uri: 'https://x.test/a.pdf', filePath: '/a.pdf' });
+    }
+    expect(warnings).toEqual([]);
   });
 });

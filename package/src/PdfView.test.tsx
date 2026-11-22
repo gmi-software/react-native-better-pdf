@@ -137,6 +137,7 @@ mock.module(
 const { PdfView } = await import('./PdfView');
 const { PdfPageOverlay } = await import('./PdfPageOverlay');
 const { PdfMethodError } = await import('./PdfMethodError');
+const { resetIgnoredKeyWarnings } = await import('./source');
 import type { PdfViewRef } from './PdfView';
 import type { PdfError } from './types/PdfError';
 import type { PdfViewStats } from './types/PdfViewStats';
@@ -573,6 +574,135 @@ describe('PdfView', () => {
     expect(lastHost().onPageTap).toBe(tap);
     tap.f({ page: 0, x: 1, y: 2 });
     expect(calls).toEqual([]);
+  });
+
+  test('renders explicit undefined props like absent ones', () => {
+    const optionalProps = [
+      'password',
+      'initialPage',
+      'initialScale',
+      'initialViewport',
+      'minScale',
+      'maxScale',
+      'pageSpacing',
+      'horizontal',
+      'enablePaging',
+      'enableRTL',
+      'singlePage',
+      'fitPolicy',
+      'spreadMode',
+      'colorScheme',
+      'contentInset',
+      'enableDoubleTapZoom',
+      'scrollEnabled',
+      'pageAccessibilityLabel',
+      'showsVerticalScrollIndicator',
+      'showsHorizontalScrollIndicator',
+      'enableTextSelection',
+      'enableFormFilling',
+      'searchHighlightColor',
+      'searchCurrentHighlightColor',
+      'onLoad',
+      'onLoadProgress',
+      'onError',
+      'onPageChange',
+      'onLinkPress',
+      'onPageTap',
+      'onScaleChange',
+      'onTextSelectionChange',
+      'onSearchChange',
+      'onViewportChange',
+      'onFormChange',
+      'ref',
+      'children',
+    ];
+    const undefinedProps = Object.fromEntries(
+      optionalProps.map((name) => [name, undefined]),
+    );
+    // Callbacks and the overlay layer id are per instance.
+    const comparable = (props: HostProps) =>
+      Object.fromEntries(
+        Object.entries(props)
+          .filter(([name]) => name !== 'overlayLayerId')
+          .map(([name, value]) => [
+            name,
+            typeof value === 'object' && value !== null && 'f' in value
+              ? 'callback'
+              : value,
+          ]),
+      );
+    const source = {
+      uri: 'https://x.test/a.pdf',
+      headers: undefined,
+      cache: undefined,
+      maxAgeMs: undefined,
+      cacheKey: undefined,
+      password: undefined,
+    };
+    render(<PdfView source={{ uri: 'https://x.test/a.pdf' }} />);
+    const absent = { host: comparable(lastHost()), box: lastBox() };
+    render(<PdfView {...undefinedProps} source={source} />);
+    expect({ host: comparable(lastHost()), box: lastBox() }).toStrictEqual(
+      absent,
+    );
+  });
+
+  test('treats undefined contentInset edges and scalesWithZoom like absent ones', () => {
+    const page = { page: 0, x: 1, y: 2, width: 3, height: 4 };
+    // The overlay id is per instance.
+    const overlays = () =>
+      (lastHost().overlays as { id: string }[]).map(
+        ({ id: _id, ...rest }) => rest,
+      );
+    render(
+      <PdfView source={{ uri: 'x' }} contentInset={{}}>
+        <PdfPageOverlay {...page} />
+      </PdfView>,
+    );
+    const absent = {
+      contentInset: lastHost().contentInset,
+      overlays: overlays(),
+    };
+    render(
+      <PdfView
+        source={{ uri: 'x' }}
+        contentInset={{ top: undefined, bottom: undefined }}
+      >
+        <PdfPageOverlay {...page} scalesWithZoom={undefined} />
+      </PdfView>,
+    );
+    expect({
+      contentInset: lastHost().contentInset,
+      overlays: overlays(),
+    }).toStrictEqual(absent);
+    expect(absent).toMatchObject({
+      contentInset: { top: 0, bottom: 0 },
+      overlays: [{ scalesWithZoom: true }],
+    });
+  });
+
+  test('ref methods treat undefined options like absent ones', async () => {
+    const ref = createRef<PdfViewRef>();
+    render(<PdfView ref={ref} source={{ uri: 'https://x.test/a.pdf' }} />);
+    (lastHost().hybridRef as { f: (instance: object) => void }).f(
+      nativeInstance,
+    );
+    ref.current?.goToPage(3, { animated: undefined });
+    ref.current?.goToPage(3, undefined);
+    ref.current?.zoomTo(2, { animated: undefined });
+    await ref.current?.print({ jobName: undefined });
+    await ref.current?.print();
+    await ref.current?.exportDocument({ filePath: undefined });
+    await ref.current?.exportDocument();
+    expect(nativeCalls).toEqual([
+      'goToPage(3, true)',
+      'goToPage(3, true)',
+      'zoomTo(2, true)',
+      'print(a.pdf)',
+      'print(a.pdf)',
+      'exportDocument()',
+      'exportDocument()',
+    ]);
   });
 
   test('sends search highlight colours as ARGB, falling back to the defaults', () => {
@@ -1472,6 +1602,59 @@ describe('PdfView without onError', () => {
     );
     act(() => renderer.update(<PdfView source={{ uri: 'file:///a.pdf' }} />));
     emitError({ code: 'file-not-found', message: 'No file at /a.pdf' });
+    expect(warnings).toEqual([]);
+  });
+});
+
+describe('PdfView with contradictory sources', () => {
+  const globals = globalThis as { __DEV__?: boolean };
+  const warn = console.warn;
+  let warnings: string[] = [];
+
+  beforeEach(() => {
+    warnings = [];
+    console.warn = (...args: unknown[]) => warnings.push(args.join(' '));
+    resetIgnoredKeyWarnings();
+  });
+
+  afterEach(() => {
+    console.warn = warn;
+    delete globals.__DEV__;
+  });
+
+  test('warns in development once per combination of ignored keys, not per render', () => {
+    globals.__DEV__ = true;
+    const renderer = render(
+      <PdfView source={{ filePath: '/a.pdf', cache: 'persistent' }} />,
+    );
+    act(() =>
+      renderer.update(
+        <PdfView source={{ filePath: '/b.pdf', cache: 'session' }} />,
+      ),
+    );
+    act(() =>
+      renderer.update(
+        <PdfView
+          source={[
+            { filePath: '/a.pdf', cache: 'persistent' },
+            { uri: 'https://x.test/a.pdf', filePath: '/a.pdf' },
+          ]}
+        />,
+      ),
+    );
+    expect(lastSources()).toEqual([
+      { uri: '/a.pdf', password: '' },
+      { uri: '/a.pdf', password: '' },
+    ]);
+    expect(warnings).toEqual([
+      expect.stringContaining('A source with filePath ignores cache.'),
+      expect.stringContaining('A source with filePath ignores uri.'),
+    ]);
+  });
+
+  test('release builds do not warn', () => {
+    globals.__DEV__ = false;
+    render(<PdfView source={{ filePath: '/a.pdf', cache: 'persistent' }} />);
     expect(warnings).toEqual([]);
   });
 });

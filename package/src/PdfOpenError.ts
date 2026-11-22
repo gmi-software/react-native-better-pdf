@@ -12,7 +12,10 @@ import type { PdfErrorCode } from './types/PdfErrorCode';
  * A cancelled open rejects with an `AbortError` instead.
  */
 export class PdfOpenError extends Error {
-  /** Stable reason; match on this. */
+  /**
+   * Stable reason; match on this. Always one of `PdfOpenErrorCode`, the type
+   * to narrow it to for an exhaustive `switch`.
+   */
   readonly code: PdfErrorCode;
   /** HTTP status code, set for `'http-error'`. */
   readonly httpStatus?: number;

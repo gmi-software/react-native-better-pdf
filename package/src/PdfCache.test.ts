@@ -15,6 +15,14 @@ interface PendingDownload {
 const downloads: PendingDownload[] = [];
 const cancelled: number[] = [];
 const created: string[] = [];
+const readSources: NativePdfSource[] = [];
+// What the native reads reject with, when set.
+let nativeError: Error | undefined;
+
+const native = <T>(value: T) =>
+  nativeError === undefined
+    ? Promise.resolve(value)
+    : Promise.reject(nativeError);
 
 const entry = {
   filePath: '/caches/a.pdf',
@@ -33,11 +41,16 @@ const nativeCache = {
       downloads.push({ requestId, source, onProgress, finish });
     }),
   cancelDownload: (requestId: number) => cancelled.push(requestId),
-  getEntry: (source: NativePdfSource) =>
-    Promise.resolve(source.cacheKey === 'present' ? entry : undefined),
-  remove: () => Promise.resolve(true),
-  clear: () => Promise.resolve(),
-  getByteSize: () => Promise.resolve(42),
+  getEntry: (source: NativePdfSource) => {
+    readSources.push(source);
+    return native(source.cacheKey === 'present' ? entry : undefined);
+  },
+  remove: (source: NativePdfSource) => {
+    readSources.push(source);
+    return native(true);
+  },
+  clear: () => native(undefined),
+  getByteSize: () => native(42),
 };
 
 // Module mocks are shared by all test files: export everything the package
@@ -56,6 +69,7 @@ mock.module('react-native-nitro-modules', () => ({
 
 const { PdfCache } = await import('./PdfCache');
 const { PdfDownloadError } = await import('./PdfDownloadError');
+const { PdfMethodError } = await import('./PdfMethodError');
 
 // ---------------------------------------------------------------------------
 
@@ -68,6 +82,8 @@ const lastDownload = () => {
 beforeEach(() => {
   downloads.length = 0;
   cancelled.length = 0;
+  readSources.length = 0;
+  nativeError = undefined;
 });
 
 describe('PdfCache.download', () => {
@@ -95,7 +111,33 @@ describe('PdfCache.download', () => {
 
   test('leaves absent options absent', () => {
     PdfCache.download({ uri: 'https://x.test/a.pdf' });
-    expect(lastDownload().source).toEqual({ uri: 'https://x.test/a.pdf' });
+    expect(lastDownload().source).toStrictEqual({
+      uri: 'https://x.test/a.pdf',
+    });
+  });
+
+  test('treats undefined source fields and options like absent ones', async () => {
+    const promise = PdfCache.download(
+      {
+        uri: 'https://x.test/a.pdf',
+        headers: undefined,
+        cache: undefined,
+        maxAgeMs: undefined,
+        cacheKey: undefined,
+        password: undefined,
+      },
+      { onProgress: undefined, signal: undefined },
+    );
+    expect(lastDownload().source).toStrictEqual({
+      uri: 'https://x.test/a.pdf',
+    });
+    expect(lastDownload().onProgress).toBeUndefined();
+    lastDownload().finish({ entry });
+    expect(await promise).toEqual(entry);
+    PdfCache.download({ uri: 'https://x.test/a.pdf' }, undefined);
+    expect(lastDownload().source).toStrictEqual({
+      uri: 'https://x.test/a.pdf',
+    });
   });
 
   test('passes progress through', () => {
@@ -240,6 +282,78 @@ describe('PdfCache', () => {
       }).not.toThrow();
       await expect(removePromise!).rejects.toThrow();
     }
+  });
+
+  test('getEntry and remove reject an invalid source with PdfMethodError invalid-argument', async () => {
+    const cases: [unknown, string][] = [
+      [null, 'source must be an object with uri; got null'],
+      ['bad', 'source must be an object with uri; got a string'],
+      [{ uri: 42 }, 'source must be an object with uri; got { uri: 42 }'],
+      [
+        { filePath: '/a.pdf' },
+        'source must be an object with uri; got an object with filePath',
+      ],
+      [
+        { uri: 'https://x.test/a.pdf', cache: 'forever' },
+        "source.cache must be 'session' or 'persistent'; got a string",
+      ],
+    ];
+    for (const [invalid, message] of cases) {
+      for (const read of [PdfCache.getEntry, PdfCache.remove]) {
+        const error = await read(invalid as never).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(PdfMethodError);
+        expect(error).toMatchObject({
+          name: 'PdfMethodError',
+          code: 'invalid-argument',
+          message,
+        });
+      }
+    }
+    expect(readSources).toEqual([]);
+  });
+
+  test('getEntry, remove, clear and getByteSize reject a native failure with PdfMethodError', async () => {
+    nativeError = new Error('[io-error] The cache directory cannot be read');
+    const source = { uri: 'https://x.test/a.pdf' };
+    for (const call of [
+      () => PdfCache.getEntry(source),
+      () => PdfCache.remove(source),
+      () => PdfCache.clear(),
+      () => PdfCache.getByteSize(),
+    ]) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(PdfMethodError);
+      expect(error).toMatchObject({
+        code: 'io-error',
+        message: 'The cache directory cannot be read',
+      });
+    }
+    nativeError = new Error('Something else');
+    for (const call of [() => PdfCache.clear(), () => PdfCache.getByteSize()]) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(PdfMethodError);
+      expect(error).toMatchObject({
+        code: 'unknown',
+        message: 'Something else',
+      });
+    }
+  });
+
+  test('getEntry and remove treat undefined source fields like absent ones', async () => {
+    const source = {
+      uri: 'https://x.test/a.pdf',
+      headers: undefined,
+      cache: undefined,
+      maxAgeMs: undefined,
+      cacheKey: undefined,
+      password: undefined,
+    };
+    await PdfCache.getEntry(source);
+    await PdfCache.remove(source);
+    expect(readSources).toStrictEqual([
+      { uri: 'https://x.test/a.pdf' },
+      { uri: 'https://x.test/a.pdf' },
+    ]);
   });
 
   test('download, getEntry and remove reject options of the wrong type before native code', async () => {

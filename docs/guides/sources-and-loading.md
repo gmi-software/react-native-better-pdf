@@ -22,6 +22,17 @@ A protected document opens with the source's own `password`, or else with
 (bundled assets included). `PdfDocument.open` takes a source's own password
 before its `password` option.
 
+Give each source one of `uri`, `filePath` or `base64`. When a source has
+more, `filePath` wins over `base64`, which wins over `uri`, and `headers`,
+`cache`, `maxAgeMs` and `cacheKey` only apply to `uri` sources. A key set to
+`undefined` counts as absent. Development builds warn about the keys a
+source ignores with `console.warn`, once per combination of keys (names
+only, never values); release builds print nothing:
+
+```text
+[react-native-better-pdf] A source with filePath ignores cache. Pass one of uri, filePath or base64; headers, cache, maxAgeMs and cacheKey apply to uri sources only.
+```
+
 `headers` are sent with the download. Each name must be an HTTP token
 (letters, digits and ``!#$%&'*+-.^_`|~``) and no value may contain a line
 break or another control character (tab is fine): such a source fails with
@@ -59,8 +70,8 @@ least 0, or `cacheKey` that is not a string. `null` options count as absent.
   failing item for a list.
 - In `PdfDocument.open` and `PdfCache.download`: the returned promise rejects
   with `PdfOpenError` or `PdfDownloadError` (`code: 'invalid-source'`).
-- `PdfCache.getEntry` and `PdfCache.remove`: reject their promise instead of
-  throwing synchronously.
+- `PdfCache.getEntry` and `PdfCache.remove`: the promise rejects with a
+  `PdfMethodError` (`code: 'invalid-argument'`), with the same message.
 - An empty list `[]` reports an `invalid-source` error with no `sourceIndex`.
 
 ### Redirects

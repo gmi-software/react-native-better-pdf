@@ -1,6 +1,7 @@
 import { NitroModules } from 'react-native-nitro-modules';
 import { abortable, abortReason, untilAborted } from './abort';
 import { PdfDownloadError } from './PdfDownloadError';
+import { PdfMethodError, withMethodErrors } from './PdfMethodError';
 import type { NativePdfSource } from './types/NativePdfSource';
 import type { PdfDownloadOptions } from './types/PdfDownloadOptions';
 import { normalizeUriSource, type PdfUriSource } from './source';
@@ -19,6 +20,18 @@ function getNativeCache(): BetterPdfCache {
   return nativeCache;
 }
 
+/** `source` for the native reads; an invalid one is an `invalid-argument`. */
+function readSource(source: PdfUriSource): Omit<NativePdfSource, 'base64'> {
+  try {
+    return normalizeUriSource(source);
+  } catch (error) {
+    throw new PdfMethodError(
+      'invalid-argument',
+      error instanceof Error ? error.message : 'Invalid URI source',
+    );
+  }
+}
+
 function unwrap(result: PdfDownloadResult): PdfCacheEntry {
   if (result.entry !== undefined) return result.entry;
   if (result.error !== undefined) throw new PdfDownloadError(result.error);
@@ -32,6 +45,9 @@ function unwrap(result: PdfDownloadResult): PdfCacheEntry {
  *
  * Every method takes the same {@linkcode PdfUriSource} you pass to
  * `PdfView`; copies are found by its `cacheKey`, or by `uri` and `headers`.
+ * `download` rejects with a {@linkcode PdfDownloadError}, the other methods
+ * with a {@linkcode PdfMethodError} (`'invalid-argument'` for an invalid
+ * source).
  *
  * @example
  * ```ts
@@ -95,18 +111,24 @@ export const PdfCache = {
    * show which documents are available offline. Never uses the network and
    * never checks `maxAgeMs`: compare {@linkcode PdfCacheEntry.validatedAtMs}
    * yourself.
+   *
+   * @throws {PdfMethodError} `'invalid-argument'` for an invalid source.
    */
-  async getEntry(source: PdfUriSource): Promise<PdfCacheEntry | undefined> {
-    return getNativeCache().getEntry(normalizeUriSource(source));
+  getEntry(source: PdfUriSource): Promise<PdfCacheEntry | undefined> {
+    return withMethodErrors(() =>
+      getNativeCache().getEntry(readSource(source)),
+    );
   },
 
   /**
    * Deletes the stored copy of `source`, whether session or persistent.
    * Resolves `false` when there was none. A `PdfView` showing the document
    * keeps showing it; a download in progress still stores its result.
+   *
+   * @throws {PdfMethodError} `'invalid-argument'` for an invalid source.
    */
-  async remove(source: PdfUriSource): Promise<boolean> {
-    return getNativeCache().remove(normalizeUriSource(source));
+  remove(source: PdfUriSource): Promise<boolean> {
+    return withMethodErrors(() => getNativeCache().remove(readSource(source)));
   },
 
   /**
@@ -116,11 +138,11 @@ export const PdfCache = {
    * `renderPage()` are not affected.
    */
   clear(): Promise<void> {
-    return getNativeCache().clear();
+    return withMethodErrors(() => getNativeCache().clear());
   },
 
   /** Total size of the stored copies in bytes. */
   getByteSize(): Promise<number> {
-    return getNativeCache().getByteSize();
+    return withMethodErrors(() => getNativeCache().getByteSize());
   },
 };

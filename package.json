@@ -11,6 +11,7 @@
     "typecheck": "bun run --filter react-native-better-pdf typecheck && bun run --filter better-pdf-example typecheck",
     "specs": "bun run --filter react-native-better-pdf specs",
     "test": "bun run --filter react-native-better-pdf test",
+    "typetest": "bun run --filter react-native-better-pdf typetest",
     "fixtures": "node benchmarks/generate-fixtures.mjs",
     "format": "prettier --write .",
     "commitlint": "commitlint",

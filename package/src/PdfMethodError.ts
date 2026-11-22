@@ -1,7 +1,8 @@
 import type { PdfMethodErrorCode } from './types/PdfMethodErrorCode';
 
 /**
- * Why a `PdfViewRef` or `PdfDocument` method rejected. Match on
+ * Why a `PdfViewRef`, `PdfDocument` or `PdfCache` method (other than
+ * `PdfCache.download`) rejected. Match on
  * {@linkcode PdfMethodError.code}: e.g. `'not-loaded'` (call it after
  * `onLoad`), `'closed'` (the document was closed or replaced while the
  * call waited), `'not-supported'` (several sources, or a platform

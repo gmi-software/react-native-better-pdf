@@ -38,8 +38,8 @@ export interface PdfPageOverlayProps extends ViewProps {
    * printed on it. `false`: it keeps its size and its top-left corner stays
    * on the page point — for badges and handles.
    */
-  scalesWithZoom?: boolean;
-  children?: ReactNode;
+  scalesWithZoom?: boolean | undefined;
+  children?: ReactNode | undefined;
 }
 
 /**

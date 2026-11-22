@@ -12,7 +12,10 @@ import type { PdfErrorCode } from './types/PdfErrorCode';
  * A cancelled download rejects with an `AbortError` instead.
  */
 export class PdfDownloadError extends Error {
-  /** Stable reason; match on this. */
+  /**
+   * Stable reason; match on this. Always one of `PdfDownloadErrorCode`, the type
+   * to narrow it to for an exhaustive `switch`.
+   */
   readonly code: PdfErrorCode;
   /** HTTP status code, set for `'http-error'`. */
   readonly httpStatus?: number;

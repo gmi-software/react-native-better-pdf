@@ -154,6 +154,49 @@ describe('PdfDocument.open', () => {
     expect(lastNative().password).toBe('secret');
   });
 
+  test('treats undefined source fields and options like absent ones', () => {
+    const sent = (open: () => unknown) => {
+      void open();
+      const { source, password, onProgress } = lastNative();
+      return { source, password, onProgress };
+    };
+    const uri = 'https://x.test/a.pdf';
+    expect(
+      sent(() =>
+        PdfDocument.open(
+          {
+            uri,
+            headers: undefined,
+            cache: undefined,
+            maxAgeMs: undefined,
+            cacheKey: undefined,
+            password: undefined,
+            filePath: undefined,
+            base64: undefined,
+          } as never,
+          { password: undefined, onProgress: undefined, signal: undefined },
+        ),
+      ),
+    ).toStrictEqual(sent(() => PdfDocument.open({ uri })));
+    expect(sent(() => PdfDocument.open({ uri }, undefined))).toStrictEqual(
+      sent(() => PdfDocument.open({ uri })),
+    );
+    expect(
+      sent(() =>
+        PdfDocument.open(
+          { filePath: '/a.pdf', password: undefined },
+          {
+            password: 'option',
+          },
+        ),
+      ),
+    ).toStrictEqual(
+      sent(() =>
+        PdfDocument.open({ filePath: '/a.pdf' }, { password: 'option' }),
+      ),
+    );
+  });
+
   test('rejects with PdfOpenError invalid-source for null, undefined and malformed values', async () => {
     for (const invalid of [
       null,

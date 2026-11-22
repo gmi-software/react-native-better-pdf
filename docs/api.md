@@ -3,6 +3,11 @@
 Every component, object and type is exported from the package root. The
 [guides](../README.md#documentation) show each feature in use.
 
+Strict presets with `exactOptionalPropertyTypes` are supported: every
+optional prop, option and source field also takes `undefined`, which means the
+same as leaving it out, and `onError`'s argument can be stored or handled as a
+`PdfError`.
+
 ## Components
 
 | Component | Description |
@@ -123,7 +128,7 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 | `PdfCache` | Stored downloads: `download()`, `getEntry()`, `remove()`, `getByteSize()`, `clear()` |
 | `PdfOpenError` | Rejection of `PdfDocument.open`, with the view's error `code` |
 | `PdfDownloadError` | Rejection of `PdfCache.download`, with a `code` and `httpStatus` |
-| `PdfMethodError` | Rejection of the ref's promise methods and `PdfDocument`'s reads, with a `code` |
+| `PdfMethodError` | Rejection of the ref's promise methods, `PdfDocument`'s reads and `PdfCache`'s other methods, with a `code` |
 
 ## Errors
 
@@ -165,18 +170,57 @@ Without `onError`, development builds warn about failures with
 The warning names the code but leaves out the message, which can quote the
 source URL, header names and their tokens.
 
+### `PdfDocument.open` and `PdfCache.download` errors
+
+`PdfDocument.open` rejects with a `PdfOpenError` and `PdfCache.download`
+with a `PdfDownloadError`, both with the codes above. Each call can only
+reject with some of them, exported as types. A call cancelled through its
+`signal` rejects with the signal's reason instead (an `AbortError` when it
+has none), which has none of these codes:
+
+| Type | Codes |
+| --- | --- |
+| `PdfOpenErrorCode` | Every code except `page-render-failed`; `unsupported-pdf` and `out-of-memory` on Android only |
+| `PdfDownloadErrorCode` | `invalid-source`, `network-error`, `http-error`, `invalid-pdf` |
+
+The classes' `code` is typed as the whole `PdfErrorCode` until 2.0; narrow
+it for an exhaustive `switch`:
+
+```ts
+try {
+  await PdfCache.download(source);
+} catch (error) {
+  if (!(error instanceof PdfDownloadError)) throw error;
+  switch (error.code as PdfDownloadErrorCode) {
+    case 'network-error':
+      /* offline */ break;
+    case 'http-error':
+      /* error.httpStatus */ break;
+    case 'invalid-pdf':
+      /* e.g. a login page */ break;
+    case 'invalid-source':
+      /* a bug in the source */ break;
+  }
+}
+```
+
+`PdfCache`'s other methods (`getEntry`, `remove`, `clear`,
+`getByteSize`) reject with a `PdfMethodError`: `invalid-argument` for an
+invalid source, with the same message `download` gives.
+
 ### Method errors
 
 The ref's promise methods (`getOutline`, `getPageSizes`, `renderPage`,
-`print`, `getFormFields`, `setFormFieldValues`, `exportDocument`) and
-`PdfDocument`'s reads reject with a `PdfMethodError`. Its `code`
+`print`, `getFormFields`, `setFormFieldValues`, `exportDocument`),
+`PdfDocument`'s reads and `PdfCache`'s methods other than `download`
+reject with a `PdfMethodError`. Its `code`
 (`PdfMethodErrorCode`) is stable and identical on both platforms:
 
 | Code | When |
 | --- | --- |
 | `not-loaded` | Before `onLoad`, also while a new `source` loads; before the view mounts |
 | `closed` | `PdfDocument` after `close()`; the view closed or its `source` changed while the call waited for its turn (a call already running finishes) |
-| `invalid-argument` | `renderPage`: a page outside the document, a `width` outside 1–4096 px, an image over 4096 × 4096 px. `setFormFieldValues`: an unknown field, a value its type does not take, text over its maximum length, an option it does not have. `exportDocument`: a `filePath` that is a directory, the displayed file or in the download cache |
+| `invalid-argument` | `PdfCache`: an invalid source. `renderPage`: a page outside the document, a `width` outside 1–4096 px, an image over 4096 × 4096 px. `setFormFieldValues`: an unknown field, a value its type does not take, text over its maximum length, an option it does not have. `exportDocument`: a `filePath` that is a directory, the displayed file or in the download cache |
 | `not-supported` | Several sources (`print`, the form methods, `exportDocument`); a device that cannot print (on Android: no print service, or the system opens no print dialog); filling forms on Android below 15 without SDK extension 13; selecting several options of a list box on iOS; clearing a radio group that cannot be turned off on Android; the outline and metadata of encrypted documents on Android |
 | `not-permitted` | The document does not permit printing (iOS); a read-only form field |
 | `busy` | A print dialog of the view is open; on Android, the app is not in the foreground |
@@ -198,6 +242,7 @@ is the platform's text (on Android with the stack trace), for logging.
 | `PdfLoadedSource` | One source as `onLoad` reports it: `{ pageCount, firstPage, filePath?, isStale }` |
 | `PdfError` / `PdfErrorCode` | Errors and their stable codes |
 | `PdfLoadError` / `PdfPageError` | `onError`'s argument: a load failure, or a page that could not be rendered after `onLoad` (Android, with `page`) |
+| `PdfOpenErrorCode` / `PdfDownloadErrorCode` | The codes `PdfDocument.open` and `PdfCache.download` can reject with, see [their errors](#pdfdocumentopen-and-pdfcachedownload-errors) |
 | `PdfMethodErrorCode` | The stable codes of `PdfMethodError`, see [Method errors](#method-errors) |
 | `PdfViewport` | A reading position: `{ page, x, y, scale }` |
 | `PdfFormField` | A form field, discriminated by `type` (`PdfTextFormField`, `PdfCheckboxFormField`, …) |
