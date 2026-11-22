@@ -59,8 +59,8 @@ least 0, or `cacheKey` that is not a string. `null` options count as absent.
   failing item for a list.
 - In `PdfDocument.open` and `PdfCache.download`: the returned promise rejects
   with `PdfOpenError` or `PdfDownloadError` (`code: 'invalid-source'`).
-- `PdfCache.getEntry` and `PdfCache.remove`: reject their promise instead of
-  throwing synchronously.
+- `PdfCache.getEntry` and `PdfCache.remove`: the promise rejects with a
+  `PdfMethodError` (`code: 'invalid-argument'`), with the same message.
 - An empty list `[]` reports an `invalid-source` error with no `sourceIndex`.
 
 ### Redirects

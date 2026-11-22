@@ -69,6 +69,7 @@ mock.module('react-native-nitro-modules', () => ({
 
 const { PdfCache } = await import('./PdfCache');
 const { PdfDownloadError } = await import('./PdfDownloadError');
+const { PdfMethodError } = await import('./PdfMethodError');
 
 // ---------------------------------------------------------------------------
 
@@ -280,6 +281,61 @@ describe('PdfCache', () => {
         removePromise = PdfCache.remove(invalid as never);
       }).not.toThrow();
       await expect(removePromise!).rejects.toThrow();
+    }
+  });
+
+  test('getEntry and remove reject an invalid source with PdfMethodError invalid-argument', async () => {
+    const cases: [unknown, string][] = [
+      [null, 'source must be an object with uri; got null'],
+      ['bad', 'source must be an object with uri; got a string'],
+      [{ uri: 42 }, 'source must be an object with uri; got { uri: 42 }'],
+      [
+        { filePath: '/a.pdf' },
+        'source must be an object with uri; got an object with filePath',
+      ],
+      [
+        { uri: 'https://x.test/a.pdf', cache: 'forever' },
+        "source.cache must be 'session' or 'persistent'; got a string",
+      ],
+    ];
+    for (const [invalid, message] of cases) {
+      for (const read of [PdfCache.getEntry, PdfCache.remove]) {
+        const error = await read(invalid as never).catch((e: unknown) => e);
+        expect(error).toBeInstanceOf(PdfMethodError);
+        expect(error).toMatchObject({
+          name: 'PdfMethodError',
+          code: 'invalid-argument',
+          message,
+        });
+      }
+    }
+    expect(readSources).toEqual([]);
+  });
+
+  test('getEntry, remove, clear and getByteSize reject a native failure with PdfMethodError', async () => {
+    nativeError = new Error('[io-error] The cache directory cannot be read');
+    const source = { uri: 'https://x.test/a.pdf' };
+    for (const call of [
+      () => PdfCache.getEntry(source),
+      () => PdfCache.remove(source),
+      () => PdfCache.clear(),
+      () => PdfCache.getByteSize(),
+    ]) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(PdfMethodError);
+      expect(error).toMatchObject({
+        code: 'io-error',
+        message: 'The cache directory cannot be read',
+      });
+    }
+    nativeError = new Error('Something else');
+    for (const call of [() => PdfCache.clear(), () => PdfCache.getByteSize()]) {
+      const error = await call().catch((e: unknown) => e);
+      expect(error).toBeInstanceOf(PdfMethodError);
+      expect(error).toMatchObject({
+        code: 'unknown',
+        message: 'Something else',
+      });
     }
   });
 

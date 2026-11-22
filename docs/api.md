@@ -127,7 +127,7 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 | `PdfCache` | Stored downloads: `download()`, `getEntry()`, `remove()`, `getByteSize()`, `clear()` |
 | `PdfOpenError` | Rejection of `PdfDocument.open`, with the view's error `code` |
 | `PdfDownloadError` | Rejection of `PdfCache.download`, with a `code` and `httpStatus` |
-| `PdfMethodError` | Rejection of the ref's promise methods and `PdfDocument`'s reads, with a `code` |
+| `PdfMethodError` | Rejection of the ref's promise methods, `PdfDocument`'s reads and `PdfCache`'s other methods, with a `code` |
 
 ## Errors
 
@@ -172,15 +172,16 @@ source URL, header names and their tokens.
 ### Method errors
 
 The ref's promise methods (`getOutline`, `getPageSizes`, `renderPage`,
-`print`, `getFormFields`, `setFormFieldValues`, `exportDocument`) and
-`PdfDocument`'s reads reject with a `PdfMethodError`. Its `code`
+`print`, `getFormFields`, `setFormFieldValues`, `exportDocument`),
+`PdfDocument`'s reads and `PdfCache`'s methods other than `download`
+reject with a `PdfMethodError`. Its `code`
 (`PdfMethodErrorCode`) is stable and identical on both platforms:
 
 | Code | When |
 | --- | --- |
 | `not-loaded` | Before `onLoad`, also while a new `source` loads; before the view mounts |
 | `closed` | `PdfDocument` after `close()`; the view closed or its `source` changed while the call waited for its turn (a call already running finishes) |
-| `invalid-argument` | `renderPage`: a page outside the document, a `width` outside 1–4096 px, an image over 4096 × 4096 px. `setFormFieldValues`: an unknown field, a value its type does not take, text over its maximum length, an option it does not have. `exportDocument`: a `filePath` that is a directory, the displayed file or in the download cache |
+| `invalid-argument` | `PdfCache`: an invalid source. `renderPage`: a page outside the document, a `width` outside 1–4096 px, an image over 4096 × 4096 px. `setFormFieldValues`: an unknown field, a value its type does not take, text over its maximum length, an option it does not have. `exportDocument`: a `filePath` that is a directory, the displayed file or in the download cache |
 | `not-supported` | Several sources (`print`, the form methods, `exportDocument`); a device that cannot print (on Android: no print service, or the system opens no print dialog); filling forms on Android below 15 without SDK extension 13; selecting several options of a list box on iOS; clearing a radio group that cannot be turned off on Android; the outline and metadata of encrypted documents on Android |
 | `not-permitted` | The document does not permit printing (iOS); a read-only form field |
 | `busy` | A print dialog of the view is open; on Android, the app is not in the foreground |
