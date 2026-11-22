@@ -58,6 +58,10 @@ abstract class HybridBetterPdfCacheSpec: HybridObject() {
   @DoNotStrip
   @Keep
   abstract fun getByteSize(): Promise<Double>
+  
+  @DoNotStrip
+  @Keep
+  abstract fun getCapabilities(): PdfDeviceCapabilities
 
   // Default implementation of `HybridObject.toString()`
   override fun toString(): String {

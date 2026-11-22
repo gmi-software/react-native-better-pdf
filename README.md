@@ -85,7 +85,7 @@ Callbacks take one event object, and `page` counts from 0. [Migrating from react
 The full list, with reaction counts, is in [Community requests](docs/community-requests.md).
 
 > [!CAUTION]
-> Search, text selection, password-protected documents and filling in forms need Android 15, or Android 12–14 with SDK extension 13 (the PDF module updated through Google Play system updates). On other Android versions a password-protected document fails with `unsupported-pdf`, search reports `isSupported: false`, long presses select nothing and forms are read only. See the [capability matrix](docs/compatibility.md#capability-matrix).
+> Search, text selection, password-protected documents and filling in forms need Android 15, or Android 12–14 with SDK extension 13 (the PDF module updated through Google Play system updates). On other Android versions a password-protected document fails with `unsupported-pdf`, search reports `isSupported: false`, long presses select nothing and forms are read only. `PdfCapabilities.get()` (1.3+) tells you which apply before you show any UI. See the [capability matrix](docs/compatibility.md#capability-matrix).
 
 ## Installation
 

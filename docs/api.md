@@ -121,9 +121,42 @@ pdf.current?.goToViewport(saved);              // a position from onViewportChan
 | --- | --- |
 | `PdfDocument` | `PdfDocument.open(source, options?)`: a document without a view — `pageCount`, `getMetadata()`, `getPageSizes()`, `getOutline()`, `renderPage()`, `close()` |
 | `PdfCache` | Stored downloads: `download()`, `getEntry()`, `remove()`, `getByteSize()`, `clear()` |
+| `PdfCapabilities` | `PdfCapabilities.get()` (1.3+): what this device supports, see [Device capabilities](#device-capabilities) |
 | `PdfOpenError` | Rejection of `PdfDocument.open`, with the view's error `code` |
 | `PdfDownloadError` | Rejection of `PdfCache.download`, with a `code` and `httpStatus` |
 | `PdfMethodError` | Rejection of the ref's promise methods and `PdfDocument`'s reads, with a `code` |
+
+## Device capabilities
+
+`PdfCapabilities.get()` (1.3+) says which features this device supports,
+before any `PdfView` mounts, so an app can leave out UI the device cannot
+back. It is synchronous and returns the same frozen
+`PdfDeviceCapabilities` object on every call: the answer cannot change
+while the app runs.
+
+```tsx
+import { PdfCapabilities } from 'react-native-better-pdf';
+
+const { search, formFilling } = PdfCapabilities.get();
+{search && <SearchButton />}
+```
+
+iOS reports all four `true`. On Android they are `true` on Android 15+ and
+on Android 12–14 with SDK extension 13, `false` elsewhere (see
+[Compatibility](compatibility.md#capability-matrix)). Viewing, links, the
+outline, page images and printing work everywhere and are not listed;
+which annotations are drawn and whether screen readers read page text
+also differ by Android version (same table).
+
+| Key | When `false` |
+| --- | --- |
+| `search` | `search()` finds nothing and `onSearchChange` reports `isSupported: false` |
+| `textSelection` | Long presses are ignored, even with `enableTextSelection`; `onTextSelectionChange` never fires |
+| `formFilling` | Fields are shown but cannot be edited and `onFormChange` never fires; `setFormFieldValues` rejects with `not-supported`; `exportDocument` copies the file unchanged; `getFormFields` still works |
+| `passwords` | Password-protected documents fail with `unsupported-pdf`, never `password-required`, in `PdfView` and `PdfDocument.open` alike |
+
+`formFilling: true` is about the device: a document without a form, or a
+view showing several sources, still has nothing to fill in.
 
 ## Errors
 
@@ -206,6 +239,7 @@ is the platform's text (on Android with the stack trace), for logging.
 | `PdfPageImage` | A rendered page: `{ uri, width, height }` |
 | `PdfFitPolicy` / `PdfSpreadMode` / `PdfColorScheme` | Layout options |
 | `PdfCacheEntry` / `PdfCacheMode` | Stored downloads |
+| `PdfDeviceCapabilities` | `PdfCapabilities.get()`'s result: `{ search, textSelection, formFilling, passwords }` (1.3+) |
 | `PdfDocumentMetadata` | Title, author, dates and the rest of the information dictionary |
 | `Pdf…Event` | Event payloads (`PdfLoadEvent`, `PdfPageTapEvent`, `PdfSearchChangeEvent`, …) |
 

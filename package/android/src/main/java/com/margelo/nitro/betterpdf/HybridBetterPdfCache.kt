@@ -77,4 +77,12 @@ class HybridBetterPdfCache : HybridBetterPdfCacheSpec() {
 
   override fun getByteSize(): Promise<Double> =
     Promise.parallel { cache.byteSize().toDouble() }
+
+  override fun getCapabilities(): PdfDeviceCapabilities =
+    PdfDeviceCapabilities(
+      search = DocumentRenderer.supportsSearch,
+      textSelection = DocumentRenderer.supportsTextSelection,
+      formFilling = DocumentRenderer.supportsForms,
+      passwords = DocumentRenderer.supportsPasswords,
+    )
 }

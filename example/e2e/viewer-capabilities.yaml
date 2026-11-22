@@ -1,0 +1,11 @@
+# PdfCapabilities.get() on iOS and on Android with the renderer's newer API:
+# all four are true, before any document is opened. Older Android devices
+# run android-legacy/capabilities instead.
+appId: software.gmi.betterpdf.example
+---
+- runFlow: _start.yaml
+- extendedWaitUntil:
+    visible:
+      id: "capabilities"
+      text: "search: true · textSelection: true · formFilling: true · passwords: true"
+    timeout: 10000

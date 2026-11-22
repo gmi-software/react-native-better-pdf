@@ -21,6 +21,8 @@ namespace margelo::nitro::betterpdf { struct NativePdfSource; }
 namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
 // Forward declaration of `PdfCacheEntry` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfCacheEntry; }
+// Forward declaration of `PdfDeviceCapabilities` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfDeviceCapabilities; }
 
 #include "PdfDownloadResult.hpp"
 #include <NitroModules/Promise.hpp>
@@ -29,6 +31,7 @@ namespace margelo::nitro::betterpdf { struct PdfCacheEntry; }
 #include <functional>
 #include <optional>
 #include "PdfCacheEntry.hpp"
+#include "PdfDeviceCapabilities.hpp"
 
 namespace margelo::nitro::betterpdf {
 
@@ -67,6 +70,7 @@ namespace margelo::nitro::betterpdf {
       virtual std::shared_ptr<Promise<bool>> remove(const NativePdfSource& source) = 0;
       virtual std::shared_ptr<Promise<void>> clear() = 0;
       virtual std::shared_ptr<Promise<double>> getByteSize() = 0;
+      virtual PdfDeviceCapabilities getCapabilities() = 0;
 
     protected:
       // Hybrid Setup

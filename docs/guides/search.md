@@ -31,4 +31,6 @@ const label = search?.isSupported === false
   opens, call it from `onLoad`.
 - Android searches with the platform renderer's text API (Android 15+, or
   12–14 with SDK extension 13); elsewhere the search ends at once with
-  `isSupported: false`.
+  `isSupported: false`. To hide search UI before any search, check
+  `PdfCapabilities.get().search` (1.3+); see
+  [Device capabilities](../api.md#device-capabilities).
