@@ -174,7 +174,9 @@ source URL, header names and their tokens.
 
 `PdfDocument.open` rejects with a `PdfOpenError` and `PdfCache.download`
 with a `PdfDownloadError`, both with the codes above. Each call can only
-reject with some of them, exported as types:
+reject with some of them, exported as types. A call cancelled through its
+`signal` rejects with the signal's reason instead (an `AbortError` when it
+has none), which has none of these codes:
 
 | Type | Codes |
 | --- | --- |
