@@ -807,7 +807,9 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
   too. The rebuild takes the newest trailer naming a catalog — a `trailer`
   dictionary or a cross-reference stream's — and without one the newest
   catalog among the objects, those in object streams too; it stops at
-  1,000,000 objects.
+  1,000,000 objects, as cross-reference tables and streams do: the
+  cross-references are kept in two primitive arrays, 12 bytes a slot, for
+  as long as the document is open.
   The cross-references are read once per document and shared by every
   read, so a damaged file is scanned once. It reads a duplicate of the file
   descriptor with positional reads, so rendering is not blocked.
@@ -824,17 +826,34 @@ type PdfOutlineItem = { title: string; page?: number; children: PdfOutlineItem[]
   KB, now under 0.3 s). Decoding is bounded too: a stream's data is at
   most 32 MB, read or decoded; one read reads and decodes at most 16 bytes
   of streams for each byte of the file, plus 64 MB; it keeps the most
-  recently used object streams up to 32 MB of decoded data (others are
+  recently used object streams up to 16 MB of decoded data (others are
   decoded again when needed), and an object
   stream it cannot decode (an unsupported filter, data expanding beyond
   the 32 MB limit) is not decoded again for every object needed from it
   (`PdfDecodeTimeTest`: 100 object streams expanding to 31 MB each, 3 GB
-  before; 5,000 links into an undecodable 4 MB stream, 20 GB read). The
-  fixtures and files from PDFKit, Quartz and pypdf use at most 1.4 parse
-  units and 0.9 stream bytes per byte, rebuilds included. Deterministic
+  before; 5,000 links into an undecodable 4 MB stream, 20 GB read).
+  Memory is bounded as well, which work does not do: a few bytes parse into
+  an object of twenty times their size, and one object can be read under
+  many numbers. One read holds at most 32 MB of the objects it parses, the
+  stream data it reads and decodes and what its readers keep of them
+  (estimated per object; the estimates are upper bounds on HotSpot), and
+  fails beyond that; readers let an annotation's, a page's, an outline
+  item's or a field's objects go once they have what they need of it. It
+  keeps the most recently used parsed objects up to 4 MB (others are read
+  again when needed), a link has at most 256 areas, a choice field at most
+  10,000 options, and the trailer is at most 2 MB. An object taken from the
+  cache and a string a reader decodes count as work too
+  (`PdfReadMemoryTest`: files of 40 KB to 40 MB that took more than 128 MB,
+  some more than 2 GB, read in a 128 MB heap; `PdfLargeDocumentTest`:
+  100,000 links, 100,000 pages, 10,000 outline entries and 10,000 fields
+  still read fully). The fixtures, the files from PDFKit, Quartz and pypdf
+  and three TeX manuals (up to 45,000 links) use at most 3.2 parse units
+  and 1.1 stream bytes per byte, rebuilds included, and hold at most 11 MB.
+  Deterministic
   fuzz tests (500 mutated files, 300 reads of generated chains of up to
-  2,000 objects on a 256 KB stack, and 200 reads of generated files of
-  such runaway objects) must end in a result or `PdfFormatException`
+  2,000 objects on a 256 KB stack, 200 reads of generated files of such
+  runaway objects, and 30 reads of generated files of many references into
+  one object, in a JVM with a 128 MB heap) must end in a result or `PdfFormatException`
   within 2 s each. A stack overflow the limits miss reads as
   `PdfFormatException` too, never a crash. Encrypted documents reject.
 - **Tested against three producers** (the generator in classic and
