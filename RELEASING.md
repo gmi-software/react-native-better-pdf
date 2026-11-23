@@ -158,12 +158,6 @@ expires unless a real (not dry-run) publish succeeds with it within 2 days, so
 create it when the next release is about to be tagged, not earlier. Until it is
 configured the publish step fails with an authentication error.
 
-> **Pending.** The publisher in use since 1.0.1 names no environment, so npm
-> still accepts a publish from any run of a workflow file called `release.yml`
-> in this repository, approved or not. Replace it while cutting the next
-> release, between merging the release pull request and pushing the tag, then
-> delete this note.
-
 Provenance also requires the repository to be public.
 
 ## The first release
