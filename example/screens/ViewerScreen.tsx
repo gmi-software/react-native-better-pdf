@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import {
+  PdfCapabilities,
   PdfPageOverlay,
   PdfView,
   type PdfError,
@@ -202,6 +203,9 @@ export function ViewerScreen() {
   if (entry == null) {
     return (
       <ScrollView contentContainerStyle={styles.list}>
+        <Text testID="capabilities" style={styles.capabilities}>
+          {formatCapabilities()}
+        </Text>
         {DOCUMENTS.map((document) => {
           const saved = savedViewports.get(document.id);
           return (
@@ -804,6 +808,12 @@ function rotateSignatures(source: DocumentSource): DocumentSource {
 }
 
 /** "p 3 · y 120 · 1.00x", plus "· end" once the end is on screen. */
+function formatCapabilities(): string {
+  return Object.entries(PdfCapabilities.get())
+    .map(([name, value]) => `${name}: ${String(value)}`)
+    .join(' · ');
+}
+
 function formatViewport(event: PdfViewportChangeEvent | null): string {
   if (event == null) return '';
   const { page, y, scale } = event.viewport;
@@ -943,6 +953,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
   },
   lastEvent: { flex: 1, fontSize: 13, color: colors.muted },
+  capabilities: {
+    paddingHorizontal: 4,
+    fontSize: 13,
+    color: colors.muted,
+  },
   viewport: {
     fontSize: 13,
     color: colors.muted,

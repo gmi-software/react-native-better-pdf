@@ -70,6 +70,10 @@ final class HybridBetterPdfCache: HybridBetterPdfCacheSpec {
     }
   }
 
+  func getCapabilities() throws -> PdfDeviceCapabilities {
+    return PdfDeviceCapabilities(search: true, textSelection: true, formFilling: true, passwords: true)
+  }
+
   // Serial on purpose; see PdfDocumentLoader.workQueue.
   private static let queue = DispatchQueue(label: "com.betterpdf.cache.api", qos: .userInitiated)
 

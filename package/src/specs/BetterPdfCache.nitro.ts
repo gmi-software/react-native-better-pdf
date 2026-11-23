@@ -1,6 +1,7 @@
 import type { HybridObject } from 'react-native-nitro-modules';
 import type { NativePdfSource } from '../types/NativePdfSource';
 import type { PdfCacheEntry } from '../types/PdfCacheEntry';
+import type { PdfDeviceCapabilities } from '../types/PdfDeviceCapabilities';
 import type { PdfDownloadResult } from '../types/PdfDownloadResult';
 import type { PdfLoadProgressEvent } from '../types/PdfLoadProgressEvent';
 
@@ -9,8 +10,8 @@ import type { PdfLoadProgressEvent } from '../types/PdfLoadProgressEvent';
  * `BetterPdfView`. Internal: apps use `PdfCache`, which adds `AbortSignal`
  * cancellation and typed errors on top.
  *
- * Every method works off the JS thread. Sources are keyed by `cacheKey`, or
- * by `uri` and `headers` when it is absent.
+ * Every method but `getCapabilities` works off the JS thread. Sources are
+ * keyed by `cacheKey`, or by `uri` and `headers` when it is absent.
  */
 export interface BetterPdfCache extends HybridObject<{
   ios: 'swift';
@@ -37,4 +38,6 @@ export interface BetterPdfCache extends HybridObject<{
   clear(): Promise<void>;
   /** Total size of all stored copies in bytes. */
   getByteSize(): Promise<number>;
+  /** What this device supports; the same for the whole process. Synchronous. */
+  getCapabilities(): PdfDeviceCapabilities;
 }

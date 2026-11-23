@@ -17,7 +17,10 @@ Kotlin 2.1, AGP 8.12 / Gradle 9.3, Node 24.
 Several Android features come from the platform renderer's newer API: on
 Android 15+, and on Android 12–14 when the device has SDK extension 13 (the
 PDF module updated through Google Play system updates; the library then uses
-`PdfRendererPreV`).
+`PdfRendererPreV`). To find out at run time, before showing any UI, call
+`PdfCapabilities.get()` (1.3+): its `search`, `textSelection`, `formFilling`
+and `passwords` match the rows below (see
+[Device capabilities](api.md#device-capabilities)).
 
 | Capability | iOS | Android 15+, or 12–14 with SDK extension 13 | Other Android versions |
 | --- | --- | --- | --- |

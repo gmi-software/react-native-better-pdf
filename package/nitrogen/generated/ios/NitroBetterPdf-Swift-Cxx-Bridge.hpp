@@ -32,6 +32,8 @@ namespace margelo::nitro::betterpdf { struct PdfCacheEntry; }
 namespace margelo::nitro::betterpdf { enum class PdfCacheMode; }
 // Forward declaration of `PdfColorScheme` to properly resolve imports.
 namespace margelo::nitro::betterpdf { enum class PdfColorScheme; }
+// Forward declaration of `PdfDeviceCapabilities` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfDeviceCapabilities; }
 // Forward declaration of `PdfDocumentMetadata` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfDocumentMetadata; }
 // Forward declaration of `PdfDownloadResult` to properly resolve imports.
@@ -113,6 +115,7 @@ namespace NitroBetterPdf { class HybridBetterPdfViewSpec_cxx; }
 #include "PdfCacheEntry.hpp"
 #include "PdfCacheMode.hpp"
 #include "PdfColorScheme.hpp"
+#include "PdfDeviceCapabilities.hpp"
 #include "PdfDocumentMetadata.hpp"
 #include "PdfDownloadResult.hpp"
 #include "PdfError.hpp"
@@ -585,6 +588,15 @@ namespace margelo::nitro::betterpdf::bridge::swift {
   }
   inline Result_std__shared_ptr_Promise_double___ create_Result_std__shared_ptr_Promise_double___(const std::exception_ptr& error) noexcept {
     return Result<std::shared_ptr<Promise<double>>>::withError(error);
+  }
+  
+  // pragma MARK: Result<PdfDeviceCapabilities>
+  using Result_PdfDeviceCapabilities_ = Result<PdfDeviceCapabilities>;
+  inline Result_PdfDeviceCapabilities_ create_Result_PdfDeviceCapabilities_(const PdfDeviceCapabilities& value) noexcept {
+    return Result<PdfDeviceCapabilities>::withValue(value);
+  }
+  inline Result_PdfDeviceCapabilities_ create_Result_PdfDeviceCapabilities_(const std::exception_ptr& error) noexcept {
+    return Result<PdfDeviceCapabilities>::withError(error);
   }
   
   // pragma MARK: std::optional<PdfOpenedDocument>

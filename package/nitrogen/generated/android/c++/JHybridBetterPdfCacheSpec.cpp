@@ -17,6 +17,8 @@ namespace margelo::nitro::betterpdf { enum class PdfCacheMode; }
 namespace margelo::nitro::betterpdf { struct PdfError; }
 // Forward declaration of `PdfErrorCode` to properly resolve imports.
 namespace margelo::nitro::betterpdf { enum class PdfErrorCode; }
+// Forward declaration of `PdfDeviceCapabilities` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfDeviceCapabilities; }
 // Forward declaration of `NativePdfSource` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct NativePdfSource; }
 // Forward declaration of `PdfLoadProgressEvent` to properly resolve imports.
@@ -37,6 +39,8 @@ namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
 #include "PdfErrorCode.hpp"
 #include "JPdfErrorCode.hpp"
 #include <NitroModules/JUnit.hpp>
+#include "PdfDeviceCapabilities.hpp"
+#include "JPdfDeviceCapabilities.hpp"
 #include "NativePdfSource.hpp"
 #include "JNativePdfSource.hpp"
 #include <NitroModules/ArrayBuffer.hpp>
@@ -163,6 +167,11 @@ namespace margelo::nitro::betterpdf {
       });
       return __promise;
     }();
+  }
+  PdfDeviceCapabilities JHybridBetterPdfCacheSpec::getCapabilities() {
+    static const auto method = _javaPart->javaClassStatic()->getMethod<jni::local_ref<JPdfDeviceCapabilities>()>("getCapabilities");
+    auto __result = method(_javaPart);
+    return __result->toCpp();
   }
 
 } // namespace margelo::nitro::betterpdf

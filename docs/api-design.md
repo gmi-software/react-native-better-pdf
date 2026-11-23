@@ -962,6 +962,9 @@ The most requested missing feature of react-native-pdf (7 issues, see
   extension 13), and devices without it end the search at once with
   `isSupported: false`. The flag is the same for every search on a device,
   so an app can hide its search UI after the first search reports `false`.
+  `PdfCapabilities.get()` (1.3+) reports the same runtime capability, with
+  text selection, form filling and passwords, before any document opens, so
+  it is not a platform boolean either: iOS reports all four `true`.
 - **Highlights**: all matches in translucent yellow, the current one in
   orange, on both platforms (PDFKit `highlightedSelections`; Android draws
   them over the page bitmaps, so zoom and tiles keep them aligned).

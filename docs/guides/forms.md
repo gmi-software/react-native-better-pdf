@@ -26,6 +26,12 @@ const { filePath } = await pdf.current!.exportDocument(); // share or upload it
   in by touch: iOS with PDFKit's own editing, Android with a text field
   over the form field (kept above the keyboard) and a list to pick
   choices from. `enableFormFilling={false}` leaves them as they are.
+- Android fills forms in with the platform renderer's newer API (Android
+  15+, or 12–14 with SDK extension 13). Elsewhere fields are drawn but not
+  editable, `setFormFieldValues` rejects with `not-supported` and
+  `exportDocument` copies the file; `getFormFields` works. Check
+  `PdfCapabilities.get().formFilling` (1.3+) before showing form UI; see
+  [Device capabilities](../api.md#device-capabilities).
 - A view showing several sources has no form to fill in: fields are drawn
   but not editable, and the form methods reject with `not-supported` (see
   [Several documents as one](sources-and-loading.md#several-documents-as-one)).

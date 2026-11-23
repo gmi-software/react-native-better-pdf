@@ -21,7 +21,9 @@ export interface PdfSearchChangeEvent {
   isComplete: boolean;
   /**
    * `false` where the device cannot search: Android before 15, except
-   * Android 12–14 with SDK extension 13. Hide search UI then.
+   * Android 12–14 with SDK extension 13. The same for every search on a
+   * device: read `PdfCapabilities.get().search` to hide search UI before a
+   * search starts.
    */
   isSupported: boolean;
 }

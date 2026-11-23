@@ -19,6 +19,7 @@ public protocol HybridBetterPdfCacheSpec_protocol: HybridObject {
   func remove(source: NativePdfSource) throws -> Promise<Bool>
   func clear() throws -> Promise<Void>
   func getByteSize() throws -> Promise<Double>
+  func getCapabilities() throws -> PdfDeviceCapabilities
 }
 
 public extension HybridBetterPdfCacheSpec_protocol {

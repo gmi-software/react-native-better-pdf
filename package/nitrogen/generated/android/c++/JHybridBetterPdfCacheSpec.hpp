@@ -60,6 +60,7 @@ namespace margelo::nitro::betterpdf {
     std::shared_ptr<Promise<bool>> remove(const NativePdfSource& source) override;
     std::shared_ptr<Promise<void>> clear() override;
     std::shared_ptr<Promise<double>> getByteSize() override;
+    PdfDeviceCapabilities getCapabilities() override;
 
   private:
     jni::global_ref<JHybridBetterPdfCacheSpec::JavaPart> _javaPart;

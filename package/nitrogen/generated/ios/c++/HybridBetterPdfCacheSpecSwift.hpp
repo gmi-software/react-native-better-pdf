@@ -28,6 +28,8 @@ namespace margelo::nitro::betterpdf { struct NativePdfSource; }
 namespace NitroModules { class ArrayBufferHolder; }
 // Forward declaration of `PdfLoadProgressEvent` to properly resolve imports.
 namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
+// Forward declaration of `PdfDeviceCapabilities` to properly resolve imports.
+namespace margelo::nitro::betterpdf { struct PdfDeviceCapabilities; }
 
 #include "PdfDownloadResult.hpp"
 #include <NitroModules/Promise.hpp>
@@ -43,6 +45,7 @@ namespace margelo::nitro::betterpdf { struct PdfLoadProgressEvent; }
 #include <unordered_map>
 #include "PdfLoadProgressEvent.hpp"
 #include <functional>
+#include "PdfDeviceCapabilities.hpp"
 
 #include "NitroBetterPdf-Swift-Cxx-Umbrella.hpp"
 
@@ -134,6 +137,14 @@ namespace margelo::nitro::betterpdf {
     }
     inline std::shared_ptr<Promise<double>> getByteSize() override {
       auto __result = _swiftPart.getByteSize();
+      if (__result.hasError()) [[unlikely]] {
+        std::rethrow_exception(__result.error());
+      }
+      auto __value = std::move(__result.value());
+      return __value;
+    }
+    inline PdfDeviceCapabilities getCapabilities() override {
+      auto __result = _swiftPart.getCapabilities();
       if (__result.hasError()) [[unlikely]] {
         std::rethrow_exception(__result.error());
       }

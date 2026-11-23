@@ -20,6 +20,7 @@ namespace margelo::nitro::betterpdf {
       prototype.registerHybridMethod("remove", &HybridBetterPdfCacheSpec::remove);
       prototype.registerHybridMethod("clear", &HybridBetterPdfCacheSpec::clear);
       prototype.registerHybridMethod("getByteSize", &HybridBetterPdfCacheSpec::getByteSize);
+      prototype.registerHybridMethod("getCapabilities", &HybridBetterPdfCacheSpec::getCapabilities);
     });
   }
 

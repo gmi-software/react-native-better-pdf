@@ -1,0 +1,13 @@
+# PdfCapabilities.get() on Android devices without the renderer's newer API
+# (the API 34 emulator image, SDK extension 7): all four are false, before
+# any document is opened. Devices with the newer API, and iOS, run
+# viewer-capabilities instead.
+#   maestro --device <id> test example/e2e/android-legacy/capabilities.yaml
+appId: software.gmi.betterpdf.example
+---
+- runFlow: ../_start.yaml
+- extendedWaitUntil:
+    visible:
+      id: "capabilities"
+      text: "search: false · textSelection: false · formFilling: false · passwords: false"
+    timeout: 10000
