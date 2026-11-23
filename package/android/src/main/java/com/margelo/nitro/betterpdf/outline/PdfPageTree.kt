@@ -35,13 +35,16 @@ class PdfPageGeometry(val number: Int, val box: FloatArray, val quarterTurns: In
 /**
  * Every page of the document in order, read from the page tree without
  * opening a page. Cycles are broken; the walk is limited to [MAX_DEPTH]
- * levels.
+ * levels, and the pages to what a read may keep ([ScanBudget]).
  */
 class PdfPageTree(private val document: PdfDocumentReader, catalog: PdfObject.Dictionary) {
   val pages: List<PdfPageGeometry> = readPages(catalog["Pages"])
 
   /** Page object number → zero-based index. */
-  val indexByObject: Map<Int, Int> by lazy { pages.withIndex().associate { (index, page) -> page.number to index } }
+  val indexByObject: Map<Int, Int> by lazy {
+    document.keep(INDEX_BYTES * pages.size)
+    pages.withIndex().associate { (index, page) -> page.number to index }
+  }
 
   private fun readPages(root: PdfObject?): List<PdfPageGeometry> {
     val pages = ArrayList<PdfPageGeometry>()
@@ -50,17 +53,27 @@ class PdfPageTree(private val document: PdfDocumentReader, catalog: PdfObject.Di
       if (depth > MAX_DEPTH) return
       val reference = node as? PdfObject.Reference ?: return
       if (!visited.add(reference.number)) return
-      val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
-      val ownMediaBox = rectangleOf(document, dictionary["MediaBox"]) ?: mediaBox
-      val ownCropBox = rectangleOf(document, dictionary["CropBox"]) ?: cropBox
-      val ownRotate = (document.resolve(dictionary["Rotate"]) as? PdfObject.Number)?.value?.toInt() ?: rotate
-      val kids = document.resolve(dictionary["Kids"]) as? PdfObject.Array
-      if (kids != null && dictionary["Type"] != PdfObject.Name("Page")) {
-        kids.items.forEach { visit(it, ownMediaBox, ownCropBox, ownRotate, depth + 1) }
-        return
+      document.keep(NODE_BYTES)
+      // A node's objects are let go once its pages are listed; a page keeps its annotations.
+      document.releasing {
+        val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
+        val ownMediaBox = rectangleOf(document, dictionary["MediaBox"]) ?: mediaBox
+        val ownCropBox = rectangleOf(document, dictionary["CropBox"]) ?: cropBox
+        val ownRotate = (document.resolve(dictionary["Rotate"]) as? PdfObject.Number)?.value?.toInt() ?: rotate
+        val kids = document.resolve(dictionary["Kids"]) as? PdfObject.Array
+        if (kids != null && dictionary["Type"] != PdfObject.Name("Page")) {
+          kids.items.forEach { visit(it, ownMediaBox, ownCropBox, ownRotate, depth + 1) }
+          return
+        }
+        val annotations = document.resolve(dictionary["Annots"]) as? PdfObject.Array
+        document.keep(PAGE_BYTES + (annotations?.heldBytes() ?: 0))
+        pages += PdfPageGeometry(
+          reference.number,
+          displayedBox(ownMediaBox, ownCropBox),
+          Math.floorMod(ownRotate / 90, 4),
+          annotations?.items.orEmpty(),
+        )
       }
-      val annotations = (document.resolve(dictionary["Annots"]) as? PdfObject.Array)?.items.orEmpty()
-      pages += PdfPageGeometry(reference.number, displayedBox(ownMediaBox, ownCropBox), Math.floorMod(ownRotate / 90, 4), annotations)
     }
     visit(root, mediaBox = null, cropBox = null, rotate = 0, depth = 0)
     return pages
@@ -78,6 +91,11 @@ class PdfPageTree(private val document: PdfDocumentReader, catalog: PdfObject.Di
   companion object {
     const val MAX_DEPTH = 64
     private val LETTER = floatArrayOf(0f, 0f, 612f, 792f)
+
+    /** What a read keeps ([ScanBudget.keep]) for a node it has visited, a page, and a page in [indexByObject]. */
+    private const val NODE_BYTES = 64L
+    private const val PAGE_BYTES = 96L
+    private const val INDEX_BYTES = 80L
 
     /** `[llx lly urx ury]` normalized; null unless four numbers. */
     fun rectangleOf(document: PdfDocumentReader, value: PdfObject?): FloatArray? {

@@ -1,6 +1,5 @@
 package com.margelo.nitro.betterpdf.outline
 
-import java.io.ByteArrayOutputStream
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
 
@@ -13,10 +12,13 @@ import java.util.zip.Inflater
 object StreamDecoder {
   /** The most a stream's data may be, read or decoded. */
   const val MAX_DECODED_BYTES = 32 * 1024 * 1024
+  private const val BLOCK_BYTES = 64 * 1024
+  private const val MAX_JOINED_BYTES = 4 * 1024 * 1024
 
   /**
    * Reads [stream]'s data from [source] and decodes it; it and what it
-   * decodes to are charged to [budget], as it decodes.
+   * decodes to are charged to [budget], as it decodes, and held
+   * ([ScanBudget.hold]).
    */
   internal fun read(
     source: PdfByteSource,
@@ -25,6 +27,8 @@ object StreamDecoder {
     resolve: (PdfObject?) -> PdfObject?,
   ): ByteArray {
     if (stream.dataLength > MAX_DECODED_BYTES) throw PdfFormatException("Stream longer than $MAX_DECODED_BYTES bytes")
+    // Before it is read: resolving the filters can read other streams meanwhile.
+    budget.hold(stream.dataLength)
     return decode(stream.dictionary, source.read(stream.dataOffset, stream.dataLength), budget, resolve)
   }
 
@@ -49,39 +53,87 @@ object StreamDecoder {
     var bytes = data
     filters.forEachIndexed { index, filter ->
       bytes = when (filter) {
-        "FlateDecode", "Fl" -> unpredict(inflate(bytes, budget), parameters.getOrNull(index), resolve)
+        "FlateDecode", "Fl" -> unpredict(inflate(bytes, budget), parameters.getOrNull(index), budget, resolve)
         else -> throw PdfFormatException("Unsupported filter /$filter")
       }
     }
     return bytes
   }
 
+  /**
+   * Inflates [data] block by block: its size is known only at the end.
+   * Joining the blocks takes twice the size for a moment, so beyond
+   * [MAX_JOINED_BYTES] they are dropped, the rest is only measured, and the
+   * data is inflated again into an array of its size.
+   */
   private fun inflate(data: ByteArray, budget: ScanBudget): ByteArray {
     val inflater = Inflater()
     try {
       inflater.setInput(data)
-      val output = ByteArrayOutputStream(data.size * 4)
-      val buffer = ByteArray(64 * 1024)
+      val blocks = ArrayList<ByteArray>()
+      var block = ByteArray(BLOCK_BYTES)
+      var filled = 0
+      var size = 0
+      var measuring = false
       while (!inflater.finished()) {
+        if (filled == block.size) {
+          if (size < MAX_JOINED_BYTES) {
+            blocks += block
+            block = ByteArray(BLOCK_BYTES)
+          } else {
+            blocks.clear()
+            measuring = true
+          }
+          filled = 0
+        }
         val count = try {
-          inflater.inflate(buffer)
+          inflater.inflate(block, filled, block.size - filled)
         } catch (error: DataFormatException) {
           // Truncated or corrupt data: keep what decoded, as viewers do.
           break
         }
         if (count == 0 && (inflater.needsInput() || inflater.needsDictionary())) break
-        output.write(buffer, 0, count)
+        filled += count
+        size += count
         budget.spendOnStream(count)
-        if (output.size() > MAX_DECODED_BYTES) throw PdfFormatException("Stream expands beyond $MAX_DECODED_BYTES bytes")
+        if (size > MAX_DECODED_BYTES) throw PdfFormatException("Stream expands beyond $MAX_DECODED_BYTES bytes")
       }
-      return output.toByteArray()
+      budget.hold(size)
+      val output = ByteArray(size)
+      if (!measuring) {
+        var at = 0
+        for (full in blocks) {
+          full.copyInto(output, at)
+          at += full.size
+        }
+        block.copyInto(output, at, 0, filled)
+        return output
+      }
+      inflater.reset()
+      inflater.setInput(data)
+      var at = 0
+      while (at < size) {
+        val count = try {
+          inflater.inflate(output, at, size - at)
+        } catch (error: DataFormatException) {
+          0
+        }
+        if (count == 0) break
+        at += count
+      }
+      return if (at == size) output else output.copyOf(at)
     } finally {
       inflater.end()
     }
   }
 
   /** Reverses a PNG predictor (/Predictor 10–15); TIFF predictor 2 is not supported. */
-  private fun unpredict(data: ByteArray, parameters: PdfObject.Dictionary?, resolve: (PdfObject?) -> PdfObject?): ByteArray {
+  private fun unpredict(
+    data: ByteArray,
+    parameters: PdfObject.Dictionary?,
+    budget: ScanBudget,
+    resolve: (PdfObject?) -> PdfObject?,
+  ): ByteArray {
     fun int(key: String, default: Int): Int = (resolve(parameters?.get(key)) as? PdfObject.Number)?.intValue ?: default
     val predictor = int("Predictor", 1)
     if (predictor < 10) {
@@ -93,19 +145,19 @@ object StreamDecoder {
     val columns = int("Columns", 1).coerceIn(1, 1 shl 20)
     val bytesPerPixel = maxOf(1, colors * bitsPerComponent / 8)
     val rowLength = (colors * bitsPerComponent * columns + 7) / 8
-    // Before allocating a row of the length the file declares (up to 64 MiB).
-    if (data.size < 1 + rowLength) return ByteArray(0)
-    val output = ByteArrayOutputStream(data.size)
-    var previous = ByteArray(rowLength)
-    var at = 0
-    while (at + 1 + rowLength <= data.size) {
-      val type = data[at].toInt() and 0xff
-      val row = data.copyOfRange(at + 1, at + 1 + rowLength)
+    // A row is as long as the file declares, up to 64 MiB: nothing is allocated for less than one.
+    val rows = data.size / (1 + rowLength)
+    budget.hold(rows.toLong() * rowLength)
+    val output = ByteArray(rows * rowLength)
+    for (row in 0 until rows) {
+      val from = row * (1 + rowLength)
+      val to = row * rowLength
+      val type = data[from].toInt() and 0xff
       for (i in 0 until rowLength) {
-        val left = if (i >= bytesPerPixel) row[i - bytesPerPixel].toInt() and 0xff else 0
-        val up = previous[i].toInt() and 0xff
-        val upLeft = if (i >= bytesPerPixel) previous[i - bytesPerPixel].toInt() and 0xff else 0
-        val raw = row[i].toInt() and 0xff
+        val left = if (i >= bytesPerPixel) output[to + i - bytesPerPixel].toInt() and 0xff else 0
+        val up = if (row > 0) output[to - rowLength + i].toInt() and 0xff else 0
+        val upLeft = if (row > 0 && i >= bytesPerPixel) output[to - rowLength + i - bytesPerPixel].toInt() and 0xff else 0
+        val raw = data[from + 1 + i].toInt() and 0xff
         val value = when (type) {
           0 -> raw
           1 -> raw + left
@@ -114,13 +166,10 @@ object StreamDecoder {
           4 -> raw + paeth(left, up, upLeft)
           else -> throw PdfFormatException("Invalid PNG predictor row type $type")
         }
-        row[i] = value.toByte()
+        output[to + i] = value.toByte()
       }
-      output.write(row)
-      previous = row
-      at += 1 + rowLength
     }
-    return output.toByteArray()
+    return output
   }
 
   private fun paeth(left: Int, up: Int, upLeft: Int): Int {

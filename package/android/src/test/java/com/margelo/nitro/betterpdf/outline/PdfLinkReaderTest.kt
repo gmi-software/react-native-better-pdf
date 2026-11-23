@@ -102,4 +102,21 @@ class PdfLinkReaderTest {
   fun `encrypted documents are rejected`() {
     assertThrows(PdfFormatException::class.java) { read("encrypted.pdf") }
   }
+
+  /** A link's areas are its quadrilaterals, up to 256 of them; with more, its rectangle. */
+  @Test
+  fun `a link of 256 quadrilaterals, and one of 257`() {
+    fun links(quads: Int): List<PageLink> {
+      val pdf = TestPdfWriter()
+      repeat(4) { pdf.reserve() }
+      pdf.add(1, "<< /Type /Catalog /Pages 2 0 R >>")
+      pdf.add(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+      pdf.add(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Annots [4 0 R] >>")
+      val points = (0 until quads).joinToString(" ") { "0 $it 10 $it 0 ${it + 1} 10 ${it + 1}" }
+      pdf.add(4, "<< /Type /Annot /Subtype /Link /Rect [0 0 50 50] /QuadPoints [$points] /A << /S /URI /URI (https://example.com) >> >>")
+      return PdfLinkReader(PdfDocumentReader(ByteArraySource(pdf.build("/Root 1 0 R")))).read().getValue(0)
+    }
+    assertEquals(List(256) { area(0, 299 - it, 10, 300 - it) }, links(256).single().bounds)
+    assertEquals(listOf(area(0, 250, 50, 300)), links(257).single().bounds)
+  }
 }

@@ -7,7 +7,8 @@ package com.margelo.nitro.betterpdf.outline
  * `/Names` → `/Dests` name tree.
  *
  * Cycles are broken and the walk is limited to [MAX_DEPTH] levels and
- * [MAX_ENTRIES] entries — the same limits as the iOS implementation.
+ * [MAX_ENTRIES] entries — the same limits as the iOS implementation — and
+ * to what a read may keep ([ScanBudget]).
  */
 class PdfOutlineReader(private val document: PdfDocumentReader) {
   private val catalog = document.resolve(document.trailer["Root"]) as? PdfObject.Dictionary
@@ -26,15 +27,21 @@ class PdfOutlineReader(private val document: PdfDocumentReader) {
     while (current != null && entries.size < MAX_ENTRIES) {
       val reference = current as? PdfObject.Reference
       if (reference != null && !visited.add(reference.number)) return
-      val item = document.resolve(current) as? PdfObject.Dictionary ?: return
-      entries += OutlineEntry(titleOf(item), pageOf(item), depth)
-      if (depth + 1 < MAX_DEPTH) walk(item["First"], depth + 1, entries, visited)
-      current = item["Next"]
+      // An item's objects are let go once it and its children are listed.
+      current = document.releasing {
+        val item = document.resolve(current) as? PdfObject.Dictionary ?: return
+        val title = titleOf(item)
+        document.keep(ENTRY_BYTES + 2L * title.length)
+        entries += OutlineEntry(title, pageOf(item), depth)
+        if (depth + 1 < MAX_DEPTH) walk(item["First"], depth + 1, entries, visited)
+        // The next item is read after this one is let go: one written here, not referred to, is kept.
+        item["Next"]?.also { if (it !is PdfObject.Reference) document.keep(it.heldBytes()) }
+      }
     }
   }
 
   private fun titleOf(item: PdfObject.Dictionary): String {
-    val title = (document.resolve(item["Title"]) as? PdfObject.Str)?.toText() ?: return ""
+    val title = (document.resolve(item["Title"]) as? PdfObject.Str)?.also { document.spend(it.bytes.size) }?.toText() ?: return ""
     // Line breaks and tabs would break a single-line list row.
     return title.replace(CONTROL_CHARACTERS, " ").trim().take(MAX_TITLE_LENGTH)
   }
@@ -53,12 +60,16 @@ class PdfOutlineReader(private val document: PdfDocumentReader) {
       if (depth > MAX_TREE_DEPTH || indices.size >= MAX_PAGES) return
       val reference = node as? PdfObject.Reference
       if (reference != null && !visited.add(reference.number)) return
-      val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
-      val kids = document.resolve(dictionary["Kids"]) as? PdfObject.Array
-      if (kids != null && dictionary["Type"] != PdfObject.Name("Page")) {
-        kids.items.forEach { visit(it, depth + 1) }
-      } else if (reference != null) {
-        indices[reference.number] = indices.size
+      document.keep(PAGE_BYTES)
+      // A node's objects are let go once its pages are numbered.
+      document.releasing {
+        val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
+        val kids = document.resolve(dictionary["Kids"]) as? PdfObject.Array
+        if (kids != null && dictionary["Type"] != PdfObject.Name("Page")) {
+          kids.items.forEach { visit(it, depth + 1) }
+        } else if (reference != null) {
+          indices[reference.number] = indices.size
+        }
       }
     }
     visit(catalog["Pages"], depth = 0)
@@ -72,6 +83,10 @@ class PdfOutlineReader(private val document: PdfDocumentReader) {
     private const val MAX_TITLE_LENGTH = 512
     private const val MAX_TREE_DEPTH = 64
     private const val MAX_PAGES = 1_000_000
+
+    /** What a read keeps ([ScanBudget.keep]) for an entry besides its title, and for a node of the page tree. */
+    private const val ENTRY_BYTES = 96L
+    private const val PAGE_BYTES = 160L
     private val CONTROL_CHARACTERS = Regex("[\\u0000-\\u001F\\u007F]+")
   }
 }

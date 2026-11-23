@@ -8,8 +8,9 @@ import java.io.ByteArrayOutputStream
  *
  * The input is untrusted: nesting, string and dictionary sizes are capped
  * and every malformed construct fails with [PdfFormatException] instead of
- * looping or allocating without bound. Each byte examined is charged to
- * [budget], which the parsers of one read share.
+ * looping or allocating without bound. Each byte examined and each object
+ * built ([HeldBytes]) is charged to [budget], which the parsers of one read
+ * share.
  */
 class PdfParser internal constructor(
   private val source: PdfByteSource,
@@ -118,6 +119,7 @@ class PdfParser internal constructor(
     val declared = dictionary["Length"]?.let(resolveLength)
     val length = declared?.takeIf { it >= 0 && endstreamFollows(dataOffset + it) } ?: findEndstream(dataOffset)
     position = dataOffset + length
+    budget?.hold(HeldBytes.STREAM)
     return PdfObject.Stream(dictionary, dataOffset, length)
   }
 
@@ -161,8 +163,10 @@ class PdfParser internal constructor(
       c == '['.code -> readArray(depth)
       c == '+'.code || c == '-'.code || c == '.'.code || c in '0'.code..'9'.code -> readNumberOrReference()
       else -> when (val token = readToken()) {
-        "true" -> PdfObject.Bool(true)
-        "false" -> PdfObject.Bool(false)
+        "true", "false" -> {
+          budget?.hold(HeldBytes.SCALAR)
+          PdfObject.Bool(token == "true")
+        }
         "null" -> PdfObject.Null
         else -> throw PdfFormatException("Unexpected token \"${token ?: c.toChar()}\" at $position")
       }
@@ -170,6 +174,7 @@ class PdfParser internal constructor(
   }
 
   private fun readNumberOrReference(): PdfObject {
+    budget?.hold(HeldBytes.SCALAR)
     val first = parseNumber(readToken())
     val integer = first.intValue ?: return first
     if (integer < 0) return first
@@ -211,6 +216,7 @@ class PdfParser internal constructor(
       bytes.write(c)
       if (bytes.size() > MAX_TOKEN_LENGTH) throw PdfFormatException("Name too long at $position")
     }
+    budget?.hold(HeldBytes.NAME + bytes.size())
     return PdfObject.Name(bytes.toByteArray().toString(Charsets.ISO_8859_1))
   }
 
@@ -229,7 +235,10 @@ class PdfParser internal constructor(
         }
         ')'.code -> {
           nesting--
-          if (nesting == 0) return PdfObject.Str(bytes.toByteArray())
+          if (nesting == 0) {
+            budget?.hold(HeldBytes.STRING + bytes.size())
+            return PdfObject.Str(bytes.toByteArray())
+          }
           bytes.write(c)
         }
         '\\'.code -> readEscape(bytes)
@@ -288,11 +297,13 @@ class PdfParser internal constructor(
       if (bytes.size() > MAX_STRING_BYTES) throw PdfFormatException("String too long at $position")
     }
     if (high >= 0) bytes.write(high * 16) // odd digit count: a trailing 0 is implied
+    budget?.hold(HeldBytes.STRING + bytes.size())
     return PdfObject.Str(bytes.toByteArray())
   }
 
   private fun readArray(depth: Int): PdfObject.Array {
     position++ // '['
+    budget?.hold(HeldBytes.ARRAY)
     val items = ArrayList<PdfObject>()
     while (true) {
       skipWhitespaceAndComments()
@@ -300,6 +311,7 @@ class PdfParser internal constructor(
         position++
         return PdfObject.Array(items)
       }
+      budget?.hold(HeldBytes.ITEM)
       items += readObject(depth + 1)
       if (items.size > MAX_COLLECTION_SIZE) throw PdfFormatException("Array too large at $position")
     }
@@ -307,6 +319,7 @@ class PdfParser internal constructor(
 
   private fun readDictionary(depth: Int): PdfObject.Dictionary {
     position += 2 // '<<'
+    budget?.hold(HeldBytes.DICTIONARY)
     val entries = LinkedHashMap<String, PdfObject>()
     while (true) {
       skipWhitespaceAndComments()
@@ -316,6 +329,7 @@ class PdfParser internal constructor(
       }
       val key = readObject(depth + 1) as? PdfObject.Name
         ?: throw PdfFormatException("Dictionary key is not a name at $position")
+      budget?.hold(HeldBytes.ENTRY)
       entries[key.value] = readObject(depth + 1)
       if (entries.size > MAX_COLLECTION_SIZE) throw PdfFormatException("Dictionary too large at $position")
     }

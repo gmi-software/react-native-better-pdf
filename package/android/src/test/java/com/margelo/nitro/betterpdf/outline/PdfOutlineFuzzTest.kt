@@ -1,5 +1,6 @@
 package com.margelo.nitro.betterpdf.outline
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.random.Random
@@ -170,4 +171,57 @@ class PdfOutlineFuzzTest {
       }
     }
   }
+
+  /**
+   * Many references into one object: up to 300 links, form fields and
+   * outline titles, the crop box and an information entry are one of up to
+   * 3 objects, under its own number or another ([aliasedDocument]) — an
+   * array or a dictionary of up to 200,000 values, nested up to 40 deep, in
+   * the file or in an object stream with up to 4 MB of padding, half of the
+   * files with a broken `startxref` (the rebuild). Read in a JVM with a
+   * heap of 128 MB ([readManyReferences]): every reader must end in a
+   * result or a [PdfFormatException] within 2 s.
+   */
+  @Test
+  fun `many references into one object end in a small heap`() {
+    assertEquals(listOf("ok"), runInHeapOf(128, "fuzz"))
+  }
+}
+
+/** The reads of `many references into one object end in a small heap`, in this JVM: the first that did not end as it must, or null. */
+internal fun readManyReferences(): String? {
+  val random = Random(20261121)
+  repeat(6) { iteration ->
+    val value = listOf("[]", "0 ", "/Name ", "() ", "(text) ", "<<>>", "1 0 R ", "[[]]", "<< /K 1 >>").random(random)
+    val body = when (random.nextInt(3)) {
+      0 -> "[" + value.repeat(random.nextInt(200_000)) + "]"
+      1 -> buildString {
+        append("<<")
+        repeat(random.nextInt(100_000)) { append("/K").append(it).append(' ').append(value) }
+        append(">>")
+      }
+      else -> (1 + random.nextInt(40)).let { depth -> "[".repeat(depth) + value.repeat(random.nextInt(200_000)) + "]".repeat(depth) }
+    }
+    val compressed = random.nextBoolean()
+    val padding = if (compressed) random.nextInt(4 * 1024 * 1024) else 0
+    var bytes = aliasedDocument(1 + random.nextInt(300), aliased = { random.nextInt(4) > 0 }) { pdf ->
+      val stream = if (compressed) pdf.reserve().also { pdf.objectStream(it, "", padding, deflate = true) } else null
+      List(1 + random.nextInt(3)) {
+        pdf.reserve().also { number -> if (stream != null) pdf.addCompressed(number, stream, body) else pdf.add(number, body) }
+      }
+    }
+    if (iteration % 2 == 1) {
+      bytes = bytes.toString(Charsets.ISO_8859_1)
+        .replace(Regex("startxref\n\\d+"), "startxref\n999999999")
+        .toByteArray(Charsets.ISO_8859_1)
+    }
+    for ((name, read) in READERS) {
+      val started = System.nanoTime()
+      val end = endOf { read(PdfDocumentReader(ByteArraySource(bytes))) }
+      val millis = (System.nanoTime() - started) / 1_000_000
+      if (end == ReadEnd.OUT_OF_MEMORY) return "iteration $iteration, $name ran out of memory"
+      if (millis >= 2_000) return "iteration $iteration, $name took $millis ms"
+    }
+  }
+  return null
 }

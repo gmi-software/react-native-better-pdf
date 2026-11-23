@@ -9,7 +9,7 @@ package com.margelo.nitro.betterpdf.outline
  * [PdfDocumentReader]s.
  */
 class PdfCrossReferences internal constructor(
-  internal val entries: Map<Int, XrefEntry>,
+  internal val entries: XrefTable,
   val trailer: PdfObject.Dictionary,
 ) {
   companion object {
@@ -33,7 +33,10 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
     } catch (error: PdfFormatException) {
       null
     }
-    return parsed ?: rebuild()
+    val crossReferences = parsed ?: rebuild()
+    // Unlike what a read holds, the trailer stays for as long as the document is open.
+    if (crossReferences.trailer.heldBytes() > MAX_TRAILER_BYTES) throw PdfFormatException("The trailer is too large")
+    return crossReferences
   }
 
   private fun parser(position: Long) = PdfParser(source, position, budget)
@@ -52,11 +55,11 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
   }
 
   /** A reader of [entries], before a trailer is chosen. */
-  private fun reader(entries: Map<Int, XrefEntry>) =
+  private fun reader(entries: XrefTable) =
     PdfDocumentReader(source, PdfCrossReferences(entries, PdfObject.Dictionary(emptyMap())), budget)
 
   private fun readCrossReferences(): PdfCrossReferences {
-    val entries = HashMap<Int, XrefEntry>()
+    val entries = XrefTable()
     var newestTrailer: PdfObject.Dictionary? = null
     var offset: Long? = findStartXref() ?: throw PdfFormatException("No startxref")
     val visited = HashSet<Long>()
@@ -82,7 +85,7 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
   }
 
   /** Reads one section into [entries] (older sections never override newer ones); returns its trailer. */
-  private fun readSection(offset: Long, entries: MutableMap<Int, XrefEntry>): PdfObject.Dictionary {
+  private fun readSection(offset: Long, entries: XrefTable): PdfObject.Dictionary {
     val parser = parser(offset)
     if (parser.matchKeyword("xref")) return readTable(parser, entries)
     parser.readIndirectHeader() ?: throw PdfFormatException("No cross-reference section at $offset")
@@ -92,7 +95,7 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
     return stream.dictionary
   }
 
-  private fun readTable(parser: PdfParser, entries: MutableMap<Int, XrefEntry>): PdfObject.Dictionary {
+  private fun readTable(parser: PdfParser, entries: XrefTable): PdfObject.Dictionary {
     while (true) {
       val token = parser.readToken() ?: throw PdfFormatException("Truncated cross-reference table")
       if (token == "trailer") {
@@ -110,35 +113,38 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
     }
   }
 
-  private fun readXrefStream(stream: PdfObject.Stream, entries: MutableMap<Int, XrefEntry>) {
+  private fun readXrefStream(stream: PdfObject.Stream, entries: XrefTable) {
     val dictionary = stream.dictionary
     val widths = (dictionary["W"] as? PdfObject.Array)?.items?.map { (it as? PdfObject.Number)?.intValue ?: -1 }
     if (widths == null || widths.size < 3 || widths.any { it !in 0..8 }) throw PdfFormatException("Invalid /W")
     val size = (dictionary["Size"] as? PdfObject.Number)?.intValue ?: 0
     val index = (dictionary["Index"] as? PdfObject.Array)?.items?.map { (it as? PdfObject.Number)?.intValue ?: 0 }
       ?: listOf(0, size)
-    val data = StreamDecoder.read(source, stream, budget) { it }
     val rowLength = widths.sum()
     if (rowLength == 0) return
-    var row = 0
-    for (pair in index.chunked(2)) {
-      val start = pair.getOrNull(0) ?: break
-      val count = pair.getOrNull(1) ?: break
-      if (start < 0 || count !in 0..MAX_XREF_ENTRIES) throw PdfFormatException("Invalid /Index")
-      for (number in start until start + count) {
-        val at = row * rowLength
-        if (at + rowLength > data.size) return
-        row++
-        fun field(which: Int, default: Long): Long {
-          if (widths[which] == 0) return default
-          var value = 0L
-          val begin = at + widths.take(which).sum()
-          for (i in 0 until widths[which]) value = (value shl 8) or (data[begin + i].toLong() and 0xff)
-          return value
-        }
-        when (field(0, 1)) {
-          1L -> field(1, 0).takeIf { it > 0 }?.let { entries.putIfAbsent(number, XrefEntry.InFile(it)) }
-          2L -> entries.putIfAbsent(number, XrefEntry.Compressed(field(1, 0).toInt(), field(2, 0).toInt()))
+    // The data is let go once its entries are listed: a file can have 64 sections.
+    budget.releasing {
+      val data = StreamDecoder.read(source, stream, budget) { it }
+      var row = 0
+      for (pair in 0 until index.size / 2) {
+        val start = index[2 * pair]
+        val count = index[2 * pair + 1]
+        if (start < 0 || count !in 0..MAX_XREF_ENTRIES) throw PdfFormatException("Invalid /Index")
+        for (number in start until start + count) {
+          val at = row * rowLength
+          if (at + rowLength > data.size) return
+          row++
+          fun field(which: Int, default: Long): Long {
+            if (widths[which] == 0) return default
+            var value = 0L
+            val begin = at + widths.take(which).sum()
+            for (i in 0 until widths[which]) value = (value shl 8) or (data[begin + i].toLong() and 0xff)
+            return value
+          }
+          when (field(0, 1)) {
+            1L -> field(1, 0).takeIf { it > 0 }?.let { entries.putIfAbsent(number, XrefEntry.InFile(it)) }
+            2L -> entries.putIfAbsent(number, XrefEntry.Compressed(field(1, 0).toInt(), field(2, 0).toInt()))
+          }
         }
       }
     }
@@ -149,18 +155,14 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
   /**
    * Rebuilds the cross-reference data from the `n g obj` headers in the
    * file ([scan]). Later definitions win, as in incremental updates.
-   * Bounded by file size, and to [MAX_REBUILT_OBJECTS] objects: each is
-   * kept until the rebuild ends.
+   * Bounded by file size, and to [XrefTable.MAX_OBJECTS] objects.
    */
   private fun rebuild(): PdfCrossReferences {
     if (source.size > MAX_REBUILD_BYTES) throw PdfFormatException("Cross-reference data is broken")
-    val entries = HashMap<Int, XrefEntry>()
+    val entries = XrefTable()
     val trailers = ArrayDeque<Long>()
     scan(
-      onObject = { number, offset ->
-        entries[number] = XrefEntry.InFile(offset)
-        checkRebuiltObjects(entries)
-      },
+      onObject = { number, offset -> entries[number] = XrefEntry.InFile(offset) },
       onTrailer = { offset ->
         if (trailers.size == MAX_TRAILERS) trailers.removeFirst()
         trailers.addLast(offset)
@@ -285,10 +287,6 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
       null
     }
 
-  private fun checkRebuiltObjects(entries: Map<Int, XrefEntry>) {
-    if (entries.size > MAX_REBUILT_OBJECTS) throw PdfFormatException("Too many objects to rebuild the cross-references")
-  }
-
   /** The newest catalog in the file, and the newest cross-reference stream's dictionary naming one, with its offset. */
   private class FoundObjects(val catalog: PdfObject.Reference?, val newestXrefStream: Pair<Long, PdfObject.Dictionary>?)
 
@@ -296,33 +294,37 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
    * Reads every object found once: for the newest catalog (used when no
    * trailer names one), for cross-reference streams (their dictionaries are
    * trailers) and for object streams, whose objects are invisible to the
-   * scan, so they are listed too.
+   * scan, so they are listed too. Each is let go once it is read, apart
+   * from the newest cross-reference stream's dictionary.
    */
-  private fun readFoundObjects(entries: MutableMap<Int, XrefEntry>): FoundObjects {
+  private fun readFoundObjects(entries: XrefTable): FoundObjects {
     var catalog: PdfObject.Reference? = null
     var catalogOffset = -1L
     var newestXrefStream: Pair<Long, PdfObject.Dictionary>? = null
-    for (number in entries.keys.sorted()) {
+    for (number in entries.sortedNumbers()) {
       val offset = (entries[number] as? XrefEntry.InFile)?.offset ?: continue
-      val parser = parser(offset)
-      val dictionary = try {
-        parser.readIndirectHeader() ?: continue
-        parser.readObject() as? PdfObject.Dictionary ?: continue
-      } catch (error: ScanBudget.Exceeded) {
-        throw error
-      } catch (error: PdfFormatException) {
-        continue
-      }
-      when (dictionary["Type"]) {
-        PdfObject.Name("Catalog") -> if (offset > catalogOffset) {
-          catalog = PdfObject.Reference(number, 0)
-          catalogOffset = offset
+      budget.releasing {
+        val parser = parser(offset)
+        val dictionary = try {
+          parser.readIndirectHeader() ?: return@releasing
+          parser.readObject() as? PdfObject.Dictionary ?: return@releasing
+        } catch (error: ScanBudget.Exceeded) {
+          throw error
+        } catch (error: PdfFormatException) {
+          return@releasing
         }
-        PdfObject.Name("XRef") -> if (dictionary["Root"] != null && offset > (newestXrefStream?.first ?: -1)) {
-          newestXrefStream = offset to dictionary
+        when (dictionary["Type"]) {
+          PdfObject.Name("Catalog") -> if (offset > catalogOffset) {
+            catalog = PdfObject.Reference(number, 0)
+            catalogOffset = offset
+          }
+          PdfObject.Name("XRef") -> if (dictionary["Root"] != null && offset > (newestXrefStream?.first ?: -1)) {
+            budget.keep(dictionary.heldBytes())
+            newestXrefStream = offset to dictionary
+          }
+          PdfObject.Name("ObjStm") -> indexObjectStream(number, parser, dictionary, entries)
+          else -> Unit
         }
-        PdfObject.Name("ObjStm") -> indexObjectStream(number, parser, dictionary, entries)
-        else -> Unit
       }
     }
     return FoundObjects(catalog, newestXrefStream)
@@ -333,16 +335,25 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
    * the newest stream — read through the rebuilt [entries]: for files whose
    * trailers are all lost.
    */
-  private fun findCompressedCatalog(entries: Map<Int, XrefEntry>): PdfObject.Reference? {
+  private fun findCompressedCatalog(entries: XrefTable): PdfObject.Reference? {
     val document = reader(entries)
-    fun position(entry: XrefEntry.Compressed) = (entries[entry.streamNumber] as? XrefEntry.InFile)?.offset ?: -1L
-    return entries.entries
-      .filter { (number, entry) ->
-        entry is XrefEntry.Compressed &&
-          (document.resolve(PdfObject.Reference(number, 0)) as? PdfObject.Dictionary)?.get("Type") == PdfObject.Name("Catalog")
+    var newest: Int? = null
+    var newestPosition = -1L
+    var newestIndex = -1
+    for (number in entries.sortedNumbers()) {
+      val entry = entries[number] as? XrefEntry.Compressed ?: continue
+      val isCatalog = budget.releasing {
+        (document.resolve(PdfObject.Reference(number, 0)) as? PdfObject.Dictionary)?.get("Type") == PdfObject.Name("Catalog")
       }
-      .maxWithOrNull(compareBy({ position(it.value as XrefEntry.Compressed) }, { (it.value as XrefEntry.Compressed).index }))
-      ?.let { PdfObject.Reference(it.key, 0) }
+      if (!isCatalog) continue
+      val position = (entries[entry.streamNumber] as? XrefEntry.InFile)?.offset ?: -1L
+      if (newest == null || position > newestPosition || (position == newestPosition && entry.index > newestIndex)) {
+        newest = number
+        newestPosition = position
+        newestIndex = entry.index
+      }
+    }
+    return newest?.let { PdfObject.Reference(it, 0) }
   }
 
   /** Lists the objects of object stream [number], whose [dictionary] [parser] just read. */
@@ -350,7 +361,7 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
     number: Int,
     parser: PdfParser,
     dictionary: PdfObject.Dictionary,
-    entries: MutableMap<Int, XrefEntry>,
+    entries: XrefTable,
   ) {
     val count = (dictionary["N"] as? PdfObject.Number)?.intValue ?: return
     if (count !in 0..ObjectStreamIndex.MAX_OBJECTS) return
@@ -375,7 +386,6 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
         null
       } ?: break
       entries.putIfAbsent(objectNumber, XrefEntry.Compressed(number, index))
-      checkRebuiltObjects(entries)
     }
   }
 
@@ -387,7 +397,7 @@ private class CrossReferenceReader(private val source: PdfByteSource) {
     const val MAX_XREF_SECTIONS = 64
     const val MAX_XREF_ENTRIES = 10_000_000
     const val MAX_REBUILD_BYTES = 64L * 1024 * 1024
-    const val MAX_REBUILT_OBJECTS = 1_000_000
+    const val MAX_TRAILER_BYTES = 2L * 1024 * 1024
     const val SCAN_WINDOW_BYTES = 64 * 1024
     const val MAX_NUMBER_DIGITS = 10
     const val MAX_GENERATION_DIGITS = 5

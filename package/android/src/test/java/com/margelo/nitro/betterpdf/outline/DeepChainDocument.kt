@@ -125,6 +125,7 @@ internal class TestPdfWriter {
   private var nextNumber = 1
   private val inFile = sortedMapOf<Int, String>()
   private val objectStreams = sortedMapOf<Int, ObjectStream>()
+  private val aliases = HashMap<Int, Int>()
 
   private class ObjectStream(val entries: String, val padding: Int, val deflate: Boolean) {
     val members = ArrayList<Pair<Int, String>>()
@@ -149,6 +150,11 @@ internal class TestPdfWriter {
   /** An object in object stream [stream]. */
   fun addCompressed(number: Int, stream: Int, body: String) {
     objectStreams.getValue(stream).members += number to body
+  }
+
+  /** Another number for object [target]: the cross-references list both at the same place. */
+  fun alias(number: Int, target: Int) {
+    aliases[number] = target
   }
 
   /** The file; [trailer] entries (`/Root` …) join the trailer. */
@@ -184,7 +190,7 @@ internal class TestPdfWriter {
     if (compressed.isEmpty()) {
       write("xref\n0 $size\n")
       for (number in 0 until size) {
-        val offset = offsets[number]
+        val offset = offsets[aliases[number] ?: number]
         write(if (offset == null) "0000000000 65535 f\r\n" else "%010d 00000 n\r\n".format(offset))
       }
       write("trailer\n<< /Size $size $trailer >>\n")
@@ -199,8 +205,8 @@ internal class TestPdfWriter {
         rows.write(index and 0xff)
       }
       for (number in 0..size) {
-        val offset = offsets[number]
-        val member = compressed[number]
+        val offset = offsets[aliases[number] ?: number]
+        val member = compressed[aliases[number] ?: number]
         when {
           offset != null -> row(1, offset, 0)
           member != null -> row(2, member.first, member.second)

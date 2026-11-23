@@ -103,4 +103,19 @@ class PdfFormReaderTest {
   fun `encrypted documents are read from an unprotected copy`() {
     assertThrows(PdfFormatException::class.java) { read("forms-encrypted.pdf") }
   }
+
+  @Test
+  fun `a choice of 10,001 options lists 10,000`() {
+    val pdf = TestPdfWriter()
+    repeat(4) { pdf.reserve() }
+    pdf.add(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [4 0 R] >> >>")
+    pdf.add(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+    pdf.add(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] /Annots [4 0 R] >>")
+    val options = (0..10_000).joinToString(" ") { "[(v$it) (Option $it)]" }
+    pdf.add(4, "<< /T (choice) /FT /Ch /Opt [$options] /V [(v9999) (v10000)] /Type /Annot /Subtype /Widget /Rect [0 0 100 20] >>")
+    val field = PdfFormReader(PdfDocumentReader(ByteArraySource(pdf.build("/Root 1 0 R")))).read().single()
+    assertEquals(List(10_000) { "Option $it" }, field.options)
+    // The export value of an option that is not listed stands for itself.
+    assertEquals(listOf("Option 9999", "v10000"), field.selectedOptions)
+  }
 }

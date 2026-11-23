@@ -111,6 +111,53 @@ class PdfReadTimeTest {
     )
 
   /**
+   * An object read once is free to read again, but not to use: the fields
+   * are 10,000 numbers for one dictionary whose kids are one array of
+   * 30,000 references, gone through for every field.
+   */
+  @Test
+  fun `one array of 30,000 kids behind 10,000 fields`() {
+    val pdf = TestPdfWriter()
+    repeat(5) { pdf.reserve() }
+    val fields = List(10_000) { pdf.reserve().also { number -> pdf.alias(number, 4) } }
+    pdf.add(1, "<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [${fields.joinToString(" ") { "$it 0 R" }}] >> >>")
+    pdf.add(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+    pdf.add(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>")
+    pdf.add(4, "<< /T (a) /Kids 5 0 R >>")
+    pdf.add(5, "[" + "999999 0 R ".repeat(30_000) + "]")
+    assertEveryReaderEndsQuickly(pdf.build("/Root 1 0 R"))
+  }
+
+  @Test
+  fun `one array of 40,000 kids behind 15,000 nodes of the page tree`() {
+    val pdf = TestPdfWriter()
+    repeat(4) { pdf.reserve() }
+    val nodes = List(15_000) { pdf.reserve().also { number -> pdf.alias(number, 3) } }
+    pdf.add(1, "<< /Type /Catalog /Pages 2 0 R >>")
+    pdf.add(2, "<< /Type /Pages /Kids [${nodes.joinToString(" ") { "$it 0 R" }}] /Count 1 >>")
+    pdf.add(3, "<< /Type /Pages /Kids 4 0 R >>")
+    pdf.add(4, "[" + "999999 0 R ".repeat(40_000) + "]")
+    assertEveryReaderEndsQuickly(pdf.build("/Root 1 0 R"))
+  }
+
+  /** Each title is decoded and cleaned in full, for its first 512 characters. */
+  @Test
+  fun `one title of 250 KB behind 2,000 outline items`() {
+    val pdf = TestPdfWriter()
+    repeat(5) { pdf.reserve() }
+    val items = List(2_000) { pdf.reserve() }
+    items.forEachIndexed { index, item ->
+      pdf.add(item, "<< /Title 5 0 R ${items.getOrNull(index + 1)?.let { "/Next $it 0 R" }.orEmpty()} >>")
+    }
+    pdf.add(1, "<< /Type /Catalog /Pages 2 0 R /Outlines 4 0 R >>")
+    pdf.add(2, "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+    pdf.add(3, "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 300] >>")
+    pdf.add(4, "<< /Type /Outlines /First ${items.first()} 0 R >>")
+    pdf.add(5, "(" + "a\n".repeat(125_000) + ")")
+    assertEveryReaderEndsQuickly(pdf.build("/Root 1 0 R"))
+  }
+
+  /**
    * More than 2 KB after `%%EOF` hid `startxref` and made every read
    * rebuild the cross-references by scanning the whole file.
    */

@@ -4,8 +4,10 @@ package com.margelo.nitro.betterpdf.outline
  * Random access to the objects of a PDF file, objects in object streams
  * included, through its [crossReferences] (read from the file unless
  * given). Not thread-safe; the readers of one file on several threads each
- * use their own, with the same cross-references. One reader's parsing is
- * bounded by a [ScanBudget].
+ * use their own, with the same cross-references. One reader's parsing, and
+ * what it holds at once, is bounded by a [ScanBudget]: every object
+ * [resolve] returns counts as held by the caller until the [releasing]
+ * block around the call ends.
  *
  * Encrypted documents are rejected: their strings (outline titles) would
  * need the security handler.
@@ -21,8 +23,10 @@ class PdfDocumentReader internal constructor(
   ) : this(source, crossReferences, ScanBudget(source.size))
 
   val trailer: PdfObject.Dictionary = crossReferences.trailer
-  private val xref: Map<Int, XrefEntry> = crossReferences.entries
-  private val cache = HashMap<Int, PdfObject>()
+  private val xref: XrefTable = crossReferences.entries
+  /** Objects read, the most recently used last, [cachedBytes] in all: [remember]. */
+  private val cache = LinkedHashMap<Int, CachedObject>(16, 0.75f, true)
+  private var cachedBytes = 0L
   /** Object streams read, the most recently used last, with [keptStreamBytes] of data: [keep]. */
   private val objectStreams = LinkedHashMap<Int, ObjectStreamIndex>(16, 0.75f, true)
   private var keptStreamBytes = 0L
@@ -58,8 +62,29 @@ class PdfDocumentReader internal constructor(
     return StreamDecoder.read(source, stream, budget, ::resolve)
   }
 
+  /** [ScanBudget.releasing]. */
+  internal inline fun <T> releasing(block: () -> T): T = budget.releasing(block)
+
+  /** [ScanBudget.keeping]. */
+  internal inline fun <T> keeping(block: () -> T): T = budget.keeping(block)
+
+  /** [ScanBudget.hold]: something a reader makes of the objects it reads. */
+  internal fun hold(bytes: Long) = budget.hold(bytes)
+
+  /** [ScanBudget.spend]: a unit for each byte of a string a reader decodes. */
+  internal fun spend(bytes: Int) = budget.spend(bytes.toLong())
+
+  /** [ScanBudget.keep]. */
+  internal fun keep(bytes: Long) = budget.keep(bytes)
+
   private fun objectAt(number: Int): PdfObject? {
-    cache[number]?.let { return it }
+    cache[number]?.let { cached ->
+      // Not parsed again, but gone through again by the caller, who holds it
+      // from now on whether or not the cache still does.
+      budget.spend(cached.bytes / CACHED_BYTES_PER_UNIT)
+      budget.hold(cached.bytes)
+      return cached.value
+    }
     val entry = xref[number] ?: return null
     // Each object of a chain recurses: a crafted chain of thousands would
     // overflow the stack. The read that needed this one fails instead.
@@ -73,11 +98,12 @@ class PdfDocumentReader internal constructor(
       return null
     }
     try {
+      val heldBefore = budget.held
       val value = when (entry) {
         is XrefEntry.InFile -> readInFile(entry.offset)
         is XrefEntry.Compressed -> readCompressed(entry)
       } ?: return null
-      if (cache.size < MAX_CACHED_OBJECTS) cache[number] = value
+      remember(number, value, budget.held - heldBefore)
       return value
     } catch (error: ScanBudget.Exceeded) {
       throw error
@@ -85,6 +111,21 @@ class PdfDocumentReader internal constructor(
       return null
     } finally {
       resolving.remove(number)
+    }
+  }
+
+  /**
+   * Keeps [value], which took [bytes] to read, for the next reference to
+   * [number], and as many of the most recently used objects as fit
+   * [MAX_CACHED_BYTES]. The others are read again when needed.
+   */
+  private fun remember(number: Int, value: PdfObject, bytes: Long) {
+    if (bytes > MAX_CACHED_OBJECT_BYTES) return
+    cachedBytes += CACHED_ENTRY_BYTES + bytes - (cache.put(number, CachedObject(value, bytes))?.let { CACHED_ENTRY_BYTES + it.bytes } ?: 0)
+    val eldest = cache.values.iterator()
+    while (cachedBytes > MAX_CACHED_BYTES) {
+      cachedBytes -= CACHED_ENTRY_BYTES + eldest.next().bytes
+      eldest.remove()
     }
   }
 
@@ -118,7 +159,11 @@ class PdfDocumentReader internal constructor(
     // A read cut short by the nesting limit can make this one differ from a
     // shallower one: read it again next time.
     if (truncatedReads == truncated) {
-      if (index == null) invalidObjectStreams += number else keep(number, index)
+      if (index == null) {
+        if (invalidObjectStreams.add(number)) budget.keep(INVALID_STREAM_BYTES)
+      } else {
+        keep(number, index)
+      }
     }
     return index
   }
@@ -130,14 +175,14 @@ class PdfDocumentReader internal constructor(
    * when needed.
    */
   private fun keep(number: Int, index: ObjectStreamIndex) {
-    if (index.data.size > MAX_KEPT_STREAM_BYTES) return
+    if (index.bytes > MAX_KEPT_STREAM_BYTES) return
     objectStreams[number] = index
-    keptStreamBytes += index.data.size
+    keptStreamBytes += index.bytes
     val eldest = objectStreams.entries.iterator()
     while (keptStreamBytes > MAX_KEPT_STREAM_BYTES) {
       val (kept, stream) = eldest.next()
       if (kept == number) break
-      keptStreamBytes -= stream.data.size
+      keptStreamBytes -= stream.bytes
       eldest.remove()
     }
   }
@@ -150,6 +195,7 @@ class PdfDocumentReader internal constructor(
     val data = streamData(stream)
     // Decoded once per reader: room to parse its objects.
     budget.extend(data.size)
+    budget.hold(Int.SIZE_BYTES.toLong() * count)
     val header = PdfParser(ByteArraySource(data), 0, budget)
     val offsets = try {
       IntArray(count) {
@@ -167,7 +213,17 @@ class PdfDocumentReader internal constructor(
   private companion object {
     const val MAX_REFERENCE_HOPS = 16
     const val MAX_NESTED_READS = 32
-    const val MAX_CACHED_OBJECTS = 50_000
-    const val MAX_KEPT_STREAM_BYTES = 32L shl 20
+    const val MAX_CACHED_BYTES = 4L shl 20
+    const val MAX_CACHED_OBJECT_BYTES = MAX_CACHED_BYTES / 2
+    /** What the cache takes for an object besides the object: a null takes nothing itself. */
+    const val CACHED_ENTRY_BYTES = 96L
+    /** A unit of work for as many bytes of an object taken from the cache: a fifth or less of what parsing them took. */
+    const val CACHED_BYTES_PER_UNIT = 8
+    const val MAX_KEPT_STREAM_BYTES = 16L shl 20
+    /** What remembering that an object stream cannot be read takes ([ScanBudget.keep]). */
+    const val INVALID_STREAM_BYTES = 64L
   }
 }
+
+/** An object in the reader's cache, and what it took to read ([ScanBudget.hold]). */
+private class CachedObject(val value: PdfObject, val bytes: Long)

@@ -10,11 +10,12 @@ class PdfDestinations(
   private val catalog: PdfObject.Dictionary,
   private val pageIndexByObject: () -> Map<Int, Int>,
 ) {
-  private val pageIndices: Map<Int, Int> by lazy(pageIndexByObject)
+  // Read when first needed, inside what a reader lets go ([PdfDocumentReader.releasing]): kept.
+  private val pageIndices: Map<Int, Int> by lazy { document.keeping(pageIndexByObject) }
   private val catalogDests: PdfObject.Dictionary? by lazy {
-    document.resolve(catalog["Dests"]) as? PdfObject.Dictionary
+    document.keeping { document.resolve(catalog["Dests"]) as? PdfObject.Dictionary }
   }
-  private val nameTreeDests: Map<String, PdfObject> by lazy(::readDestsNameTree)
+  private val nameTreeDests: Map<String, PdfObject> by lazy { document.keeping(::readDestsNameTree) }
 
   /** The page of a GoTo action's destination; null for other actions. */
   fun pageOfAction(action: PdfObject.Dictionary): Int? {
@@ -54,11 +55,13 @@ class PdfDestinations(
       if (depth > MAX_TREE_DEPTH || result.size >= MAX_NAMED_DESTINATIONS) return
       val reference = node as? PdfObject.Reference
       if (reference != null && !visited.add(reference.number)) return
+      document.keep(NAME_BYTES)
       val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
-      (document.resolve(dictionary["Names"]) as? PdfObject.Array)?.items?.chunked(2)?.forEach { pair ->
-        val key = document.resolve(pair.getOrNull(0)) as? PdfObject.Str ?: return@forEach
-        val value = pair.getOrNull(1) ?: return@forEach
-        result.putIfAbsent(keyOf(key), value)
+      val pairs = (document.resolve(dictionary["Names"]) as? PdfObject.Array)?.items.orEmpty()
+      for (pair in 0 until pairs.size / 2) {
+        val key = document.resolve(pairs[2 * pair]) as? PdfObject.Str ?: continue
+        document.keep(NAME_BYTES + key.bytes.size)
+        result.putIfAbsent(keyOf(key), pairs[2 * pair + 1])
       }
       (document.resolve(dictionary["Kids"]) as? PdfObject.Array)?.items?.forEach { visit(it, depth + 1) }
     }
@@ -70,5 +73,8 @@ class PdfDestinations(
     const val MAX_HOPS = 4
     const val MAX_TREE_DEPTH = 64
     const val MAX_NAMED_DESTINATIONS = 1_000_000
+
+    /** What a read keeps ([ScanBudget.keep]) for a node it has visited, and for a name besides its bytes and its destination. */
+    const val NAME_BYTES = 96L
   }
 }

@@ -10,8 +10,8 @@ import com.margelo.nitro.betterpdf.PdfDocumentLayout.PageSize
  * Letter, a crop box that does not overlap the media box is ignored, and
  * /Rotate counts in whole quarter turns.
  *
- * Cycles are broken and the walk is limited to [MAX_TREE_DEPTH] levels and
- * [MAX_PAGES] pages.
+ * Cycles are broken and the walk is limited to [MAX_TREE_DEPTH] levels,
+ * [MAX_PAGES] pages and what a read may keep ([ScanBudget]).
  */
 class PdfPageSizeReader(private val document: PdfDocumentReader) {
   private val catalog = document.resolve(document.trailer["Root"]) as? PdfObject.Dictionary
@@ -24,15 +24,19 @@ class PdfPageSizeReader(private val document: PdfDocumentReader) {
       if (depth > MAX_TREE_DEPTH || sizes.size >= MAX_PAGES) return
       val reference = node as? PdfObject.Reference
       if (reference != null && !visited.add(reference.number)) return
-      val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
-      val ownMediaBox = rectangleOf(dictionary["MediaBox"]) ?: mediaBox
-      val ownCropBox = rectangleOf(dictionary["CropBox"]) ?: cropBox
-      val ownRotate = (document.resolve(dictionary["Rotate"]) as? PdfObject.Number)?.value?.toInt() ?: rotate
-      val kids = document.resolve(dictionary["Kids"]) as? PdfObject.Array
-      if (kids != null && dictionary["Type"] != PdfObject.Name("Page")) {
-        kids.items.forEach { visit(it, ownMediaBox, ownCropBox, ownRotate, depth + 1) }
-      } else {
-        sizes += displayedSize(ownMediaBox, ownCropBox, ownRotate)
+      document.keep(NODE_BYTES)
+      // A node's objects are let go once its pages' sizes are listed.
+      document.releasing {
+        val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
+        val ownMediaBox = rectangleOf(dictionary["MediaBox"]) ?: mediaBox
+        val ownCropBox = rectangleOf(dictionary["CropBox"]) ?: cropBox
+        val ownRotate = (document.resolve(dictionary["Rotate"]) as? PdfObject.Number)?.value?.toInt() ?: rotate
+        val kids = document.resolve(dictionary["Kids"]) as? PdfObject.Array
+        if (kids != null && dictionary["Type"] != PdfObject.Name("Page")) {
+          kids.items.forEach { visit(it, ownMediaBox, ownCropBox, ownRotate, depth + 1) }
+        } else {
+          sizes += displayedSize(ownMediaBox, ownCropBox, ownRotate)
+        }
       }
     }
     visit(catalog["Pages"], mediaBox = null, cropBox = null, rotate = 0, depth = 0)
@@ -75,5 +79,8 @@ class PdfPageSizeReader(private val document: PdfDocumentReader) {
     const val MAX_TREE_DEPTH = 64
     const val MAX_PAGES = 1_000_000
     val LETTER = floatArrayOf(0f, 0f, 612f, 792f)
+
+    /** What a read keeps ([ScanBudget.keep]) for a node it has visited and its size. */
+    const val NODE_BYTES = 96L
   }
 }

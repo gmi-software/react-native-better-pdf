@@ -4,6 +4,7 @@ import com.margelo.nitro.betterpdf.PageLink
 import com.margelo.nitro.betterpdf.PageRect
 import com.margelo.nitro.betterpdf.PdfDocumentLayout.PageSize
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -51,5 +52,11 @@ class PdfDocumentReaderTest {
     val head = document.resolve(PdfObject.Reference(1, 0)) as PdfObject.Stream
     assertEquals("chain", document.streamData(head).toString(Charsets.ISO_8859_1))
     assertEveryReaderEnds(bytes)
+  }
+
+  /** What the reader keeps has a size, however little data is in it: it keeps a limited number. */
+  @Test
+  fun `an empty object stream counts`() {
+    assertTrue(ObjectStreamIndex(ByteArray(0), first = 0, offsets = IntArray(0)).bytes >= 64)
   }
 }

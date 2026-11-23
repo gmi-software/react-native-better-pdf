@@ -11,7 +11,8 @@ import com.margelo.nitro.betterpdf.PageRect
  * and the Named actions NextPage, PrevPage, FirstPage and LastPage. Areas
  * are the `/QuadPoints` when present (a link across lines), else the
  * `/Rect`, from the displayed page's top-left. Other actions (another file,
- * launching an app, JavaScript) are left out.
+ * launching an app, JavaScript) are left out. Limited to [MAX_LINKS] links
+ * and to what a read may keep ([ScanBudget]).
  */
 class PdfLinkReader(private val document: PdfDocumentReader) {
   private val catalog = document.resolve(document.trailer["Root"]) as? PdfObject.Dictionary
@@ -29,9 +30,12 @@ class PdfLinkReader(private val document: PdfDocumentReader) {
     tree.pages.forEachIndexed { index, page ->
       if (total >= MAX_LINKS) return result
       val links = page.annotationItems.mapNotNull { item ->
-        val annotation = document.resolve(item) as? PdfObject.Dictionary ?: return@mapNotNull null
-        if (annotation["Subtype"] != PdfObject.Name("Link")) return@mapNotNull null
-        link(annotation, index, page, pageCount, destinations)
+        // An annotation's objects are let go once its link is made.
+        document.releasing {
+          val annotation = document.resolve(item) as? PdfObject.Dictionary ?: return@releasing null
+          if (annotation["Subtype"] != PdfObject.Name("Link")) return@releasing null
+          link(annotation, index, page, pageCount, destinations)?.also { document.keep(heldBytes(it)) }
+        }
       }
       if (links.isNotEmpty()) {
         result[index] = links
@@ -55,6 +59,7 @@ class PdfLinkReader(private val document: PdfDocumentReader) {
     }
     return when ((action["S"] as? PdfObject.Name)?.value) {
       "URI" -> (document.resolve(action["URI"]) as? PdfObject.Str)
+        ?.also { document.spend(it.bytes.size) }
         // URIs are 7-bit ASCII (§12.6.4.7).
         ?.bytes?.toString(Charsets.ISO_8859_1)?.trim()?.takeIf { it.isNotEmpty() }
         ?.let { PageLink.Url(bounds, it) }
@@ -70,9 +75,13 @@ class PdfLinkReader(private val document: PdfDocumentReader) {
     }
   }
 
-  /** The link's areas: each quadrilateral's bounds, or the rectangle. */
+  private fun heldBytes(link: PageLink): Long =
+    LINK_BYTES + AREA_BYTES * link.bounds.size + ((link as? PageLink.Url)?.url?.length ?: 0)
+
+  /** The link's areas: each quadrilateral's bounds, up to [MAX_AREAS] of them, or the rectangle. */
   private fun areas(annotation: PdfObject.Dictionary, page: PdfPageGeometry): List<PageRect> {
     val quads = (document.resolve(annotation["QuadPoints"]) as? PdfObject.Array)?.items
+      ?.takeIf { it.size <= 8 * MAX_AREAS }
       ?.map { (document.resolve(it) as? PdfObject.Number)?.value?.toFloat() }
     if (quads != null && quads.size >= 8 && quads.size % 8 == 0 && quads.all { it != null }) {
       return quads.filterNotNull().chunked(8).map { quad ->
@@ -89,5 +98,10 @@ class PdfLinkReader(private val document: PdfDocumentReader) {
 
   private companion object {
     const val MAX_LINKS = 100_000
+    const val MAX_AREAS = 256
+
+    /** What a read keeps ([ScanBudget.keep]) for a link besides its address, and for each of its areas. */
+    const val LINK_BYTES = 96L
+    const val AREA_BYTES = 40L
   }
 }

@@ -172,6 +172,16 @@ class PdfCrossReferencesTest {
     assertThrows(PdfFormatException::class.java) { PdfCrossReferences.read(ByteArraySource(bytes)) }
   }
 
+  /** The trailer is kept for as long as the document is open, by every reader of it. */
+  @Test
+  fun `a trailer of several MB is rejected`() {
+    val bytes = outlinedDocument("Found").toString(Charsets.ISO_8859_1)
+      .replace("/Root 1 0 R", "/Root 1 0 R /Filler [${"0 ".repeat(100_000)}]")
+      .toByteArray(Charsets.ISO_8859_1)
+    assertThrows(PdfFormatException::class.java) { PdfCrossReferences.read(ByteArraySource(bytes)) }
+    assertThrows(PdfFormatException::class.java) { PdfCrossReferences.read(ByteArraySource(damaged(bytes))) }
+  }
+
   /** When no trailer names the catalog, it is looked for among the objects, those in object streams too. */
   @Test
   fun `a catalog in an object stream is found without a trailer`() {

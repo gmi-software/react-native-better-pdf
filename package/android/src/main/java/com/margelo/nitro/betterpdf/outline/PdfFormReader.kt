@@ -60,7 +60,8 @@ data class FormFieldEntry(
  * AcroForm's `/Fields` tree, in order, with its inherited type, flags and
  * value and its widgets' places. Pages are found through their `/Annots`
  * (a widget's `/P` is optional). Cycles are broken; the walk is limited to
- * [MAX_DEPTH] levels and [MAX_FIELDS] fields.
+ * [MAX_DEPTH] levels, [MAX_FIELDS] fields, [MAX_OPTIONS] options and
+ * selected values of a field, and what a read may keep ([ScanBudget]).
  */
 class PdfFormReader(private val document: PdfDocumentReader) {
   private val catalog = document.resolve(document.trailer["Root"]) as? PdfObject.Dictionary
@@ -73,7 +74,11 @@ class PdfFormReader(private val document: PdfDocumentReader) {
     val tree = PdfPageTree(document, catalog)
     val pages = tree.pages
     val pageOfAnnotation = HashMap<Int, Int>()
-    pages.forEachIndexed { index, page -> page.annotations.forEach { pageOfAnnotation.putIfAbsent(it, index) } }
+    pages.forEachIndexed { index, page ->
+      val annotations = page.annotations
+      document.keep(ANNOTATION_BYTES * annotations.size)
+      annotations.forEach { pageOfAnnotation.putIfAbsent(it, index) }
+    }
     val pageIndexByObject = tree.indexByObject
 
     val result = ArrayList<FormFieldEntry>()
@@ -82,31 +87,41 @@ class PdfFormReader(private val document: PdfDocumentReader) {
       if (depth > MAX_DEPTH || result.size >= MAX_FIELDS) return
       val reference = node as? PdfObject.Reference
       if (reference != null && !visited.add(reference.number)) return
-      val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
-      val partial = (document.resolve(dictionary["T"]) as? PdfObject.Str)?.toText()
-      val name = when {
-        partial == null -> parentName
-        parentName == null -> partial
-        else -> "$parentName.$partial"
-      } ?: return
-      val own = inherited.with(dictionary)
-      val kids = (document.resolve(dictionary["Kids"]) as? PdfObject.Array)?.items.orEmpty()
-      val (childFields, widgetKids) = kids.partition { kid ->
-        (document.resolve(kid) as? PdfObject.Dictionary)?.get("T") != null
+      document.keep(NODE_BYTES)
+      // A field's objects are let go once it and its children are listed.
+      document.releasing {
+        val dictionary = document.resolve(node) as? PdfObject.Dictionary ?: return
+        val partial = (document.resolve(dictionary["T"]) as? PdfObject.Str)?.let(::textOf)
+        val name = when {
+          partial == null -> parentName
+          parentName == null -> partial
+          else -> "$parentName.$partial".also { document.hold(heldBytes(it)) }
+        } ?: return
+        val own = inherited.with(dictionary)
+        val kids = (document.resolve(dictionary["Kids"]) as? PdfObject.Array)?.items.orEmpty()
+        val (childFields, widgetKids) = kids.partition { kid ->
+          document.releasing { (document.resolve(kid) as? PdfObject.Dictionary)?.get("T") != null }
+        }
+        childFields.forEach { visit(it, name, own, depth + 1) }
+        if (childFields.isNotEmpty() && widgetKids.isEmpty()) return
+        // A field without kids is its own widget.
+        val widgetNodes = if (kids.isEmpty()) listOf(node) else widgetKids
+        val widgets = widgetNodes.mapNotNull { widgetNode ->
+          document.releasing {
+            val widget = (if (widgetNode === node) dictionary else document.resolve(widgetNode) as? PdfObject.Dictionary)
+              ?: return@releasing null
+            val number = (widgetNode as? PdfObject.Reference)?.number
+            val pageIndex = number?.let(pageOfAnnotation::get)
+              ?: (widget["P"] as? PdfObject.Reference)?.number?.let(pageIndexByObject::get)
+              ?: return@releasing null
+            widgetEntry(widget, pageIndex, pages[pageIndex])
+          }?.also { document.hold(heldBytes(it)) }
+        }
+        field(name, own, widgets, widgetNodes)?.let {
+          document.keep(heldBytes(it))
+          result.add(it)
+        }
       }
-      childFields.forEach { visit(it, name, own, depth + 1) }
-      if (childFields.isNotEmpty() && widgetKids.isEmpty()) return
-      // A field without kids is its own widget.
-      val widgetNodes = if (kids.isEmpty()) listOf(node) else widgetKids
-      val widgets = widgetNodes.mapNotNull { widgetNode ->
-        val widget = document.resolve(widgetNode) as? PdfObject.Dictionary ?: return@mapNotNull null
-        val number = (widgetNode as? PdfObject.Reference)?.number
-        val pageIndex = number?.let(pageOfAnnotation::get)
-          ?: (widget["P"] as? PdfObject.Reference)?.number?.let(pageIndexByObject::get)
-          ?: return@mapNotNull null
-        widgetEntry(widget, pageIndex, pages[pageIndex])
-      }
-      field(name, own, widgets, widgetNodes)?.let(result::add)
     }
     fields.items.forEach { visit(it, null, Inherited(), 0) }
     return result
@@ -153,7 +168,7 @@ class PdfFormReader(private val document: PdfDocumentReader) {
     var options = emptyList<String>()
     var selected = emptyList<String>()
     when (kind) {
-      FormFieldKind.TEXT -> text = textOf(value)
+      FormFieldKind.TEXT -> text = (value as? PdfObject.Str)?.let(::textOf)?.withLineFeeds().orEmpty()
       FormFieldKind.CHECKBOX -> {
         val state = (value as? PdfObject.Name)?.value ?: appearanceState(widgetNodes.firstOrNull())
         isChecked = state != null && state != OFF
@@ -169,11 +184,13 @@ class PdfFormReader(private val document: PdfDocumentReader) {
         options = choices.map { it.second }
         // /V holds export values; report what the reader sees.
         val values = when (value) {
-          is PdfObject.Str -> listOf(value.toText())
-          is PdfObject.Array -> value.items.mapNotNull { (document.resolve(it) as? PdfObject.Str)?.toText() }
+          is PdfObject.Str -> listOf(textOf(value))
+          is PdfObject.Array -> value.items.take(MAX_OPTIONS).mapNotNull { (document.resolve(it) as? PdfObject.Str)?.let(::textOf) }
           else -> emptyList()
         }
-        selected = values.map { exported -> choices.firstOrNull { it.first == exported }?.second ?: exported }
+        val displayed = HashMap<String, String>()
+        for ((exported, display) in choices) displayed.putIfAbsent(exported, display)
+        selected = values.map { exported -> displayed[exported] ?: exported }
         if (kind == FormFieldKind.COMBO_BOX) text = selected.firstOrNull().orEmpty()
       }
       FormFieldKind.SIGNATURE, FormFieldKind.PUSH_BUTTON -> Unit
@@ -192,20 +209,30 @@ class PdfFormReader(private val document: PdfDocumentReader) {
     )
   }
 
-  private fun textOf(value: PdfObject?): String = when (value) {
-    is PdfObject.Str -> value.toText().withLineFeeds()
-    else -> ""
+  /** [value] as text, counted as work and as held ([ScanBudget]): many fields can share one long string, each with a copy. */
+  private fun textOf(value: PdfObject.Str): String {
+    document.spend(value.bytes.size)
+    return value.toText().also { document.hold(heldBytes(it)) }
   }
 
-  /** `/Opt`: (export value, display text) pairs; plain entries are both. */
+  private fun heldBytes(text: String): Long = HeldBytes.TEXT + 2L * text.length
+
+  private fun heldBytes(widget: FormWidgetEntry): Long = WIDGET_BYTES + heldBytes(widget.onState.orEmpty())
+
+  private fun heldBytes(field: FormFieldEntry): Long =
+    FIELD_BYTES + heldBytes(field.name) + heldBytes(field.text) +
+      (field.options + field.selectedOptions).sumOf { heldBytes(it) } +
+      field.widgets.sumOf { heldBytes(it) }
+
+  /** `/Opt`: (export value, display text) pairs, up to [MAX_OPTIONS]; plain entries are both. */
   private fun choicesOf(options: PdfObject?): List<Pair<String, String>> {
     val items = (document.resolve(options) as? PdfObject.Array)?.items ?: return emptyList()
-    return items.mapNotNull { item ->
+    return items.take(MAX_OPTIONS).mapNotNull { item ->
       when (val entry = document.resolve(item)) {
-        is PdfObject.Str -> entry.toText().let { it to it }
+        is PdfObject.Str -> textOf(entry).let { it to it }
         is PdfObject.Array -> {
-          val export = (document.resolve(entry.items.getOrNull(0)) as? PdfObject.Str)?.toText()
-          val display = (document.resolve(entry.items.getOrNull(1)) as? PdfObject.Str)?.toText()
+          val export = (document.resolve(entry.items.getOrNull(0)) as? PdfObject.Str)?.let(::textOf)
+          val display = (document.resolve(entry.items.getOrNull(1)) as? PdfObject.Str)?.let(::textOf)
           if (export != null) export to (display ?: export) else null
         }
         else -> null
@@ -214,7 +241,7 @@ class PdfFormReader(private val document: PdfDocumentReader) {
   }
 
   private fun appearanceState(widgetNode: PdfObject?): String? =
-    ((document.resolve(widgetNode) as? PdfObject.Dictionary)?.get("AS") as? PdfObject.Name)?.value
+    document.releasing { ((document.resolve(widgetNode) as? PdfObject.Dictionary)?.get("AS") as? PdfObject.Name)?.value }
 
   private fun widgetEntry(widget: PdfObject.Dictionary, pageIndex: Int, page: PdfPageGeometry): FormWidgetEntry? {
     val rect = PdfPageTree.rectangleOf(document, widget["Rect"]) ?: return null
@@ -237,5 +264,15 @@ class PdfFormReader(private val document: PdfDocumentReader) {
     const val OFF = "Off"
     const val MAX_DEPTH = 32
     const val MAX_FIELDS = 10_000
+    const val MAX_OPTIONS = 10_000
+
+    /**
+     * What a read keeps ([ScanBudget.keep]) for a node it has visited, a
+     * field besides its texts, a widget, and an annotation's page.
+     */
+    const val NODE_BYTES = 64L
+    const val FIELD_BYTES = 160L
+    const val WIDGET_BYTES = 64L
+    const val ANNOTATION_BYTES = 64L
   }
 }

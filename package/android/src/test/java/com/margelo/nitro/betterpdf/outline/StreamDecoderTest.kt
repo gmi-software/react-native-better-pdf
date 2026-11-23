@@ -1,9 +1,9 @@
 package com.margelo.nitro.betterpdf.outline
 
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.util.zip.Deflater
 
 class StreamDecoderTest {
   @Test
@@ -28,6 +28,42 @@ class StreamDecoderTest {
     assertArrayEquals(byteArrayOf(1, 2, 3, 2, 3, 4), stream.decode())
   }
 
+  /** Above 4 MB the data is inflated twice, the second time into an array of its size. */
+  @Test
+  fun `a stream of 6 MB decodes to its data`() {
+    val data = ByteArray(6 * 1024 * 1024) { (it * 31 + it / 977).toByte() }
+    assertArrayEquals(data, flateStream(data).decode())
+  }
+
+  @Test
+  fun `a stream that ends on a block's edge decodes to its data`() {
+    for (size in intArrayOf(64 * 1024, 4 * 1024 * 1024, 4 * 1024 * 1024 + 64 * 1024)) {
+      val data = ByteArray(size) { (it / 3).toByte() }
+      assertArrayEquals(data, flateStream(data).decode())
+    }
+  }
+
+  /** What decoded before the damage is kept, as viewers do, however long it is. */
+  @Test
+  fun `a damaged stream of 6 MB decodes to what precedes the damage`() {
+    val data = ByteArray(6 * 1024 * 1024) { (it * 31 + it / 977).toByte() }
+    val whole = flateStream(data)
+    val damaged = whole.bytes.copyOf()
+    for (index in damaged.size - 1000 until damaged.size - 900) damaged[index] = 0x55
+    val decoded = EncodedStream(damaged, whole.stream).decode()
+    assertTrue("decoded ${decoded.size} bytes", decoded.size in 5 * 1024 * 1024 until data.size)
+    assertArrayEquals(data.copyOf(decoded.size), decoded)
+  }
+
+  @Test
+  fun `more than a read may hold fails the read`() {
+    val data = ByteArray(8 * 1024 * 1024)
+    val stream = flateStream(data)
+    val budget = ScanBudget(stream.bytes.size.toLong())
+    budget.hold(ScanBudget.MAX_HELD_BYTES - 4 * 1024 * 1024)
+    assertThrows(ScanBudget.Exceeded::class.java) { StreamDecoder.read(ByteArraySource(stream.bytes), stream.stream, budget) { it } }
+  }
+
   private class EncodedStream(val bytes: ByteArray, val stream: PdfObject.Stream) {
     fun decode(): ByteArray = StreamDecoder.read(ByteArraySource(bytes), stream, ScanBudget(bytes.size.toLong())) { it }
   }
@@ -41,15 +77,12 @@ class StreamDecoderTest {
     ),
   )
 
-  private fun flateStream(data: ByteArray, parameters: PdfObject.Dictionary): EncodedStream {
-    val deflater = Deflater()
-    deflater.setInput(data)
-    deflater.finish()
-    val buffer = ByteArray(256)
-    val length = deflater.deflate(buffer)
-    deflater.end()
-    val dictionary = PdfObject.Dictionary(mapOf("Filter" to PdfObject.Name("FlateDecode"), "DecodeParms" to parameters))
-    return EncodedStream(buffer.copyOf(length), PdfObject.Stream(dictionary, dataOffset = 0, dataLength = length))
+  private fun flateStream(data: ByteArray, parameters: PdfObject.Dictionary? = null): EncodedStream {
+    val bytes = deflate(data)
+    val dictionary = PdfObject.Dictionary(
+      listOfNotNull("Filter" to PdfObject.Name("FlateDecode"), parameters?.let { "DecodeParms" to it }).toMap(),
+    )
+    return EncodedStream(bytes, PdfObject.Stream(dictionary, dataOffset = 0, dataLength = bytes.size))
   }
 
   /** Through reflection: unit tests compile against android.jar, which has no `java.lang.management`. */
